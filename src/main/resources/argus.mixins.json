@@ -3,7 +3,7 @@
 	"package": "dev.butterflysky.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExampleMixin"
+		"WhitelistCommandExecuteMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

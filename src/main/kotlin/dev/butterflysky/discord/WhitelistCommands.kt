@@ -133,7 +133,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val success = whitelistService.addToWhitelist(
                 uuid = profile.id,
                 username = profile.name,
-                addedBy = event.user.name
+                discordId = event.user.id
             )
             
             if (success) {
@@ -167,7 +167,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             // Remove from whitelist
             val success = whitelistService.removeFromWhitelist(
                 uuid = user.uuid,
-                removedBy = event.user.name
+                discordId = event.user.id
             )
             
             if (success) {
@@ -196,14 +196,51 @@ class WhitelistCommands(private val server: MinecraftServer) {
             if (whitelistedPlayers.isEmpty()) {
                 embed.addField("Players", "No players in whitelist", false)
             } else {
-                // Group players by who added them
-                val playersByAdder = whitelistedPlayers.groupBy { it.addedBy }
+                // Sort players by name
+                val sortedPlayers = whitelistedPlayers.sortedBy { it.username.lowercase() }
                 
-                for ((adder, players) in playersByAdder) {
-                    val playerList = players.joinToString("\\n") { 
-                        "${it.username} (added: ${it.addedAt.format(dateFormatter)})" 
+                // Create individual cards for each player with all the info
+                val maxPlayersPerField = 10
+                val chunks = sortedPlayers.chunked(maxPlayersPerField)
+                
+                chunks.forEachIndexed { index, players ->
+                    val playerCards = StringBuilder()
+                    
+                    players.forEach { player ->
+                        // Get Discord user if linked
+                        val discordUser = whitelistService.getDiscordUserForMinecraftAccount(player.uuid)
+                        val discordMention = if (discordUser != null) "<@${discordUser.discordId}>" else "Not Linked"
+                        
+                        // Format date
+                        val addedDate = player.addedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                        
+                        // Display who added the player as a Discord mention if it's a valid Discord ID
+                        val addedByMention = try {
+                            // Try to parse as a Long to see if it's a valid Discord ID
+                            val addedById = player.addedBy.toLongOrNull()
+                            if (addedById != null) {
+                                "<@${player.addedBy}>" // Discord ID format
+                            } else {
+                                player.addedBy // Fallback to string (for system imports)
+                            }
+                        } catch (e: Exception) {
+                            player.addedBy
+                        }
+                        
+                        // Build a card-like entry for each player
+                        playerCards.append("**${player.username}**\n")
+                        playerCards.append("• Discord: ${discordMention}\n")
+                        playerCards.append("• Added: ${addedDate} by ${addedByMention}\n")
+                        playerCards.append("\n") // Space between entries
                     }
-                    embed.addField("Added by $adder (${players.size})", playerList, false)
+                    
+                    val fieldTitle = if (chunks.size == 1) {
+                        "Whitelisted Players"
+                    } else {
+                        "Whitelisted Players (${index + 1}/${chunks.size})"
+                    }
+                    
+                    embed.addField(fieldTitle, playerCards.toString(), false)
                 }
                 
                 embed.setFooter("Total: ${whitelistedPlayers.size} players")
@@ -322,7 +359,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 discordUsername = discordUser.name,
                 minecraftUuid = profile.id,
                 minecraftUsername = profile.name,
-                createdBy = event.user.name,
+                createdByDiscordId = event.user.id,
                 isPrimary = true
             )
             
@@ -331,7 +368,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 whitelistService.addToWhitelist(
                     uuid = profile.id,
                     username = profile.name,
-                    addedBy = event.user.name
+                    discordId = event.user.id
                 )
                 
                 event.hook.editOriginal("Linked Discord user ${discordUser.asMention} to Minecraft account $minecraftName and added to whitelist.").queue()
@@ -361,19 +398,19 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 whitelistService.unlinkDiscordMinecraft(
                     discordUserId = discordUser.id,
                     minecraftName = minecraftName,
-                    performedBy = event.user.name
+                    performedByDiscordId = event.user.id
                 )
             } else if (discordUser != null) {
                 // Unlink all of this Discord user's accounts
                 whitelistService.unlinkAllMinecraftAccounts(
                     discordUserId = discordUser.id,
-                    performedBy = event.user.name
+                    performedByDiscordId = event.user.id
                 )
             } else {
                 // Unlink this Minecraft account from any Discord user
                 whitelistService.unlinkMinecraftAccount(
                     minecraftName = minecraftName!!,
-                    performedBy = event.user.name
+                    performedByDiscordId = event.user.id
                 )
             }
             
@@ -508,14 +545,26 @@ class WhitelistCommands(private val server: MinecraftServer) {
             } else {
                 val historyFormatter: (dev.butterflysky.service.WhitelistEventInfo) -> String = when {
                     minecraftName != null -> { event ->
-                        "${event.timestamp.format(dateFormatter)} - ${event.eventType} by ${event.performedBy}"
+                        // Format the performer as a Discord mention if possible
+                        val performer = if (event.performedByDiscordId != null) {
+                            "<@${event.performedByDiscordId}>"
+                        } else {
+                            "system"
+                        }
+                        "${event.timestamp.format(dateFormatter)} - ${event.eventType} by $performer"
                     }
                     else -> { event ->
-                        "${event.timestamp.format(dateFormatter)} - ${event.playerName}: ${event.eventType} by ${event.performedBy}"
+                        // Format the performer as a Discord mention if possible
+                        val performer = if (event.performedByDiscordId != null) {
+                            "<@${event.performedByDiscordId}>"
+                        } else {
+                            "system"
+                        }
+                        "${event.timestamp.format(dateFormatter)} - ${event.playerName}: ${event.eventType} by $performer"
                     }
                 }
                 
-                val historyList = history.joinToString("\\n", transform = historyFormatter)
+                val historyList = history.joinToString("\n", transform = historyFormatter)
                 embed.addField("Recent Events", historyList, false)
             }
             

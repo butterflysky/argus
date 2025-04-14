@@ -105,7 +105,7 @@ class WhitelistService private constructor() {
                                 it[minecraftUser] = uuid
                                 it[eventType] = "import"
                                 it[timestamp] = LocalDateTime.now()
-                                it[performedBy] = "system"
+                                it[performedByDiscordId] = null // System action, no Discord user
                                 it[details] = "Imported from vanilla whitelist"
                             }
                             
@@ -146,7 +146,7 @@ class WhitelistService private constructor() {
     /**
      * Add a Minecraft user to the whitelist
      */
-    fun addToWhitelist(uuid: UUID, username: String, addedBy: String): Boolean {
+    fun addToWhitelist(uuid: UUID, username: String, discordId: String): Boolean {
         try {
             val server = this.server ?: return false
             
@@ -162,7 +162,7 @@ class WhitelistService private constructor() {
                         it[MinecraftUsers.username] = username
                         it[isWhitelisted] = true
                         it[addedAt] = LocalDateTime.now()
-                        it[MinecraftUsers.addedBy] = addedBy
+                        it[MinecraftUsers.addedBy] = discordId
                     }
                 } else {
                     // Update existing player
@@ -191,7 +191,7 @@ class WhitelistService private constructor() {
                     it[minecraftUser] = uuid
                     it[eventType] = "add"
                     it[timestamp] = LocalDateTime.now()
-                    it[performedBy] = addedBy
+                    it[performedByDiscordId] = discordId
                     it[details] = null
                 }
             }
@@ -205,7 +205,7 @@ class WhitelistService private constructor() {
                 logger.error("Error adding to vanilla whitelist: ${e.message}")
             }
             
-            logger.info("Added $username ($uuid) to whitelist by $addedBy")
+            logger.info("Added $username ($uuid) to whitelist by Discord user $discordId")
             return true
         } catch (e: Exception) {
             logger.error("Error adding $username ($uuid) to whitelist", e)
@@ -216,7 +216,7 @@ class WhitelistService private constructor() {
     /**
      * Remove a Minecraft user from the whitelist
      */
-    fun removeFromWhitelist(uuid: UUID, removedBy: String): Boolean {
+    fun removeFromWhitelist(uuid: UUID, discordId: String): Boolean {
         try {
             val server = this.server ?: return false
             
@@ -231,7 +231,7 @@ class WhitelistService private constructor() {
                     it[minecraftUser] = uuid
                     it[eventType] = "remove"
                     it[timestamp] = LocalDateTime.now()
-                    it[performedBy] = removedBy
+                    it[performedByDiscordId] = discordId
                     it[details] = null
                 }
             }
@@ -248,7 +248,7 @@ class WhitelistService private constructor() {
                 }
             }
             
-            logger.info("Removed player $uuid from whitelist by $removedBy")
+            logger.info("Removed player $uuid from whitelist by Discord user $discordId")
             return true
         } catch (e: Exception) {
             logger.error("Error removing $uuid from whitelist", e)
@@ -293,7 +293,7 @@ class WhitelistService private constructor() {
         discordUsername: String,
         minecraftUuid: UUID,
         minecraftUsername: String,
-        createdBy: String,
+        createdByDiscordId: String,
         isPrimary: Boolean = false
     ): Boolean {
         try {
@@ -327,7 +327,7 @@ class WhitelistService private constructor() {
                         it[username] = minecraftUsername
                         it[isWhitelisted] = true
                         it[addedAt] = LocalDateTime.now()
-                        it[addedBy] = createdBy
+                        it[addedBy] = createdByDiscordId
                     }
                 }
                 
@@ -352,7 +352,7 @@ class WhitelistService private constructor() {
                         it[minecraftUser] = minecraftUuid
                         it[discordUser] = discordUuid
                         it[createdAt] = LocalDateTime.now()
-                        it[UserMappings.createdBy] = createdBy
+                        it[UserMappings.createdBy] = createdByDiscordId
                         it[UserMappings.isPrimary] = isPrimary
                     }
                 } else {
@@ -366,7 +366,7 @@ class WhitelistService private constructor() {
                 }
             }
             
-            logger.info("Mapped Discord user $discordUsername ($discordUserId) to Minecraft user $minecraftUsername ($minecraftUuid)")
+            logger.info("Mapped Discord user $discordUsername ($discordUserId) to Minecraft user $minecraftUsername ($minecraftUuid) by Discord user $createdByDiscordId")
             return true
         } catch (e: Exception) {
             logger.error("Error mapping Discord user to Minecraft user", e)
@@ -415,7 +415,7 @@ class WhitelistService private constructor() {
     /**
      * Unlink a specific Discord user from a Minecraft account
      */
-    fun unlinkDiscordMinecraft(discordUserId: String, minecraftName: String, performedBy: String): Boolean {
+    fun unlinkDiscordMinecraft(discordUserId: String, minecraftName: String, performedByDiscordId: String): Boolean {
         try {
             // Find the Minecraft user
             val minecraftUser = findMinecraftUserByName(minecraftName) ?: return false
@@ -432,7 +432,7 @@ class WhitelistService private constructor() {
                     (UserMappings.discordUser.eq(discordUserUuid))
                 }
                 
-                logger.info("Unlinked Discord user $discordUserId from Minecraft account $minecraftName by $performedBy")
+                logger.info("Unlinked Discord user $discordUserId from Minecraft account $minecraftName by Discord user $performedByDiscordId")
             }
             
             return true
@@ -445,7 +445,7 @@ class WhitelistService private constructor() {
     /**
      * Unlink all Minecraft accounts from a Discord user
      */
-    fun unlinkAllMinecraftAccounts(discordUserId: String, performedBy: String): Boolean {
+    fun unlinkAllMinecraftAccounts(discordUserId: String, performedByDiscordId: String): Boolean {
         try {
             transaction {
                 // Find the Discord user
@@ -458,7 +458,7 @@ class WhitelistService private constructor() {
                     UserMappings.discordUser.eq(discordUserUuid)
                 }
                 
-                logger.info("Unlinked all Minecraft accounts from Discord user $discordUserId by $performedBy")
+                logger.info("Unlinked all Minecraft accounts from Discord user $discordUserId by Discord user $performedByDiscordId")
             }
             
             return true
@@ -471,7 +471,7 @@ class WhitelistService private constructor() {
     /**
      * Unlink a Minecraft account from all Discord users
      */
-    fun unlinkMinecraftAccount(minecraftName: String, performedBy: String): Boolean {
+    fun unlinkMinecraftAccount(minecraftName: String, performedByDiscordId: String): Boolean {
         try {
             // Find the Minecraft user
             val minecraftUser = findMinecraftUserByName(minecraftName) ?: return false
@@ -482,7 +482,7 @@ class WhitelistService private constructor() {
                     UserMappings.minecraftUser.eq(minecraftUser.uuid)
                 }
                 
-                logger.info("Unlinked Minecraft account $minecraftName from all Discord users by $performedBy")
+                logger.info("Unlinked Minecraft account $minecraftName from all Discord users by Discord user $performedByDiscordId")
             }
             
             return true
@@ -509,7 +509,7 @@ class WhitelistService private constructor() {
                         .firstOrNull()?.get(MinecraftUsers.username) ?: "Unknown",
                     eventType = it[WhitelistEvents.eventType],
                     timestamp = it[WhitelistEvents.timestamp],
-                    performedBy = it[WhitelistEvents.performedBy],
+                    performedByDiscordId = it[WhitelistEvents.performedByDiscordId],
                     details = it[WhitelistEvents.details]
                 )
             }
@@ -531,7 +531,7 @@ class WhitelistService private constructor() {
                     playerName = it[MinecraftUsers.username],
                     eventType = it[WhitelistEvents.eventType],
                     timestamp = it[WhitelistEvents.timestamp],
-                    performedBy = it[WhitelistEvents.performedBy],
+                    performedByDiscordId = it[WhitelistEvents.performedByDiscordId],
                     details = it[WhitelistEvents.details]
                 )
             }
@@ -571,7 +571,7 @@ class WhitelistService private constructor() {
                     playerName = it[MinecraftUsers.username],
                     eventType = it[WhitelistEvents.eventType],
                     timestamp = it[WhitelistEvents.timestamp],
-                    performedBy = it[WhitelistEvents.performedBy],
+                    performedByDiscordId = it[WhitelistEvents.performedByDiscordId],
                     details = it[WhitelistEvents.details]
                 )
             }
@@ -621,6 +621,6 @@ data class WhitelistEventInfo(
     val playerName: String,
     val eventType: String,
     val timestamp: LocalDateTime,
-    val performedBy: String,
+    val performedByDiscordId: String?,
     val details: String?
 )

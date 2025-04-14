@@ -69,7 +69,7 @@ object WhitelistDatabase {
         val minecraftUser = reference("minecraft_user", MinecraftUsers)
         val eventType = varchar("event_type", 32) // "add", "remove", etc.
         val timestamp = datetime("timestamp").default(LocalDateTime.now())
-        val performedBy = varchar("performed_by", 128)
+        val performedByDiscordId = varchar("performed_by_discord_id", 64).nullable() // Discord user ID of who performed the action
         val details = text("details").nullable()
     }
     

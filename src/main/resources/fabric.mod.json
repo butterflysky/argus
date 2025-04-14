@@ -2,14 +2,14 @@
 	"schemaVersion": 1,
 	"id": "argus",
 	"version": "${version}",
-	"name": "Argus",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "argus",
+	"description": "Abcraft's whitelist management mod",
 	"authors": [
-		"Me!"
+		"butterflysky"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://abfielder.com/",
+		"sources": "https://github.com/butterflysky/argus"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/argus/icon.png",
@@ -36,13 +36,13 @@
 		}
 	],
 	"depends": {
-		"fabricloader": ">=0.16.13",
+		"fabricloader": ">=0.16.12",
 		"minecraft": "~1.21.5",
 		"java": ">=21",
 		"fabric-api": "*",
 		"fabric-language-kotlin": "*"
 	},
 	"suggests": {
-		"another-mod": "*"
+	
 	}
 }

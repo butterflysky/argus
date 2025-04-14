@@ -17,6 +17,9 @@ repositories {
 	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
 	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
 	// for more information about repositories.
+	
+	// Maven Central for JDA and other dependencies
+	mavenCentral()
 }
 
 loom {
@@ -28,7 +31,6 @@ loom {
 			sourceSet sourceSets.client
 		}
 	}
-
 }
 
 dependencies {
@@ -40,6 +42,24 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
+	
+	// Discord integration - will be included in the jar
+	include "net.dv8tion:JDA:${project.jda_version}"
+	implementation "net.dv8tion:JDA:${project.jda_version}"
+	
+	// SQLite for database
+	include "org.xerial:sqlite-jdbc:${project.sqlite_version}"
+	implementation "org.xerial:sqlite-jdbc:${project.sqlite_version}"
+	
+	// Exposed - Kotlin SQL framework
+	include "org.jetbrains.exposed:exposed-core:${project.exposed_version}"
+	implementation "org.jetbrains.exposed:exposed-core:${project.exposed_version}"
+	include "org.jetbrains.exposed:exposed-dao:${project.exposed_version}"  
+	implementation "org.jetbrains.exposed:exposed-dao:${project.exposed_version}"
+	include "org.jetbrains.exposed:exposed-jdbc:${project.exposed_version}"
+	implementation "org.jetbrains.exposed:exposed-jdbc:${project.exposed_version}"
+	include "org.jetbrains.exposed:exposed-java-time:${project.exposed_version}"
+	implementation "org.jetbrains.exposed:exposed-java-time:${project.exposed_version}"
 }
 
 processResources {

@@ -2,6 +2,8 @@ package dev.butterflysky.discord
 
 import dev.butterflysky.service.WhitelistService
 import dev.butterflysky.service.MinecraftUserInfo
+import dev.butterflysky.service.ApplicationInfo
+import dev.butterflysky.service.ApplicationResult
 import net.dv8tion.jda.api.EmbedBuilder
 import net.dv8tion.jda.api.entities.User
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent
@@ -14,6 +16,9 @@ import java.time.format.DateTimeFormatter
 import net.minecraft.server.WhitelistEntry
 import com.mojang.authlib.GameProfile
 import java.util.concurrent.TimeUnit
+import java.time.ZoneId
+import java.time.Instant
+import java.util.stream.Collectors
 
 /**
  * Handlers for whitelist-related Discord commands
@@ -22,6 +27,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
     private val logger = LoggerFactory.getLogger("argus-whitelist-discord")
     private val whitelistService = WhitelistService.getInstance()
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        .withZone(ZoneId.systemDefault())
     
     /**
      * Register all command handlers with the Discord service
@@ -37,10 +43,14 @@ class WhitelistCommands(private val server: MinecraftServer) {
         discordService.registerCommandHandler("off", OffHandler())
         discordService.registerCommandHandler("reload", ReloadHandler())
         discordService.registerCommandHandler("test", TestHandler())
-        discordService.registerCommandHandler("link", LinkHandler())
-        discordService.registerCommandHandler("unlink", UnlinkHandler())
         discordService.registerCommandHandler("lookup", LookupHandler())
         discordService.registerCommandHandler("history", HistoryHandler())
+        
+        // New application-related commands
+        discordService.registerCommandHandler("apply", ApplyHandler())
+        discordService.registerCommandHandler("applications", ApplicationsHandler())
+        discordService.registerCommandHandler("approve", ApproveHandler())
+        discordService.registerCommandHandler("reject", RejectHandler())
         
         logger.info("Registered all whitelist command handlers")
     }
@@ -107,13 +117,32 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 return "Error: ${e.message}"
             }
         }
+        
+        /**
+         * Check if user has moderator or admin permissions
+         */
+        protected fun isModeratorOrAdmin(event: SlashCommandInteractionEvent): Boolean {
+            val member = event.member ?: return false
+            
+            // Check for moderator or admin role
+            val hasModerator = member.roles.any { it.name.equals("Moderator", ignoreCase = true) }
+            val hasAdmin = member.roles.any { it.name.equals("Admin", ignoreCase = true) }
+            
+            return hasModerator || hasAdmin
+        }
     }
     
     /**
-     * Handler for the 'add' subcommand
+     * Handler for the 'add' subcommand - admin only
      */
     private inner class AddHandler : BaseHandler() {
         override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
             val playerName = options.find { it.name == "player" }?.asString
             if (playerName == null) {
                 event.hook.editOriginal("Please provide a player name.").queue()
@@ -133,7 +162,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val success = whitelistService.addToWhitelist(
                 uuid = profile.id,
                 username = profile.name,
-                discordId = event.user.id
+                discordId = event.user.id,
+                override = true,
+                reason = "Added by moderator via Discord command"
             )
             
             if (success) {
@@ -145,10 +176,16 @@ class WhitelistCommands(private val server: MinecraftServer) {
     }
     
     /**
-     * Handler for the 'remove' subcommand
+     * Handler for the 'remove' subcommand - admin only
      */
     private inner class RemoveHandler : BaseHandler() {
         override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
             val playerName = options.find { it.name == "player" }?.asString
             if (playerName == null) {
                 event.hook.editOriginal("Please provide a player name.").queue()
@@ -207,12 +244,15 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     val playerCards = StringBuilder()
                     
                     players.forEach { player ->
-                        // Get Discord user if linked
-                        val discordUser = whitelistService.getDiscordUserForMinecraftAccount(player.uuid)
-                        val discordMention = if (discordUser != null) "<@${discordUser.discordId}>" else "Not Linked"
+                        // Discord mention if linked
+                        val discordMention = if (player.discordUserId != null) {
+                            "<@${player.discordUserId}>"
+                        } else {
+                            "Not Linked"
+                        }
                         
                         // Format date
-                        val addedDate = player.addedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                        val addedDate = dateFormatter.format(player.addedAt)
                         
                         // Display who added the player as a Discord mention if it's a valid Discord ID
                         val addedByMention = try {
@@ -251,10 +291,16 @@ class WhitelistCommands(private val server: MinecraftServer) {
     }
     
     /**
-     * Handler for the 'on' subcommand
+     * Handler for the 'on' subcommand - admin only
      */
     private inner class OnHandler : BaseHandler() {
         override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
             logger.info("Enabling whitelist (requested by ${event.user.name})")
             
             // Enable the whitelist
@@ -268,10 +314,16 @@ class WhitelistCommands(private val server: MinecraftServer) {
     }
     
     /**
-     * Handler for the 'off' subcommand
+     * Handler for the 'off' subcommand - admin only
      */
     private inner class OffHandler : BaseHandler() {
         override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
             logger.info("Disabling whitelist (requested by ${event.user.name})")
             
             // Disable the whitelist
@@ -285,10 +337,16 @@ class WhitelistCommands(private val server: MinecraftServer) {
     }
     
     /**
-     * Handler for the 'reload' subcommand
+     * Handler for the 'reload' subcommand - admin only
      */
     private inner class ReloadHandler : BaseHandler() {
         override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
             logger.info("Reloading whitelist (requested by ${event.user.name})")
             
             // Reload the whitelist
@@ -302,10 +360,16 @@ class WhitelistCommands(private val server: MinecraftServer) {
     }
     
     /**
-     * Handler for the 'test' subcommand
+     * Handler for the 'test' subcommand - admin only
      */
     private inner class TestHandler : BaseHandler() {
         override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
             logger.info("Testing whitelist (requested by ${event.user.name})")
             
             // Execute the test command
@@ -332,105 +396,6 @@ class WhitelistCommands(private val server: MinecraftServer) {
     }
     
     /**
-     * Handler for the 'link' subcommand
-     */
-    private inner class LinkHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            val discordUser = options.find { it.name == "discord_user" }?.asUser
-            val minecraftName = options.find { it.name == "minecraft_name" }?.asString
-            
-            if (discordUser == null || minecraftName == null) {
-                event.hook.editOriginal("Please provide both a Discord user and Minecraft username.").queue()
-                return
-            }
-            
-            logger.info("Linking Discord user ${discordUser.name} to Minecraft account $minecraftName (requested by ${event.user.name})")
-            
-            // Get Minecraft profile
-            val profile = getGameProfileByName(minecraftName)
-            if (profile == null) {
-                event.hook.editOriginal("Could not find Minecraft player: $minecraftName").queue()
-                return
-            }
-            
-            // Link the accounts
-            val success = whitelistService.mapDiscordToMinecraft(
-                discordUserId = discordUser.id,
-                discordUsername = discordUser.name,
-                minecraftUuid = profile.id,
-                minecraftUsername = profile.name,
-                createdByDiscordId = event.user.id,
-                isPrimary = true
-            )
-            
-            if (success) {
-                // Also make sure the player is whitelisted
-                whitelistService.addToWhitelist(
-                    uuid = profile.id,
-                    username = profile.name,
-                    discordId = event.user.id
-                )
-                
-                event.hook.editOriginal("Linked Discord user ${discordUser.asMention} to Minecraft account $minecraftName and added to whitelist.").queue()
-            } else {
-                event.hook.editOriginal("Failed to link accounts.").queue()
-            }
-        }
-    }
-    
-    /**
-     * Handler for the 'unlink' subcommand
-     */
-    private inner class UnlinkHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            val discordUser = options.find { it.name == "discord_user" }?.asUser
-            val minecraftName = options.find { it.name == "minecraft_name" }?.asString
-            
-            if (discordUser == null && minecraftName == null) {
-                event.hook.editOriginal("Please provide either a Discord user or Minecraft username.").queue()
-                return
-            }
-            
-            logger.info("Unlinking account(s) (requested by ${event.user.name})")
-            
-            val success = if (discordUser != null && minecraftName != null) {
-                // Unlink specific mapping
-                whitelistService.unlinkDiscordMinecraft(
-                    discordUserId = discordUser.id,
-                    minecraftName = minecraftName,
-                    performedByDiscordId = event.user.id
-                )
-            } else if (discordUser != null) {
-                // Unlink all of this Discord user's accounts
-                whitelistService.unlinkAllMinecraftAccounts(
-                    discordUserId = discordUser.id,
-                    performedByDiscordId = event.user.id
-                )
-            } else {
-                // Unlink this Minecraft account from any Discord user
-                whitelistService.unlinkMinecraftAccount(
-                    minecraftName = minecraftName!!,
-                    performedByDiscordId = event.user.id
-                )
-            }
-            
-            if (success) {
-                val message = when {
-                    discordUser != null && minecraftName != null -> 
-                        "Unlinked Discord user ${discordUser.asMention} from Minecraft account $minecraftName."
-                    discordUser != null -> 
-                        "Unlinked all Minecraft accounts from Discord user ${discordUser.asMention}."
-                    else -> 
-                        "Unlinked Minecraft account $minecraftName from all Discord users."
-                }
-                event.hook.editOriginal(message).queue()
-            } else {
-                event.hook.editOriginal("Failed to unlink account(s).").queue()
-            }
-        }
-    }
-    
-    /**
      * Handler for the 'lookup' subcommand
      */
     private inner class LookupHandler : BaseHandler() {
@@ -443,7 +408,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 return
             }
             
-            logger.info("Looking up linked account(s) (requested by ${event.user.name})")
+            logger.info("Looking up account info (requested by ${event.user.name})")
             
             val embed = EmbedBuilder()
                 .setTitle("Account Lookup")
@@ -458,7 +423,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 if (accounts.isEmpty()) {
                     embed.addField("Minecraft Accounts", "No linked Minecraft accounts", false)
                 } else {
-                    val accountsList = accounts.joinToString("\\n") { 
+                    val accountsList = accounts.joinToString("\n") { 
                         "${it.username} ${if (it.isPrimary) "(Primary)" else ""}" 
                     }
                     embed.addField("Linked Minecraft Accounts (${accounts.size})", accountsList, false)
@@ -477,7 +442,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     if (discordUserInfo == null) {
                         embed.addField("Discord User", "No linked Discord account", false)
                     } else {
-                        val discordMention = "<@${discordUserInfo.discordId}>"
+                        val discordMention = "<@${discordUserInfo.id}>"
                         embed.addField("Linked Discord User", discordMention, false)
                         
                         // Add role info
@@ -545,22 +510,52 @@ class WhitelistCommands(private val server: MinecraftServer) {
             } else {
                 val historyFormatter: (dev.butterflysky.service.WhitelistEventInfo) -> String = when {
                     minecraftName != null -> { event ->
-                        // Format the performer as a Discord mention if possible
-                        val performer = if (event.performedByDiscordId != null) {
-                            "<@${event.performedByDiscordId}>"
+                        // Format the actor as a Discord mention if possible
+                        val actor = if (event.actorDiscordId != null) {
+                            "<@${event.actorDiscordId}>"
                         } else {
                             "system"
                         }
-                        "${event.timestamp.format(dateFormatter)} - ${event.eventType} by $performer"
+                        
+                        // Format Discord user if available
+                        val discordInfo = if (event.discordUserId != null) {
+                            " with Discord <@${event.discordUserId}>"
+                        } else {
+                            ""
+                        }
+                        
+                        // Format the comment if available
+                        val commentInfo = if (event.comment != null && event.comment.isNotBlank()) {
+                            " - \"${event.comment}\""
+                        } else {
+                            ""
+                        }
+                        
+                        "${dateFormatter.format(event.timestamp)} - ${event.eventType}$discordInfo by $actor$commentInfo"
                     }
                     else -> { event ->
-                        // Format the performer as a Discord mention if possible
-                        val performer = if (event.performedByDiscordId != null) {
-                            "<@${event.performedByDiscordId}>"
+                        // Format the actor as a Discord mention if possible
+                        val actor = if (event.actorDiscordId != null) {
+                            "<@${event.actorDiscordId}>"
                         } else {
                             "system"
                         }
-                        "${event.timestamp.format(dateFormatter)} - ${event.playerName}: ${event.eventType} by $performer"
+                        
+                        // Format Discord user if available
+                        val discordInfo = if (event.discordUserId != null) {
+                            " with Discord <@${event.discordUserId}>"
+                        } else {
+                            ""
+                        }
+                        
+                        // Format the comment if available
+                        val commentInfo = if (event.comment != null && event.comment.isNotBlank()) {
+                            " - \"${event.comment}\""
+                        } else {
+                            ""
+                        }
+                        
+                        "${dateFormatter.format(event.timestamp)} - ${event.minecraftUsername}: ${event.eventType}$discordInfo by $actor$commentInfo"
                     }
                 }
                 
@@ -571,6 +566,187 @@ class WhitelistCommands(private val server: MinecraftServer) {
             embed.setFooter("Showing up to $limit events")
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
+        }
+    }
+    
+    /**
+     * Handler for the 'apply' subcommand - for players to apply for whitelist
+     */
+    private inner class ApplyHandler : BaseHandler() {
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            val minecraftName = options.find { it.name == "minecraft_name" }?.asString
+            if (minecraftName == null) {
+                event.hook.editOriginal("Please provide your Minecraft username.").queue()
+                return
+            }
+            
+            logger.info("Whitelist application submitted for $minecraftName by ${event.user.name} (${event.user.id})")
+            
+            // Submit the application
+            val result = whitelistService.submitWhitelistApplication(
+                discordId = event.user.id,
+                minecraftUsername = minecraftName
+            )
+            
+            when (result) {
+                is ApplicationResult.Success -> {
+                    // Format the eligibility date
+                    val eligibleDate = dateFormatter.format(result.eligibleAt)
+                    
+                    // Create a fancy embed for the success message
+                    val embed = EmbedBuilder()
+                        .setTitle("Whitelist Application Submitted")
+                        .setColor(Color.GREEN)
+                        .setDescription(
+                            "Your application for **$minecraftName** has been submitted successfully. " +
+                            "A moderator will review your application soon."
+                        )
+                        .addField("Application ID", "#${result.applicationId}", true)
+                        .addField("Minecraft Username", minecraftName, true)
+                        .addField("Discord User", event.user.asMention, true)
+                        .addField("Eligible For Review", "After $eligibleDate", false)
+                        .setFooter("Waiting for moderator approval")
+                        .setTimestamp(Instant.now())
+                        .build()
+                    
+                    event.hook.editOriginalEmbeds(embed).queue()
+                }
+                is ApplicationResult.Error -> {
+                    event.hook.editOriginal("Failed to submit application: ${result.message}").queue()
+                }
+            }
+        }
+    }
+    
+    /**
+     * Handler for the 'applications' subcommand - admin only, for listing pending applications
+     */
+    private inner class ApplicationsHandler : BaseHandler() {
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
+            logger.info("Listing whitelist applications (requested by ${event.user.name})")
+            
+            // Get all pending applications
+            val applications = whitelistService.getPendingApplications()
+            
+            val embed = EmbedBuilder()
+                .setTitle("Pending Whitelist Applications")
+                .setColor(Color.BLUE)
+            
+            if (applications.isEmpty()) {
+                embed.setDescription("There are no pending whitelist applications.")
+            } else {
+                // Sort applications by date (oldest first)
+                val sortedApplications = applications.sortedBy { it.appliedAt }
+                
+                // Create individual cards for each application
+                val applicationsText = StringBuilder()
+                
+                sortedApplications.forEach { app ->
+                    // Format dates
+                    val appliedDate = dateFormatter.format(app.appliedAt)
+                    val eligibleDate = dateFormatter.format(app.eligibleAt)
+                    
+                    // Build a card-like entry for each application
+                    applicationsText.append("**Application #${app.id}**\n")
+                    applicationsText.append("• Minecraft: **${app.minecraftUsername}**\n")
+                    applicationsText.append("• Discord: <@${app.discordId}>\n")
+                    applicationsText.append("• Applied: $appliedDate\n")
+                    applicationsText.append("• Eligible: $eligibleDate")
+                    
+                    // Add eligibility status
+                    if (app.isEligibleNow) {
+                        applicationsText.append(" (Eligible Now 🟢)")
+                    } else {
+                        applicationsText.append(" (Waiting ⏳)")
+                    }
+                    
+                    // Usage hint
+                    applicationsText.append("\n• `/whitelist approve ${app.id}` or `/whitelist reject ${app.id}`\n\n")
+                }
+                
+                embed.setDescription(applicationsText.toString())
+                embed.setFooter("Total: ${applications.size} pending applications")
+            }
+            
+            event.hook.editOriginalEmbeds(embed.build()).queue()
+        }
+    }
+    
+    /**
+     * Handler for the 'approve' subcommand - admin only, for approving an application
+     */
+    private inner class ApproveHandler : BaseHandler() {
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
+            val applicationId = options.find { it.name == "application_id" }?.asInt
+            val notes = options.find { it.name == "notes" }?.asString
+            
+            if (applicationId == null) {
+                event.hook.editOriginal("Please provide an application ID.").queue()
+                return
+            }
+            
+            logger.info("Approving whitelist application #$applicationId (requested by ${event.user.name})")
+            
+            // Approve the application
+            val success = whitelistService.approveApplication(
+                applicationId = applicationId,
+                moderatorDiscordId = event.user.id,
+                notes = notes
+            )
+            
+            if (success) {
+                event.hook.editOriginal("Successfully approved whitelist application #$applicationId.").queue()
+            } else {
+                event.hook.editOriginal("Failed to approve application #$applicationId. It may not exist or is not in a pending state.").queue()
+            }
+        }
+    }
+    
+    /**
+     * Handler for the 'reject' subcommand - admin only, for rejecting an application
+     */
+    private inner class RejectHandler : BaseHandler() {
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
+            val applicationId = options.find { it.name == "application_id" }?.asInt
+            val notes = options.find { it.name == "notes" }?.asString
+            
+            if (applicationId == null) {
+                event.hook.editOriginal("Please provide an application ID.").queue()
+                return
+            }
+            
+            logger.info("Rejecting whitelist application #$applicationId (requested by ${event.user.name})")
+            
+            // Reject the application
+            val success = whitelistService.rejectApplication(
+                applicationId = applicationId,
+                moderatorDiscordId = event.user.id,
+                notes = notes
+            )
+            
+            if (success) {
+                event.hook.editOriginal("Successfully rejected whitelist application #$applicationId.").queue()
+            } else {
+                event.hook.editOriginal("Failed to reject application #$applicationId. It may not exist or is not in a pending state.").queue()
+            }
         }
     }
 }

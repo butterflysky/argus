@@ -253,21 +253,19 @@ class DiscordService : ListenerAdapter() {
             .addOption(OptionType.STRING, "notes", "Optional notes about the rejection", false)
         
         whitelistCommand.addSubcommands(
-            addSubcommand, 
-            removeSubcommand, 
-            listSubcommand,
-            onSubcommand,
-            offSubcommand,
-            reloadSubcommand,
-            testSubcommand,
-            linkSubcommand,
-            unlinkSubcommand,
-            lookupSubcommand,
-            historySubcommand,
-            applySubcommand,
+            addSubcommand,
             applicationsSubcommand,
+            applySubcommand,
             approveSubcommand,
-            rejectSubcommand
+            historySubcommand,
+            listSubcommand,
+            lookupSubcommand,
+            offSubcommand,
+            onSubcommand,
+            rejectSubcommand,
+            reloadSubcommand,
+            removeSubcommand,
+            testSubcommand
         )
         
         // Register the commands with Discord

@@ -98,29 +98,45 @@ class DiscordService : ListenerAdapter() {
         
         try {
             logger.info("Connecting to Discord...")
-            jda = JDABuilder.createDefault(config.discord.token)
+            
+            // Create the JDA builder but don't await ready yet
+            val jdaBuilder = JDABuilder.createDefault(config.discord.token)
                 .enableIntents(GatewayIntent.GUILD_MEMBERS)
                 .addEventListeners(this)
-                .build()
-                .awaitReady()
             
-            // Get the guild from config
-            val guildId = config.discord.guildId
-            guild = jda?.getGuildById(guildId)
+            // Build the JDA instance and add a ready listener to handle guild setup
+            jda = jdaBuilder.build()
             
-            if (guild == null) {
-                logger.error("Could not find guild with ID $guildId")
-                scheduleReconnect()
-                return
-            }
+            // Add a ready listener to handle guild setup and command registration
+            jda?.addEventListener(object : net.dv8tion.jda.api.hooks.EventListener {
+                override fun onEvent(event: net.dv8tion.jda.api.events.GenericEvent) {
+                    if (event is net.dv8tion.jda.api.events.session.ReadyEvent) {
+                        // Get the guild from config
+                        val guildId = config.discord.guildId
+                        guild = jda?.getGuildById(guildId)
+                        
+                        if (guild == null) {
+                            logger.error("Could not find guild with ID $guildId")
+                            scheduleReconnect()
+                            return
+                        }
+                        
+                        logger.info("Connected to Discord guild: ${guild?.name}")
+                        
+                        // Register slash commands after we're fully connected
+                        registerCommands()
+                        
+                        // Reset reconnect delay on successful connection
+                        currentReconnectDelay = 0
+                        
+                        // Remove this listener as we don't need it anymore
+                        jda?.removeEventListener(this)
+                    }
+                }
+            })
             
-            logger.info("Connected to Discord guild: ${guild?.name}")
-            
-            // Register slash commands
-            registerCommands()
-            
-            // Reset reconnect delay on successful connection
-            currentReconnectDelay = 0
+            // Wait for JDA to be ready, but don't block guild setup
+            logger.info("JDA instance created, waiting for ready state...")
             
         } catch (e: Exception) {
             logger.error("Failed to connect to Discord", e)
@@ -168,11 +184,17 @@ class DiscordService : ListenerAdapter() {
     private fun registerCommands() {
         val guild = this.guild ?: return
         
-        // Clear existing commands
+        // Log that we're starting command registration
+        logger.info("Registering Discord slash commands for guild ${guild.name} (${guild.id})")
+        
+        // Clear existing commands with complete callback
         try {
-            guild.updateCommands().queue()
+            guild.updateCommands().queue(
+                { logger.info("Successfully cleared existing commands, now registering new commands") },
+                { error -> logger.error("Failed to clear existing commands", error) }
+            )
         } catch (e: Exception) {
-            logger.error("Failed to clear existing commands", e)
+            logger.error("Exception while clearing existing commands", e)
         }
         
         // Create the whitelist command with subcommands
@@ -212,6 +234,23 @@ class DiscordService : ListenerAdapter() {
             .addOption(OptionType.STRING, "minecraft_name", "The Minecraft username to show history for", false)
             .addOption(OptionType.USER, "discord_user", "The Discord user to show history for", false)
             .addOption(OptionType.INTEGER, "limit", "Maximum number of entries to show", false)
+            
+        // Apply subcommand - for players to apply for whitelist
+        val applySubcommand = SubcommandData("apply", "Apply for whitelist with your Minecraft account")
+            .addOption(OptionType.STRING, "minecraft_name", "Your Minecraft username", true)
+            
+        // Applications subcommand - for admins to view pending applications
+        val applicationsSubcommand = SubcommandData("applications", "View pending whitelist applications")
+            
+        // Approve subcommand - for approving applications
+        val approveSubcommand = SubcommandData("approve", "Approve a whitelist application")
+            .addOption(OptionType.INTEGER, "application_id", "The ID of the application to approve", true)
+            .addOption(OptionType.STRING, "notes", "Optional notes about the approval", false)
+            
+        // Reject subcommand - for rejecting applications
+        val rejectSubcommand = SubcommandData("reject", "Reject a whitelist application")
+            .addOption(OptionType.INTEGER, "application_id", "The ID of the application to reject", true)
+            .addOption(OptionType.STRING, "notes", "Optional notes about the rejection", false)
         
         whitelistCommand.addSubcommands(
             addSubcommand, 
@@ -224,16 +263,31 @@ class DiscordService : ListenerAdapter() {
             linkSubcommand,
             unlinkSubcommand,
             lookupSubcommand,
-            historySubcommand
+            historySubcommand,
+            applySubcommand,
+            applicationsSubcommand,
+            approveSubcommand,
+            rejectSubcommand
         )
         
         // Register the commands with Discord
         try {
-            guild.upsertCommand(whitelistCommand).queue { cmd -> 
-                logger.info("Registered whitelist command with ID: ${cmd.id}")
-            }
+            guild.upsertCommand(whitelistCommand).queue(
+                { cmd -> 
+                    logger.info("Successfully registered whitelist command with ID: ${cmd.id}")
+                    logger.info("All ${whitelistCommand.subcommands.size} subcommands registered")
+                    
+                    // List all registered subcommands for debugging
+                    whitelistCommand.subcommands.forEach { subcommand ->
+                        logger.info("  - Registered subcommand: ${subcommand.name}")
+                    }
+                },
+                { error ->
+                    logger.error("Failed to register commands", error)
+                }
+            )
         } catch (e: Exception) {
-            logger.error("Failed to register commands", e)
+            logger.error("Exception during command registration", e)
         }
     }
     

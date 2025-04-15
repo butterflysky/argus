@@ -52,6 +52,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
         discordService.registerCommandHandler("approve", ApproveHandler())
         discordService.registerCommandHandler("reject", RejectHandler())
         
+        // Account linking command
+        discordService.registerCommandHandler("link", LinkHandler())
+        
         logger.info("Registered all whitelist command handlers")
     }
     
@@ -746,6 +749,68 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 event.hook.editOriginal("Successfully rejected whitelist application #$applicationId.").queue()
             } else {
                 event.hook.editOriginal("Failed to reject application #$applicationId. It may not exist or is not in a pending state.").queue()
+            }
+        }
+    }
+    
+    /**
+     * Handler for the 'link' subcommand - for linking Discord accounts to Minecraft
+     */
+    private inner class LinkHandler : BaseHandler() {
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            val token = options.find { it.name == "token" }?.asString
+            
+            if (token == null) {
+                event.hook.editOriginal("Please provide a valid link token from Minecraft.").queue()
+                return
+            }
+            
+            logger.info("Processing link token $token from Discord user ${event.user.name} (${event.user.id})")
+            
+            // Get the LinkManager instance
+            val linkManager = dev.butterflysky.whitelist.LinkManager.getInstance()
+            
+            // Find the link request for this token
+            val linkRequest = linkManager.getLinkRequestByToken(token)
+            if (linkRequest == null) {
+                // Clear error message with instructions to get a new token
+                val errorMessage = "Invalid or expired token. Please run `/whitelist link` in Minecraft to generate a new token."
+                event.hook.editOriginal(errorMessage).queue()
+                return
+            }
+            
+            // Create the mapping between Discord and Minecraft
+            val success = whitelistService.mapDiscordToMinecraft(
+                discordUserId = event.user.id,
+                discordUsername = event.user.name,
+                minecraftUuid = linkRequest.minecraftUuid,
+                minecraftUsername = linkRequest.minecraftUsername,
+                createdByDiscordId = event.user.id,
+                isPrimary = true
+            )
+            
+            if (success) {
+                // Mark the token as processed
+                linkManager.markTokenAsProcessed(token)
+                
+                // Create a fancy embed response
+                val embed = EmbedBuilder()
+                    .setTitle("Account Linked Successfully")
+                    .setColor(Color.GREEN)
+                    .setDescription("Your Discord account has been linked to Minecraft account **${linkRequest.minecraftUsername}**")
+                    .addField("Minecraft Username", linkRequest.minecraftUsername, true)
+                    .addField("Minecraft UUID", linkRequest.minecraftUuid.toString(), true)
+                    .addField("Discord User", event.user.asMention, true)
+                    .setFooter("You can now use whitelist commands in-game")
+                    .setTimestamp(Instant.now())
+                    .build()
+                
+                event.hook.editOriginalEmbeds(embed).queue()
+                
+                logger.info("Successfully linked Discord user ${event.user.name} (${event.user.id}) to Minecraft account ${linkRequest.minecraftUsername} (${linkRequest.minecraftUuid})")
+            } else {
+                event.hook.editOriginal("Failed to link accounts. Please try again later.").queue()
+                logger.error("Failed to link Discord user ${event.user.name} (${event.user.id}) to Minecraft account ${linkRequest.minecraftUsername} (${linkRequest.minecraftUuid})")
             }
         }
     }

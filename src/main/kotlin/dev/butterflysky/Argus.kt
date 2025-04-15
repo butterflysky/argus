@@ -4,6 +4,7 @@ import dev.butterflysky.config.ArgusConfig
 import dev.butterflysky.discord.DiscordService
 import dev.butterflysky.discord.WhitelistCommands
 import dev.butterflysky.service.WhitelistService
+import dev.butterflysky.whitelist.LinkManager
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -55,7 +56,48 @@ object Argus : ModInitializer {
                         }
                         .build()
                 )
-                logger.info("[ARGUS WHITELIST] Successfully registered 'test' subcommand")
+                
+                // Add our link subcommand
+                whitelistNode.addChild(
+                    literal("link")
+                        .executes { context ->
+                            val source = context.source
+                            val player = source.player
+                            
+                            if (player == null) {
+                                source.sendFeedback({ Text.literal("[Argus] This command can only be used by players") }, false)
+                                return@executes 0
+                            }
+                            
+                            val uuid = player.uuid
+                            val username = player.gameProfile.name
+                            
+                            // Check if already linked
+                            val discordUser = WhitelistService.getInstance().getDiscordUserForMinecraftAccount(uuid)
+                            if (discordUser != null) {
+                                source.sendFeedback({ 
+                                    Text.literal("§a[Argus] §fYour Minecraft account is already linked to Discord user §b${discordUser.username} §f(ID: §b${discordUser.id}§f)")
+                                }, false)
+                                return@executes 1
+                            }
+                            
+                            // Generate token
+                            val linkManager = dev.butterflysky.whitelist.LinkManager.getInstance()
+                            val token = linkManager.createLinkToken(uuid, username)
+                            
+                            // Send message with the token
+                            source.sendFeedback({
+                                Text.literal("§6[Argus] §eGenerated a link token for your account.\n")
+                                    .append(Text.literal("§eRun this command in Discord: §b/whitelist link $token\n"))
+                                    .append(Text.literal("§7(This token will expire in 10 minutes)"))
+                            }, false)
+                            
+                            logger.info("[ARGUS WHITELIST] Generated link token $token for player $username ($uuid)")
+                            1
+                        }
+                        .build()
+                )
+                logger.info("[ARGUS WHITELIST] Successfully registered 'test' and 'link' subcommands")
             } else {
                 logger.warn("[ARGUS WHITELIST] Could not find whitelist command to attach subcommand")
             }
@@ -154,6 +196,11 @@ object Argus : ModInitializer {
             try {
                 // Shutdown the Discord service
                 discordService.shutdown()
+                
+                // Shutdown the link manager
+                LinkManager.getInstance().shutdown()
+                
+                logger.info("Shutting down Argus services")
             } catch (e: Exception) {
                 logger.error("Failed to shutdown services", e)
             }

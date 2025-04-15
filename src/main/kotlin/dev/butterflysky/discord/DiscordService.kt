@@ -251,6 +251,10 @@ class DiscordService : ListenerAdapter() {
         val rejectSubcommand = SubcommandData("reject", "Reject a whitelist application")
             .addOption(OptionType.INTEGER, "application_id", "The ID of the application to reject", true)
             .addOption(OptionType.STRING, "notes", "Optional notes about the rejection", false)
+            
+        // Link subcommand - for linking Discord to Minecraft accounts
+        val linkSubcommand = SubcommandData("link", "Link your Discord account to your Minecraft account")
+            .addOption(OptionType.STRING, "token", "The token generated in Minecraft with /whitelist link", true)
         
         whitelistCommand.addSubcommands(
             addSubcommand,
@@ -258,6 +262,7 @@ class DiscordService : ListenerAdapter() {
             applySubcommand,
             approveSubcommand,
             historySubcommand,
+            linkSubcommand,
             listSubcommand,
             lookupSubcommand,
             offSubcommand,

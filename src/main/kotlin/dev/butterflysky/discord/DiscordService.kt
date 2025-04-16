@@ -49,6 +49,8 @@ class DiscordService : ListenerAdapter() {
     private var reconnectTask: ScheduledFuture<*>? = null
     private var currentReconnectDelay: Long = 0
     private var adminRoles: List<String> = listOf()
+    private var patronRole: String = ""
+    private var adultRole: String = ""
     
     private var minecraftServer: MinecraftServer? = null
     private val whitelistService = WhitelistService.getInstance()
@@ -66,6 +68,8 @@ class DiscordService : ListenerAdapter() {
         }
         
         adminRoles = config.discord.adminRoles
+        patronRole = config.discord.patronRole
+        adultRole = config.discord.adultRole
         connect()
     }
     
@@ -388,6 +392,48 @@ class DiscordService : ListenerAdapter() {
      */
     fun getAdminRoleNames(): List<String> {
         return adminRoles
+    }
+    
+    /**
+     * Check if a user has patron role using their Discord ID
+     */
+    fun hasPatronRole(discordId: String): Boolean {
+        try {
+            val guild = this.guild ?: return false
+            val member = guild.retrieveMemberById(discordId).complete() ?: return false
+            return member.roles.any { it.name == patronRole } || hasRequiredRole(member)
+        } catch (e: Exception) {
+            logger.warn("Error checking patron role for $discordId: ${e.message}")
+            return false
+        }
+    }
+    
+    /**
+     * Check if a user has the adult role using their Discord ID
+     */
+    fun hasAdultRole(discordId: String): Boolean {
+        try {
+            val guild = this.guild ?: return false
+            val member = guild.retrieveMemberById(discordId).complete() ?: return false
+            return member.roles.any { it.name == adultRole } || hasRequiredRole(member)
+        } catch (e: Exception) {
+            logger.warn("Error checking adult role for $discordId: ${e.message}")
+            return false
+        }
+    }
+    
+    /**
+     * Get patron role name from config
+     */
+    fun getPatronRoleName(): String {
+        return patronRole
+    }
+    
+    /**
+     * Get adult role name from config
+     */
+    fun getAdultRoleName(): String {
+        return adultRole
     }
     
     /**

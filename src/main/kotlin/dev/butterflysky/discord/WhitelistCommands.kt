@@ -446,14 +446,21 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     val discordInfo = if (discordUserInfo == null) {
                         "No linked Discord account"
                     } else {
-                        // Check if user has admin permissions at runtime
+                        // Check all special roles at runtime
                         val discordId = discordUserInfo.id
                         val discordService = DiscordService.getInstance()
                         val isAdmin = discordService.hasAdminPermission(discordId)
+                        val isPatron = discordService.hasPatronRole(discordId)
+                        val isAdult = discordService.hasAdultRole(discordId)
                         
-                        // Get admin role names for display
-                        val roleList = if (isAdmin) {
-                            " (${discordService.getAdminRoleNames().first()})"
+                        // Build role display string
+                        val roles = mutableListOf<String>()
+                        if (isAdmin) roles.add(discordService.getAdminRoleNames().first())
+                        if (isPatron) roles.add(discordService.getPatronRoleName())
+                        if (isAdult) roles.add(discordService.getAdultRoleName())
+                        
+                        val roleList = if (roles.isNotEmpty()) {
+                            " (${roles.joinToString(", ")})"
                         } else {
                             ""
                         }

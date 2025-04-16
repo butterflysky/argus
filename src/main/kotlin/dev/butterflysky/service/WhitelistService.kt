@@ -323,8 +323,7 @@ class WhitelistService private constructor() {
         discordUsername: String,
         minecraftUuid: UUID,
         minecraftUsername: String,
-        createdByDiscordId: String,
-        isPrimary: Boolean = false
+        createdByDiscordId: String
     ): Boolean {
         try {
             // Get or create the Discord user
@@ -696,35 +695,27 @@ class WhitelistService private constructor() {
                 WhitelistDatabase.MinecraftUsers.currentUsername.lowerCase() eq username.lowercase()
             }.firstOrNull() ?: return@transaction null
             
-            // Find the most recent approved application for this user
+            // Get the owner Discord user from the currentOwner field
+            val discordOwner = minecraftUser.currentOwner
+            
+            // Find the most recent approved application for timing info
             val application = WhitelistApplication.find {
                 (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
                 (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
             }.sortedByDescending { it.appliedAt }.firstOrNull()
             
-            if (application != null) {
-                val discordUser = application.discordUser
-                val processedBy = application.processedBy
-                
-                MinecraftUserInfo(
-                    uuid = minecraftUser.id.value,
-                    username = minecraftUser.currentUsername,
-                    addedAt = application.appliedAt,
-                    addedBy = processedBy?.id?.value?.toString() ?: "system",
-                    discordUserId = if (discordUser.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID) 
-                        discordUser.id.value.toString() else null,
-                    discordUsername = if (discordUser.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID) 
-                        discordUser.currentUsername else null
-                )
-            } else {
-                // Return basic info since there is no approved application
-                MinecraftUserInfo(
-                    uuid = minecraftUser.id.value,
-                    username = minecraftUser.currentUsername,
-                    addedAt = minecraftUser.createdAt,
-                    addedBy = "unknown"
-                )
-            }
+            // Build the user info with Discord links if available
+            MinecraftUserInfo(
+                uuid = minecraftUser.id.value,
+                username = minecraftUser.currentUsername,
+                addedAt = application?.appliedAt ?: minecraftUser.createdAt,
+                addedBy = application?.processedBy?.id?.value?.toString() ?: "unknown",
+                // Only include Discord info if it's not the unmapped user
+                discordUserId = if (discordOwner != null && discordOwner.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID) 
+                    discordOwner.id.value.toString() else null,
+                discordUsername = if (discordOwner != null && discordOwner.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID) 
+                    discordOwner.currentUsername else null
+            )
         }
     }
     
@@ -746,9 +737,7 @@ class WhitelistService private constructor() {
             
             DiscordUserInfo(
                 id = discordUser.id.value.toString(),
-                username = discordUser.currentUsername,
-                isAdmin = false, // These would come from Discord roles which aren't tracked yet
-                isModerator = false
+                username = discordUser.currentUsername
             )
         }
     }
@@ -777,8 +766,7 @@ class WhitelistService private constructor() {
                     uuid = minecraftUser.id.value,
                     username = minecraftUser.currentUsername,
                     addedAt = application?.appliedAt ?: minecraftUser.createdAt,
-                    addedBy = application?.processedBy?.id?.value?.toString() ?: "unknown",
-                    isPrimary = true // All owned accounts are considered primary with the new schema
+                    addedBy = application?.processedBy?.id?.value?.toString() ?: "unknown"
                 )
             }
         }
@@ -1012,8 +1000,7 @@ data class MinecraftUserInfo(
     val addedAt: Instant,
     val addedBy: String,
     val discordUserId: String? = null,
-    val discordUsername: String? = null,
-    val isPrimary: Boolean = false
+    val discordUsername: String? = null
 )
 
 /**
@@ -1021,9 +1008,7 @@ data class MinecraftUserInfo(
  */
 data class DiscordUserInfo(
     val id: String,
-    val username: String,
-    val isAdmin: Boolean,
-    val isModerator: Boolean
+    val username: String
 )
 
 /**

@@ -369,6 +369,28 @@ class DiscordService : ListenerAdapter() {
     }
     
     /**
+     * Check if a user has admin permissions using their Discord ID
+     * This is useful for services that need to check permissions without a Member object
+     */
+    fun hasAdminPermission(discordId: String): Boolean {
+        try {
+            val guild = this.guild ?: return false
+            val member = guild.retrieveMemberById(discordId).complete() ?: return false
+            return hasRequiredRole(member)
+        } catch (e: Exception) {
+            logger.warn("Error checking admin permission for $discordId: ${e.message}")
+            return false
+        }
+    }
+    
+    /**
+     * Get the admin role names from config
+     */
+    fun getAdminRoleNames(): List<String> {
+        return adminRoles
+    }
+    
+    /**
      * Shutdown the Discord service
      */
     fun shutdown() {

@@ -421,13 +421,15 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 // Look up Minecraft accounts for this Discord user
                 val accounts = whitelistService.getMinecraftAccountsForDiscordUser(discordUser.id)
                 
-                embed.setDescription("Discord User: ${discordUser.asMention}")
+                embed.setDescription("Discord User: **${discordUser.name}**")
+                    .addField("Discord ID", discordUser.id, true)
+                    .addField("Mention", discordUser.asMention, true)
                 
                 if (accounts.isEmpty()) {
-                    embed.addField("Minecraft Accounts", "No linked Minecraft accounts", false)
+                    embed.addField("Minecraft Accounts", "No linked Minecraft accounts ❌", true)
                 } else {
                     val accountsList = accounts.joinToString("\n") { 
-                        "${it.username} ${if (it.isPrimary) "(Primary)" else ""}" 
+                        "**${it.username}** (${it.uuid})"
                     }
                     embed.addField("Linked Minecraft Accounts (${accounts.size})", accountsList, false)
                 }
@@ -439,28 +441,31 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     embed.setDescription("Minecraft account not found: $minecraftName")
                 } else {
                     val discordUserInfo = whitelistService.getDiscordUserForMinecraftAccount(minecraftUser.uuid)
+                    val isWhitelisted = whitelistService.isWhitelisted(minecraftUser.uuid)
                     
-                    embed.setDescription("Minecraft Account: $minecraftName (${minecraftUser.uuid})")
-                    
-                    if (discordUserInfo == null) {
-                        embed.addField("Discord User", "No linked Discord account", false)
+                    val discordInfo = if (discordUserInfo == null) {
+                        "No linked Discord account"
                     } else {
-                        val discordMention = "<@${discordUserInfo.id}>"
-                        embed.addField("Linked Discord User", discordMention, false)
+                        // Check if user has admin permissions at runtime
+                        val discordId = discordUserInfo.id
+                        val discordService = DiscordService.getInstance()
+                        val isAdmin = discordService.hasAdminPermission(discordId)
                         
-                        // Add role info
-                        val roleInfo = mutableListOf<String>()
-                        if (discordUserInfo.isAdmin) roleInfo.add("Admin")
-                        if (discordUserInfo.isModerator) roleInfo.add("Moderator")
-                        
-                        if (roleInfo.isNotEmpty()) {
-                            embed.addField("Roles", roleInfo.joinToString(", "), false)
+                        // Get admin role names for display
+                        val roleList = if (isAdmin) {
+                            " (${discordService.getAdminRoleNames().first()})"
+                        } else {
+                            ""
                         }
+                        
+                        "<@${discordId}>${roleList}"
                     }
                     
-                    // Add whitelist status
-                    val isWhitelisted = whitelistService.isWhitelisted(minecraftUser.uuid)
-                    embed.addField("Whitelist Status", if (isWhitelisted) "Whitelisted" else "Not whitelisted", false)
+                    // Create a cleaner, more concise display
+                    embed.setDescription("Minecraft Account: **$minecraftName**")
+                        .addField("UUID", minecraftUser.uuid.toString(), true)
+                        .addField("Discord User", discordInfo, true)
+                        .addField("Whitelist Status", if (isWhitelisted) "Whitelisted ✅" else "Not whitelisted ❌", true)
                 }
             }
             
@@ -785,8 +790,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 discordUsername = event.user.name,
                 minecraftUuid = linkRequest.minecraftUuid,
                 minecraftUsername = linkRequest.minecraftUsername,
-                createdByDiscordId = event.user.id,
-                isPrimary = true
+                createdByDiscordId = event.user.id
             )
             
             if (success) {

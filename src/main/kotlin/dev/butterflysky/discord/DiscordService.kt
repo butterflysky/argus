@@ -340,8 +340,8 @@ class DiscordService : ListenerAdapter() {
         
         logger.info("Handling whitelist/$subcommandName command from ${event.user.name}")
         
-        // Acknowledge the command immediately
-        event.deferReply().queue()
+        // Acknowledge the command immediately with ephemeral response (only visible to command invoker)
+        event.deferReply(true).queue()
         
         // Execute the command in a separate thread to not block Discord
         Thread {

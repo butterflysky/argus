@@ -316,6 +316,102 @@ class WhitelistService private constructor() {
     }
     
     /**
+     * Map a Discord user to a Minecraft account
+     */
+    fun mapDiscordToMinecraft(
+        discordUserId: String,
+        discordUsername: String,
+        minecraftUuid: UUID,
+        minecraftUsername: String,
+        createdByDiscordId: String,
+        isPrimary: Boolean = false
+    ): Boolean {
+        try {
+            // Get or create the Discord user
+            val discordUser = transaction {
+                DiscordUser.findById(discordUserId.toLong()) ?: DiscordUser.new(discordUserId.toLong()) {
+                    currentUsername = discordUsername
+                    currentServername = null
+                    joinedServerAt = Instant.now()
+                    isInServer = true
+                }
+            }
+            
+            // Record username if it changed
+            transaction {
+                if (discordUser.currentUsername != discordUsername) {
+                    val oldUsername = discordUser.currentUsername
+                    discordUser.currentUsername = discordUsername
+                    
+                    // Add to username history
+                    WhitelistDatabase.DiscordUserName.new {
+                        this.discordUser = discordUser
+                        this.username = discordUsername
+                        this.type = NameType.USERNAME
+                        this.recordedAt = Instant.now()
+                        this.recordedBy = discordUser
+                    }
+                    
+                    logger.info("Updated Discord username for user ID $discordUserId from $oldUsername to $discordUsername")
+                }
+            }
+            
+            // Get or create the Minecraft user
+            val minecraftUser = transaction {
+                MinecraftUser.findById(minecraftUuid) ?: MinecraftUser.new(minecraftUuid) {
+                    currentUsername = minecraftUsername
+                    currentOwner = discordUser
+                }
+            }
+            
+            // Record username if it changed
+            transaction {
+                if (minecraftUser.currentUsername != minecraftUsername) {
+                    val oldUsername = minecraftUser.currentUsername
+                    minecraftUser.currentUsername = minecraftUsername
+                    
+                    // Add to username history
+                    WhitelistDatabase.MinecraftUserName.new {
+                        this.minecraftUser = minecraftUser
+                        this.username = minecraftUsername
+                        this.recordedBy = discordUser
+                    }
+                    
+                    logger.info("Updated Minecraft username for $minecraftUuid from $oldUsername to $minecraftUsername")
+                }
+            }
+            
+            // Set the Minecraft user's owner to the Discord user
+            transaction {
+                // Get the current owner
+                val currentOwner = minecraftUser.currentOwner
+                
+                // Update owner if different
+                if (currentOwner?.id?.value != discordUserId.toLong()) {
+                    minecraftUser.currentOwner = discordUser
+                    minecraftUser.transferredAt = Instant.now()
+                    
+                    // Create audit log for ownership change
+                    WhitelistDatabase.createAuditLog(
+                        actionType = "ACCOUNT_LINK",
+                        entityType = "MinecraftUser",
+                        entityId = minecraftUuid.toString(),
+                        performedBy = discordUser,
+                        details = "Linked Minecraft account $minecraftUsername to Discord user $discordUsername ($discordUserId)"
+                    )
+                    
+                    logger.info("Set Discord user $discordUsername ($discordUserId) as owner of Minecraft account $minecraftUsername ($minecraftUuid)")
+                }
+            }
+            
+            return true
+        } catch (e: Exception) {
+            logger.error("Error mapping Discord user to Minecraft user", e)
+            return false
+        }
+    }
+    
+    /**
      * Submit a new whitelist application
      */
     fun submitWhitelistApplication(discordId: String, minecraftUsername: String): ApplicationResult {

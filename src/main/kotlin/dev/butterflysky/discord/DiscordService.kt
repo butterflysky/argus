@@ -384,17 +384,62 @@ class DiscordService : ListenerAdapter() {
     }
     
     /**
+     * Role types supported by the system
+     */
+    enum class RoleType {
+        ADMIN, PATRON, ADULT
+    }
+    
+    /**
+     * Retrieves a member by their Discord ID
+     * Returns null if retrieval fails
+     */
+    private fun getMemberById(discordId: String): Member? {
+        try {
+            val guild = this.guild ?: return null
+            return guild.retrieveMemberById(discordId).complete()
+        } catch (e: Exception) {
+            logger.warn("Error retrieving member $discordId: ${e.message}")
+            return null
+        }
+    }
+    
+    /**
+     * Generic method to check if a user has a specific role
+     */
+    private fun hasRole(discordId: String, roleName: String, adminFallback: Boolean = false): Boolean {
+        val member = getMemberById(discordId) ?: return false
+        val hasSpecificRole = member.roles.any { it.name == roleName }
+        return hasSpecificRole || (adminFallback && hasRequiredRole(member))
+    }
+    
+    /**
+     * Check if a user has any of the specified roles
+     */
+    private fun hasAnyRoles(discordId: String, roleNames: List<String>, adminFallback: Boolean = false): Boolean {
+        val member = getMemberById(discordId) ?: return false
+        val memberRoles = member.roles.map { it.name }
+        val hasAny = roleNames.any { memberRoles.contains(it) }
+        return hasAny || (adminFallback && hasRequiredRole(member))
+    }
+    
+    /**
      * Check if a user has admin permissions using their Discord ID
      * This is useful for services that need to check permissions without a Member object
      */
     fun hasAdminPermission(discordId: String): Boolean {
-        try {
-            val guild = this.guild ?: return false
-            val member = guild.retrieveMemberById(discordId).complete() ?: return false
-            return hasRequiredRole(member)
-        } catch (e: Exception) {
-            logger.warn("Error checking admin permission for $discordId: ${e.message}")
-            return false
+        val member = getMemberById(discordId) ?: return false
+        return hasRequiredRole(member)
+    }
+    
+    /**
+     * Check if a user has a specific role type
+     */
+    fun hasRoleType(discordId: String, type: RoleType): Boolean {
+        return when(type) {
+            RoleType.ADMIN -> hasAdminPermission(discordId)
+            RoleType.PATRON -> hasPatronRole(discordId)
+            RoleType.ADULT -> hasAdultRole(discordId)
         }
     }
     
@@ -409,28 +454,14 @@ class DiscordService : ListenerAdapter() {
      * Check if a user has patron role using their Discord ID
      */
     fun hasPatronRole(discordId: String): Boolean {
-        try {
-            val guild = this.guild ?: return false
-            val member = guild.retrieveMemberById(discordId).complete() ?: return false
-            return member.roles.any { it.name == patronRole } || hasRequiredRole(member)
-        } catch (e: Exception) {
-            logger.warn("Error checking patron role for $discordId: ${e.message}")
-            return false
-        }
+        return hasRole(discordId, patronRole, true)
     }
     
     /**
      * Check if a user has the adult role using their Discord ID
      */
     fun hasAdultRole(discordId: String): Boolean {
-        try {
-            val guild = this.guild ?: return false
-            val member = guild.retrieveMemberById(discordId).complete() ?: return false
-            return member.roles.any { it.name == adultRole } || hasRequiredRole(member)
-        } catch (e: Exception) {
-            logger.warn("Error checking adult role for $discordId: ${e.message}")
-            return false
-        }
+        return hasRole(discordId, adultRole, true)
     }
     
     /**

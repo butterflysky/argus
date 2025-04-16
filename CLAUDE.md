@@ -50,3 +50,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Version Pinning (Cursor Rule)
 Do not change versions of existing libraries in build.gradle or gradle.properties. When adding dependencies, select the most recent compatible version.
+
+## Allowed Documentation URLs
+The following documentation sites are approved for fetching:
+- jda.wiki - Discord JDA library documentation

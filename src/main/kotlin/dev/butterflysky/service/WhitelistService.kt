@@ -38,9 +38,108 @@ class WhitelistService private constructor() {
         fun isDatabaseConnected(): Boolean {
             return databaseConnected
         }
+        
+        /**
+         * Run a database transaction with error handling
+         */
+        private inline fun <T> dbTransaction(
+            errorMessage: String,
+            defaultValue: T,
+            crossinline block: Transaction.() -> T
+        ): T {
+            return try {
+                transaction {
+                    block()
+                }
+            } catch (e: Exception) {
+                logger.error("$errorMessage: ${e.message}", e)
+                defaultValue
+            }
+        }
     }
     
     private var server: MinecraftServer? = null
+    
+    /**
+     * Check if the server is available
+     */
+    private fun validateServerAvailable(): Boolean {
+        if (server == null) {
+            logger.error("Server is not available")
+            return false
+        }
+        return true
+    }
+    
+    /**
+     * Get or create a Discord user
+     */
+    private fun getOrCreateDiscordUser(discordId: String, discordUsername: String? = null): DiscordUser? {
+        return dbTransaction("Failed to get or create Discord user", null) {
+            val id = discordId.toLongOrNull() ?: return@dbTransaction null
+            DiscordUser.findById(id) ?: DiscordUser.new(id) {
+                currentUsername = discordUsername ?: "Unknown"
+                currentServername = null
+                joinedServerAt = Instant.now()
+                isInServer = true
+            }
+        }
+    }
+    
+    /**
+     * Get or create a Minecraft user
+     */
+    private fun getOrCreateMinecraftUser(uuid: UUID, username: String, owner: DiscordUser? = null): MinecraftUser? {
+        return dbTransaction("Failed to get or create Minecraft user", null) {
+            MinecraftUser.findById(uuid) ?: MinecraftUser.new(uuid) {
+                currentUsername = username
+                currentOwner = owner
+            }
+        }
+    }
+    
+    /**
+     * Update a Minecraft username if it changed
+     */
+    private fun updateMinecraftUsername(user: MinecraftUser, newUsername: String, recordedBy: DiscordUser): Boolean {
+        return dbTransaction("Failed to update Minecraft username", false) {
+            if (user.currentUsername != newUsername) {
+                val oldUsername = user.currentUsername
+                user.currentUsername = newUsername
+                
+                // Add to username history
+                WhitelistDatabase.MinecraftUserName.new {
+                    this.minecraftUser = user
+                    this.username = newUsername
+                    this.recordedBy = recordedBy
+                }
+                
+                logger.info("Updated Minecraft username for ${user.id.value} from $oldUsername to $newUsername")
+                true
+            } else {
+                false
+            }
+        }
+    }
+    
+    /**
+     * Find an approved whitelist application for a Minecraft user
+     */
+    private fun findApprovedApplication(minecraftUser: MinecraftUser): WhitelistApplication? {
+        return dbTransaction("Failed to find approved application", null) {
+            WhitelistApplication.find {
+                (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+            }.sortedByDescending { it.appliedAt }.firstOrNull()
+        }
+    }
+    
+    /**
+     * Check if a Discord user ID is the unmapped placeholder ID
+     */
+    private fun isUnmappedDiscordUser(discordUser: DiscordUser?): Boolean {
+        return discordUser == null || discordUser.id.value == WhitelistDatabase.UNMAPPED_DISCORD_ID
+    }
     
     /**
      * Initialize the whitelist service
@@ -206,16 +305,34 @@ class WhitelistService private constructor() {
                 logger.info("Updated Minecraft username for $uuid to $username")
             }
             
-            // Create a moderator whitelist entry
-            transaction {
-                // Check if there's already an approved application
-                val existingApplication = WhitelistApplication.find {
+            // First, check if player is already whitelisted
+            val alreadyWhitelisted = transaction {
+                WhitelistApplication.find {
                     (WhitelistDatabase.WhitelistApplications.minecraftUser eq EntityID(uuid, WhitelistDatabase.MinecraftUsers)) and
                     (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
-                }.firstOrNull()
-                
-                if (existingApplication == null) {
-                    // Create a new whitelist entry
+                }.firstOrNull() != null
+            }
+            
+            if (alreadyWhitelisted) {
+                logger.info("Player $username ($uuid) is already whitelisted")
+                return true
+            }
+            
+            // Add to vanilla whitelist first to ensure it succeeds
+            try {
+                val profile = com.mojang.authlib.GameProfile(uuid, username)
+                val entry = net.minecraft.server.WhitelistEntry(profile)
+                server.playerManager.whitelist.add(entry)
+            } catch (e: Exception) {
+                logger.error("Error adding to vanilla whitelist: ${e.message}", e)
+                // If vanilla whitelist update fails, abort the whole operation
+                return false
+            }
+            
+            // If vanilla whitelist succeeded, create our database entry
+            try {
+                transaction {
+                    // Create a whitelist entry directly added by moderator
                     WhitelistApplication.createModeratorWhitelist(
                         discordUser = discordUser,
                         minecraftUser = minecraftUser,
@@ -230,26 +347,25 @@ class WhitelistService private constructor() {
                         entityType = "MinecraftUser",
                         entityId = uuid.toString(),
                         performedBy = discordUser,
-                        details = "Added $username to whitelist"
+                        details = "Added $username to whitelist by moderator action"
                     )
-                    
-                    logger.info("Created moderator whitelist for $username ($uuid)")
-                } else {
-                    logger.info("Player $username ($uuid) already has an approved whitelist application")
                 }
-            }
-            
-            // Also add to the vanilla whitelist
-            try {
-                val profile = com.mojang.authlib.GameProfile(uuid, username)
-                val entry = net.minecraft.server.WhitelistEntry(profile)
-                server.playerManager.whitelist.add(entry)
+                
+                logger.info("Player $username ($uuid) whitelisted directly by moderator $discordId")
+                return true
             } catch (e: Exception) {
-                logger.error("Error adding to vanilla whitelist: ${e.message}")
+                // Database operation failed after vanilla whitelist succeeded
+                // Try to revert vanilla whitelist change
+                logger.error("Database operation failed after vanilla whitelist update. Attempting to revert...", e)
+                try {
+                    val profile = com.mojang.authlib.GameProfile(uuid, username)
+                    val entry = net.minecraft.server.WhitelistEntry(profile)
+                    server.playerManager.whitelist.remove(entry)
+                } catch (revertError: Exception) {
+                    logger.error("Failed to revert vanilla whitelist change. System may be in inconsistent state!", revertError)
+                }
+                return false
             }
-            
-            logger.info("Added $username ($uuid) to whitelist by Discord user $discordId")
-            return true
         } catch (e: Exception) {
             logger.error("Error adding $username ($uuid) to whitelist", e)
             return false
@@ -268,34 +384,25 @@ class WhitelistService private constructor() {
                 DiscordUser.findById(discordId.toLong())
             } ?: return false
             
-            transaction {
-                // Find the Minecraft user
-                val minecraftUser = MinecraftUser.findById(uuid) ?: return@transaction
-                
-                // Find all approved applications
-                val approvedApplications = WhitelistApplication.find {
+            // Find the Minecraft user
+            val minecraftUser = transaction {
+                MinecraftUser.findById(uuid)
+            } ?: return false
+            
+            // Check if the player is actually whitelisted
+            val applications = transaction {
+                WhitelistApplication.find {
                     (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
                     (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
-                }
-                
-                // Mark all as removed
-                approvedApplications.forEach { application ->
-                    application.status = ApplicationStatus.REMOVED
-                    application.processedAt = Instant.now()
-                    application.processedBy = discordUser
-                    
-                    // Create audit log
-                    WhitelistDatabase.createAuditLog(
-                        actionType = "WHITELIST_REMOVE",
-                        entityType = "MinecraftUser",
-                        entityId = uuid.toString(),
-                        performedBy = discordUser,
-                        details = "Removed ${minecraftUser.currentUsername} from whitelist"
-                    )
-                }
+                }.toList()
             }
             
-            // Also remove from the vanilla whitelist
+            if (applications.isEmpty()) {
+                logger.info("Player ${minecraftUser.currentUsername} ($uuid) is not whitelisted, nothing to remove")
+                return false
+            }
+            
+            // Remove from vanilla whitelist first
             val playerManager = server.playerManager
             val user = playerManager.server.getUserCache()?.getByUuid(uuid)?.orElse(null)
             if (user != null) {
@@ -303,12 +410,49 @@ class WhitelistService private constructor() {
                     val entry = net.minecraft.server.WhitelistEntry(user)
                     playerManager.whitelist.remove(entry)
                 } catch (e: Exception) {
-                    logger.error("Error removing from vanilla whitelist: ${e.message}")
+                    logger.error("Error removing from vanilla whitelist: ${e.message}", e)
+                    // If we can't remove from vanilla whitelist, abort
+                    return false
                 }
+            } else {
+                logger.warn("Could not find user profile for $uuid in user cache - removing from database only")
             }
             
-            logger.info("Removed player $uuid from whitelist by Discord user $discordId")
-            return true
+            // Now update our database records
+            try {
+                transaction {
+                    // Mark all approved applications as removed
+                    applications.forEach { application ->
+                        application.status = ApplicationStatus.REMOVED
+                        application.processedAt = Instant.now()
+                        application.processedBy = discordUser
+                    }
+                    
+                    // Create audit log
+                    WhitelistDatabase.createAuditLog(
+                        actionType = "WHITELIST_REMOVE",
+                        entityType = "MinecraftUser",
+                        entityId = uuid.toString(),
+                        performedBy = discordUser,
+                        details = "Removed ${minecraftUser.currentUsername} from whitelist by moderator action"
+                    )
+                }
+                
+                logger.info("Player ${minecraftUser.currentUsername} ($uuid) removed from whitelist by moderator $discordId")
+                return true
+            } catch (e: Exception) {
+                // If database update fails but vanilla removal succeeded, try to add back to vanilla whitelist
+                logger.error("Database operation failed after vanilla whitelist removal. Attempting to revert...", e)
+                if (user != null) {
+                    try {
+                        val entry = net.minecraft.server.WhitelistEntry(user)
+                        playerManager.whitelist.add(entry)
+                    } catch (revertError: Exception) {
+                        logger.error("Failed to revert vanilla whitelist removal. System may be in inconsistent state!", revertError)
+                    }
+                }
+                return false
+            }
         } catch (e: Exception) {
             logger.error("Error removing $uuid from whitelist", e)
             return false

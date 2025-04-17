@@ -164,14 +164,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'add' subcommand - admin only
      */
-    private inner class AddHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
-            
+    private inner class AddHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             val playerName = options.find { it.name == "player" }?.asString
             if (playerName == null) {
                 event.hook.editOriginal("Please provide a player name.").queue()
@@ -207,13 +201,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'remove' subcommand - admin only
      */
-    private inner class RemoveHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class RemoveHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             val playerName = options.find { it.name == "player" }?.asString
             if (playerName == null) {
@@ -322,13 +311,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'on' subcommand - admin only
      */
-    private inner class OnHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class OnHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             logger.info("Enabling whitelist (requested by ${event.user.name})")
             
@@ -345,13 +329,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'off' subcommand - admin only
      */
-    private inner class OffHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class OffHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             logger.info("Disabling whitelist (requested by ${event.user.name})")
             
@@ -368,13 +347,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'reload' subcommand - admin only
      */
-    private inner class ReloadHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class ReloadHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             logger.info("Reloading whitelist (requested by ${event.user.name})")
             
@@ -391,13 +365,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'test' subcommand - admin only
      */
-    private inner class TestHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class TestHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             logger.info("Testing whitelist (requested by ${event.user.name})")
             
@@ -662,13 +631,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'applications' subcommand - admin only, for listing pending applications
      */
-    private inner class ApplicationsHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class ApplicationsHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             logger.info("Listing whitelist applications (requested by ${event.user.name})")
             
@@ -722,13 +686,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'approve' subcommand - admin only, for approving an application
      */
-    private inner class ApproveHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class ApproveHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             val applicationId = options.find { it.name == "application_id" }?.asInt
             val notes = options.find { it.name == "notes" }?.asString
@@ -758,13 +717,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'reject' subcommand - admin only, for rejecting an application
      */
-    private inner class RejectHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use this command.").queue()
-                return
-            }
+    private inner class RejectHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             
             val applicationId = options.find { it.name == "application_id" }?.asInt
             val notes = options.find { it.name == "notes" }?.asString

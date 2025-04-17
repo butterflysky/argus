@@ -32,13 +32,9 @@ class WhitelistService private constructor() {
         private val instance = WhitelistService()
         private var databaseConnected = false
         
-        fun getInstance(): WhitelistService {
-            return instance
-        }
+        fun getInstance() = instance
         
-        fun isDatabaseConnected(): Boolean {
-            return databaseConnected
-        }
+        fun isDatabaseConnected() = databaseConnected
         
         /**
          * Run a database transaction with error handling and logging
@@ -69,11 +65,10 @@ class WhitelistService private constructor() {
      * Check if the server is available
      */
     private fun validateServerAvailable(): Boolean {
-        if (server == null) {
+        return if (server == null) {
             logger.error("Server is not available")
-            return false
-        }
-        return true
+            false
+        } else true
     }
     
     /**
@@ -162,9 +157,8 @@ class WhitelistService private constructor() {
     /**
      * Check if a Discord user ID is the unmapped placeholder ID
      */
-    private fun isUnmappedDiscordUser(discordUser: DiscordUser?): Boolean {
-        return discordUser == null || discordUser.id.value == WhitelistDatabase.UNMAPPED_DISCORD_ID
-    }
+    private fun isUnmappedDiscordUser(discordUser: DiscordUser?) = 
+        discordUser == null || discordUser.id.value == WhitelistDatabase.UNMAPPED_DISCORD_ID
     
     /**
      * Initialize the whitelist service
@@ -1116,42 +1110,30 @@ class WhitelistService private constructor() {
             val minecraftUsers = minecraftUserQuery.toList()
             
             // Apply Discord username filter - this is more complex as we need to join
-            val filteredUsers = if (filters.discordUsername != null) {
+            val filteredUsers = filters.discordUsername?.let { discordName ->
                 minecraftUsers.filter { minecraftUser ->
-                    val owner = minecraftUser.currentOwner
-                    owner != null && 
-                    owner.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID &&
-                    owner.currentUsername.lowercase().contains(filters.discordUsername.lowercase())
+                    minecraftUser.currentOwner?.let { owner ->
+                        owner.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID &&
+                        owner.currentUsername.lowercase().contains(discordName.lowercase())
+                    } ?: false
                 }
-            } else {
-                minecraftUsers
-            }
+            } ?: minecraftUsers
             
             // Apply Discord ID filter
-            val afterDiscordIdFilter = if (filters.discordId != null) {
-                val discordIdLong = filters.discordId.toLongOrNull()
-                if (discordIdLong != null) {
-                    filteredUsers.filter { minecraftUser ->
-                        val owner = minecraftUser.currentOwner
-                        owner != null && owner.id.value == discordIdLong
-                    }
-                } else {
-                    filteredUsers
+            val afterDiscordIdFilter = filters.discordId?.toLongOrNull()?.let { discordIdLong ->
+                filteredUsers.filter { minecraftUser ->
+                    minecraftUser.currentOwner?.id?.value == discordIdLong
                 }
-            } else {
-                filteredUsers
-            }
+            } ?: filteredUsers
             
             // Apply has Discord link filter
-            val afterDiscordLinkFilter = if (filters.hasDiscordLink != null) {
+            val afterDiscordLinkFilter = filters.hasDiscordLink?.let { hasDiscordFilter ->
                 afterDiscordIdFilter.filter { minecraftUser ->
                     val hasLink = minecraftUser.currentOwner != null && 
                                  minecraftUser.currentOwner?.id?.value != WhitelistDatabase.UNMAPPED_DISCORD_ID
-                    filters.hasDiscordLink == hasLink
+                    hasDiscordFilter == hasLink
                 }
-            } else {
-                afterDiscordIdFilter
-            }
+            } ?: afterDiscordIdFilter
             
             // Get approval status for each user
             val results = afterDiscordLinkFilter.map { minecraftUser ->
@@ -1186,14 +1168,13 @@ class WhitelistService private constructor() {
                     }
                 }
                 
-                val discordUser = minecraftUser.currentOwner
-                val discordInfo = if (discordUser != null && discordUser.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID) {
-                    DiscordUserInfo(
-                        id = discordUser.id.value.toString(),
-                        username = discordUser.currentUsername
-                    )
-                } else {
-                    null
+                val discordInfo = minecraftUser.currentOwner?.let { discordUser ->
+                    if (discordUser.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID) {
+                        DiscordUserInfo(
+                            id = discordUser.id.value.toString(),
+                            username = discordUser.currentUsername
+                        )
+                    } else null
                 }
                 
                 val minecraftInfo = MinecraftUserInfo(

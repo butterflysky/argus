@@ -160,7 +160,7 @@ object WhitelistDatabase {
          * Records that a user has left the Discord server.
          * We keep their records but mark them as no longer in the server.
          */
-        fun markAsLeft(): DiscordUser = apply {
+        fun markAsLeft() = apply {
             isInServer = false
             leftServerAt = Instant.now()
         }
@@ -168,7 +168,7 @@ object WhitelistDatabase {
         /**
          * Records that a user has rejoined the Discord server.
          */
-        fun markAsRejoined(): DiscordUser = apply {
+        fun markAsRejoined() = apply {
             isInServer = true
             leftServerAt = null
         }
@@ -540,7 +540,5 @@ object WhitelistDatabase {
     /**
      * Check if the database is initialized
      */
-    fun isInitialized(): Boolean {
-        return initialized
-    }
+    fun isInitialized() = initialized
 }

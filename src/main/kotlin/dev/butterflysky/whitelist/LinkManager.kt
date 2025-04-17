@@ -16,9 +16,7 @@ class LinkManager private constructor() {
         private val logger = LoggerFactory.getLogger("argus-link-manager")
         private val instance = LinkManager()
         
-        fun getInstance(): LinkManager {
-            return instance
-        }
+        fun getInstance() = instance
     }
     
     private val linkTokens = ConcurrentHashMap<String, LinkRequest>()

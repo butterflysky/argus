@@ -63,10 +63,10 @@ class ArgusConfig {
         /**
          * Get the current config
          */
-        fun get(): ConfigData = instance
+        fun get() = instance
         
         /**
-         * Update the config with new values
+         * Update the config with new values and save it to disk
          */
         fun update(newConfig: ConfigData) {
             instance = newConfig

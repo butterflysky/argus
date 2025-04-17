@@ -153,20 +153,15 @@ object Argus : ModInitializer {
     }
     
     /**
-     * Initialize Discord integration
+     * Initialize Discord integration in a separate thread
      */
     private fun initializeDiscord() {
-        try {
-            // Initialize in a separate thread to not block the main thread
-            Thread {
-                try {
-                    discordService.init()
-                } catch (e: Exception) {
-                    logger.error("Failed to initialize Discord service", e)
-                }
-            }.start()
-        } catch (e: Exception) {
-            logger.error("Error starting Discord initialization thread", e)
+        kotlin.concurrent.thread(start = true, name = "DiscordInitThread") {
+            try {
+                discordService.init()
+            } catch (e: Exception) {
+                logger.error("Failed to initialize Discord service", e)
+            }
         }
     }
     

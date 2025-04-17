@@ -39,30 +39,38 @@ class WhitelistCommands(private val server: MinecraftServer) {
     fun registerHandlers() {
         val discordService = DiscordService.getInstance()
         
-        // Register handlers for each subcommand
-        discordService.registerCommandHandler("add", AddHandler())
-        discordService.registerCommandHandler("remove", RemoveHandler())
-        discordService.registerCommandHandler("list", ListHandler())
-        discordService.registerCommandHandler("on", OnHandler())
-        discordService.registerCommandHandler("off", OffHandler())
-        discordService.registerCommandHandler("reload", ReloadHandler())
-        discordService.registerCommandHandler("test", TestHandler())
-        discordService.registerCommandHandler("lookup", LookupHandler())
-        discordService.registerCommandHandler("history", HistoryHandler())
+        // Define handler mappings
+        val handlers = mapOf(
+            // Basic whitelist management
+            "add" to AddHandler(),
+            "remove" to RemoveHandler(),
+            "list" to ListHandler(),
+            "on" to OnHandler(),
+            "off" to OffHandler(),
+            "reload" to ReloadHandler(),
+            "test" to TestHandler(),
+            
+            // Lookup and history
+            "lookup" to LookupHandler(),
+            "history" to HistoryHandler(),
+            
+            // Application workflow
+            "apply" to ApplyHandler(),
+            "applications" to ApplicationsHandler(),
+            "approve" to ApproveHandler(),
+            "reject" to RejectHandler(),
+            
+            // Account management
+            "link" to LinkHandler(),
+            "search" to SearchHandler()
+        )
         
-        // New application-related commands
-        discordService.registerCommandHandler("apply", ApplyHandler())
-        discordService.registerCommandHandler("applications", ApplicationsHandler())
-        discordService.registerCommandHandler("approve", ApproveHandler())
-        discordService.registerCommandHandler("reject", RejectHandler())
+        // Register all handlers
+        handlers.forEach { (command, handler) ->
+            discordService.registerCommandHandler(command, handler)
+        }
         
-        // Account linking command
-        discordService.registerCommandHandler("link", LinkHandler())
-        
-        // Search command
-        discordService.registerCommandHandler("search", SearchHandler())
-        
-        logger.info("Registered all whitelist command handlers")
+        logger.info("Registered ${handlers.size} whitelist command handlers")
     }
     
     /**
@@ -136,10 +144,10 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val member = event.member ?: return false
             
             // Check for moderator or admin role
-            val hasModerator = member.roles.any { it.name.equals("Moderator", ignoreCase = true) }
-            val hasAdmin = member.roles.any { it.name.equals("Admin", ignoreCase = true) }
-            
-            return hasModerator || hasAdmin
+            return member.roles.any { 
+                it.name.equals("Moderator", ignoreCase = true) || 
+                it.name.equals("Admin", ignoreCase = true)
+            }
         }
     }
     

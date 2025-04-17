@@ -76,9 +76,7 @@ class DiscordService : ListenerAdapter() {
     /**
      * Check if Discord service is connected
      */
-    fun isConnected(): Boolean {
-        return jda?.status == JDA.Status.CONNECTED
-    }
+    fun isConnected() = jda?.status == JDA.Status.CONNECTED
     
     /**
      * Set the Minecraft server instance

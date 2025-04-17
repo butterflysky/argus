@@ -1,6 +1,7 @@
 package dev.butterflysky
 
 import dev.butterflysky.config.ArgusConfig
+import dev.butterflysky.config.Constants
 import dev.butterflysky.discord.DiscordService
 import dev.butterflysky.discord.WhitelistCommands
 import dev.butterflysky.service.WhitelistService
@@ -11,8 +12,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.minecraft.server.command.CommandManager.literal
 import net.minecraft.text.Text
 import org.slf4j.LoggerFactory
-import dev.butterflysky.config.Constants
-import dev.butterflysky.config.ArgusConfig
 
 object Argus : ModInitializer {
     private val logger = LoggerFactory.getLogger("argus")

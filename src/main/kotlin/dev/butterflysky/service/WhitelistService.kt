@@ -88,7 +88,7 @@ class WhitelistService private constructor() {
      * @param discordUsername Optional Discord username, defaults to "Unknown" if creating new
      * @return The Discord user entity or null if creation fails
      */
-    private fun getOrCreateDiscordUser(discordId: String, discordUsername: String? = null): DiscordUser? {
+    fun getOrCreateDiscordUser(discordId: String, discordUsername: String? = null): DiscordUser? {
         try {
             val id = discordId.toLongOrNull() ?: return null
             

@@ -118,6 +118,35 @@ class WhitelistCommands(private val server: MinecraftServer) {
      */
     private abstract inner class BaseHandler : DiscordService.CommandHandler {
         /**
+         * Execute the command, ensuring Discord user exists in database first
+         */
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Ensure Discord user exists in database before executing any command
+            val discordUser = whitelistService.getOrCreateDiscordUser(
+                discordId = event.user.id,
+                discordUsername = event.user.name
+            )
+            
+            if (discordUser == null) {
+                logger.error("Failed to create or update Discord user record for ${event.user.name} (${event.user.id})")
+                event.hook.editOriginal("An error occurred processing your Discord account. Please try again later.").queue()
+                return
+            }
+            
+            // Call the implementation with verified Discord user
+            executeCommand(event, options, discordUser)
+        }
+        
+        /**
+         * Execute the command implementation after Discord user is verified
+         */
+        protected abstract fun executeCommand(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        )
+        
+        /**
          * Execute a Minecraft server command
          */
         protected fun executeServerCommand(command: String): String {
@@ -155,28 +184,40 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Base handler that requires moderator or admin permissions
      */
     private abstract inner class ModeratorCommandHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeCommand(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             // Check permissions
             if (!isModeratorOrAdmin(event)) {
                 event.hook.editOriginal("You don't have permission to use this command.").queue()
                 return
             }
             
-            // Call the implementation
-            executeWithPermission(event, options)
+            // Call the implementation with verified Discord user
+            executeWithPermission(event, options, discordUser)
         }
         
         /**
          * Execute the command once permissions are verified
          */
-        protected abstract fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>)
+        protected abstract fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        )
     }
     
     /**
      * Handler for the 'add' subcommand - admin only
      */
     private inner class AddHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             val playerName = options.find { it.name == "player" }?.asString
             if (playerName == null) {
                 event.hook.editOriginal("Please provide a player name.").queue()
@@ -213,8 +254,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'remove' subcommand - admin only
      */
     private inner class RemoveHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             val playerName = options.find { it.name == "player" }?.asString
             if (playerName == null) {
                 event.hook.editOriginal("Please provide a player name.").queue()
@@ -248,7 +292,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'list' subcommand
      */
     private inner class ListHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeCommand(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             logger.info("Listing whitelisted players (requested by ${event.user.name})")
             
             val whitelistedPlayers = whitelistService.getWhitelistedPlayers()
@@ -323,7 +371,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'on' subcommand - admin only
      */
     private inner class OnHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             
             logger.info("Enabling whitelist (requested by ${event.user.name})")
             
@@ -341,7 +393,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'off' subcommand - admin only
      */
     private inner class OffHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             
             logger.info("Disabling whitelist (requested by ${event.user.name})")
             
@@ -359,7 +415,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'reload' subcommand - admin only
      */
     private inner class ReloadHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             
             logger.info("Reloading whitelist (requested by ${event.user.name})")
             
@@ -377,7 +437,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'test' subcommand - admin only
      */
     private inner class TestHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             
             logger.info("Testing whitelist (requested by ${event.user.name})")
             
@@ -408,11 +472,15 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'lookup' subcommand
      */
     private inner class LookupHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            val discordUser = options.find { it.name == "discord_user" }?.asUser
+        override fun executeCommand(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
+            val discordUserOption = options.find { it.name == "discord_user" }?.asUser
             val minecraftName = options.find { it.name == "minecraft_name" }?.asString
             
-            if (discordUser == null && minecraftName == null) {
+            if (discordUserOption == null && minecraftName == null) {
                 event.hook.editOriginal("Please provide either a Discord user or Minecraft username.").queue()
                 return
             }
@@ -423,13 +491,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 .setTitle("Account Lookup")
                 .setColor(Constants.INFO_COLOR)
             
-            if (discordUser != null) {
+            if (discordUserOption != null) {
                 // Look up Minecraft accounts for this Discord user
-                val accounts = whitelistService.getMinecraftAccountsForDiscordUser(discordUser.id)
+                val accounts = whitelistService.getMinecraftAccountsForDiscordUser(discordUserOption.id)
                 
-                embed.setDescription("Discord User: **${discordUser.name}**")
-                    .addField("Discord ID", discordUser.id, true)
-                    .addField("Mention", discordUser.asMention, true)
+                embed.setDescription("Discord User: **${discordUserOption.name}**")
+                    .addField("Discord ID", discordUserOption.id, true)
+                    .addField("Mention", discordUserOption.asMention, true)
                 
                 if (accounts.isEmpty()) {
                     embed.addField("Minecraft Accounts", "No linked Minecraft accounts ❌", true)
@@ -490,9 +558,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'history' subcommand
      */
     private inner class HistoryHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeCommand(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             val minecraftName = options.find { it.name == "minecraft_name" }?.asString
-            val discordUser = options.find { it.name == "discord_user" }?.asUser
+            val discordUserOption = options.find { it.name == "discord_user" }?.asUser
             val defaultLimit = ArgusConfig.get().whitelist.defaultHistoryLimit
             val limit = options.find { it.name == "limit" }?.asInt ?: defaultLimit
             
@@ -510,10 +582,10 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         "Whitelist history for $minecraftName"
                     )
                 }
-                discordUser != null -> {
+                discordUserOption != null -> {
                     Pair(
-                        whitelistService.getWhitelistHistoryByDiscordId(discordUser.id, limit),
-                        "Whitelist history for ${discordUser.asMention}"
+                        whitelistService.getWhitelistHistoryByDiscordId(discordUserOption.id, limit),
+                        "Whitelist history for ${discordUserOption.asMention}"
                     )
                 }
                 else -> {
@@ -595,7 +667,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'apply' subcommand - for players to apply for whitelist
      */
     private inner class ApplyHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeCommand(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             val minecraftName = options.find { it.name == "minecraft_name" }?.asString
             if (minecraftName == null) {
                 event.hook.editOriginal("Please provide your Minecraft username.").queue()
@@ -644,7 +720,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'applications' subcommand - admin only, for listing pending applications
      */
     private inner class ApplicationsHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             
             logger.info("Listing whitelist applications (requested by ${event.user.name})")
             
@@ -699,7 +779,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'approve' subcommand - admin only, for approving an application
      */
     private inner class ApproveHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             
             val applicationId = options.find { it.name == "application_id" }?.asInt
             val notes = options.find { it.name == "notes" }?.asString
@@ -730,7 +814,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'reject' subcommand - admin only, for rejecting an application
      */
     private inner class RejectHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             
             val applicationId = options.find { it.name == "application_id" }?.asInt
             val notes = options.find { it.name == "notes" }?.asString
@@ -761,7 +849,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'link' subcommand - for linking Discord accounts to Minecraft
      */
     private inner class LinkHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeCommand(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             val token = options.find { it.name == "token" }?.asString
             
             if (token == null) {
@@ -822,13 +914,17 @@ class WhitelistCommands(private val server: MinecraftServer) {
      * Handler for the 'search' subcommand - search users with various filters
      */
     private inner class SearchHandler : ModeratorCommandHandler() {
-        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
             logger.info("Performing user search (requested by ${event.user.name})")
             
             // Extract filters from options
             val minecraftName = options.find { it.name == "minecraft_name" }?.asString
             val discordName = options.find { it.name == "discord_name" }?.asString
-            val discordUser = options.find { it.name == "discord_user" }?.asUser
+            val discordUserOption = options.find { it.name == "discord_user" }?.asUser
             val hasDiscord = options.find { it.name == "has_discord" }?.asBoolean
             val isWhitelisted = options.find { it.name == "is_whitelisted" }?.asBoolean
             val addedBy = options.find { it.name == "added_by" }?.asUser
@@ -839,7 +935,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val filters = UserSearchFilters(
                 minecraftUsername = minecraftName,
                 discordUsername = discordName,
-                discordId = discordUser?.id,
+                discordId = discordUserOption?.id,
                 hasDiscordLink = hasDiscord,
                 isWhitelisted = isWhitelisted,
                 addedBy = addedBy?.id,
@@ -861,7 +957,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val filterDescription = StringBuilder()
             if (minecraftName != null) filterDescription.append("• Minecraft name: *$minecraftName*\n")
             if (discordName != null) filterDescription.append("• Discord name: *$discordName*\n")
-            if (discordUser != null) filterDescription.append("• Discord user: ${discordUser.asMention}\n")
+            if (discordUserOption != null) filterDescription.append("• Discord user: ${discordUserOption.asMention}\n")
             if (hasDiscord != null) filterDescription.append("• Has Discord link: ${if (hasDiscord) "Yes" else "No"}\n")
             if (isWhitelisted != null) filterDescription.append("• Whitelisted: ${if (isWhitelisted) "Yes" else "No"}\n")
             if (addedBy != null) filterDescription.append("• Added by: ${addedBy.asMention}\n")

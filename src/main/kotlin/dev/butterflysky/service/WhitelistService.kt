@@ -11,6 +11,7 @@ import net.minecraft.server.WhitelistEntry
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.LoggerFactory
+import dev.butterflysky.config.ArgusConfig
 import java.io.File
 import java.time.Instant
 import java.util.*
@@ -40,7 +41,11 @@ class WhitelistService private constructor() {
         }
         
         /**
-         * Run a database transaction with error handling
+         * Run a database transaction with error handling and logging
+         * 
+         * @param errorMessage Error message prefix to include in logs
+         * @param defaultValue Default value to return if transaction fails
+         * @param block Transaction code to execute
          */
         private inline fun <T> dbTransaction(
             errorMessage: String,
@@ -72,29 +77,49 @@ class WhitelistService private constructor() {
     }
     
     /**
-     * Get or create a Discord user
+     * Get or create a Discord user with improved error handling
+     * 
+     * @param discordId The Discord user ID
+     * @param discordUsername Optional Discord username, defaults to "Unknown" if creating new
+     * @return The Discord user entity or null if creation fails
      */
     private fun getOrCreateDiscordUser(discordId: String, discordUsername: String? = null): DiscordUser? {
-        return dbTransaction("Failed to get or create Discord user", null) {
-            val id = discordId.toLongOrNull() ?: return@dbTransaction null
-            DiscordUser.findById(id) ?: DiscordUser.new(id) {
-                currentUsername = discordUsername ?: "Unknown"
-                currentServername = null
-                joinedServerAt = Instant.now()
-                isInServer = true
+        try {
+            val id = discordId.toLongOrNull() ?: return null
+            
+            return dbTransaction("Failed to get or create Discord user", null) {
+                DiscordUser.findById(id) ?: DiscordUser.new(id) {
+                    currentUsername = discordUsername ?: "Unknown"
+                    currentServername = null
+                    joinedServerAt = Instant.now()
+                    isInServer = true
+                }
             }
+        } catch (e: Exception) {
+            logger.error("Error creating Discord user for ID $discordId: ${e.message}", e)
+            return null
         }
     }
     
     /**
-     * Get or create a Minecraft user
+     * Get or create a Minecraft user with improved error handling
+     * 
+     * @param uuid The Minecraft user UUID
+     * @param username The Minecraft username
+     * @param owner Optional Discord user owner, can be null for unmapped users
+     * @return The Minecraft user entity or null if creation fails
      */
     private fun getOrCreateMinecraftUser(uuid: UUID, username: String, owner: DiscordUser? = null): MinecraftUser? {
-        return dbTransaction("Failed to get or create Minecraft user", null) {
-            MinecraftUser.findById(uuid) ?: MinecraftUser.new(uuid) {
-                currentUsername = username
-                currentOwner = owner
+        try {
+            return dbTransaction("Failed to get or create Minecraft user", null) {
+                MinecraftUser.findById(uuid) ?: MinecraftUser.new(uuid) {
+                    currentUsername = username
+                    currentOwner = owner
+                }
             }
+        } catch (e: Exception) {
+            logger.error("Error creating Minecraft user for $username ($uuid): ${e.message}", e)
+            return null
         }
     }
     
@@ -343,8 +368,8 @@ class WhitelistService private constructor() {
                     
                     // Create audit log
                     WhitelistDatabase.createAuditLog(
-                        actionType = "WHITELIST_ADD",
-                        entityType = "MinecraftUser",
+                        actionType = WhitelistDatabase.AuditActionType.WHITELIST_ADD,
+                        entityType = WhitelistDatabase.EntityType.MINECRAFT_USER,
                         entityId = uuid.toString(),
                         performedBy = discordUser,
                         details = "Added $username to whitelist by moderator action"
@@ -430,8 +455,8 @@ class WhitelistService private constructor() {
                     
                     // Create audit log
                     WhitelistDatabase.createAuditLog(
-                        actionType = "WHITELIST_REMOVE",
-                        entityType = "MinecraftUser",
+                        actionType = WhitelistDatabase.AuditActionType.WHITELIST_REMOVE,
+                        entityType = WhitelistDatabase.EntityType.MINECRAFT_USER,
                         entityId = uuid.toString(),
                         performedBy = discordUser,
                         details = "Removed ${minecraftUser.currentUsername} from whitelist by moderator action"
@@ -536,8 +561,8 @@ class WhitelistService private constructor() {
                     
                     // Create audit log for ownership change
                     WhitelistDatabase.createAuditLog(
-                        actionType = "ACCOUNT_LINK",
-                        entityType = "MinecraftUser",
+                        actionType = WhitelistDatabase.AuditActionType.ACCOUNT_LINK,
+                        entityType = WhitelistDatabase.EntityType.MINECRAFT_USER,
                         entityId = minecraftUuid.toString(),
                         performedBy = discordUser,
                         details = "Linked Minecraft account $minecraftUsername to Discord user $discordUsername ($discordUserId)"
@@ -661,8 +686,8 @@ class WhitelistService private constructor() {
             // Log the application
             transaction {
                 WhitelistDatabase.createAuditLog(
-                    actionType = "WHITELIST_APPLY",
-                    entityType = "WhitelistApplication",
+                    actionType = WhitelistDatabase.AuditActionType.WHITELIST_APPLY,
+                    entityType = WhitelistDatabase.EntityType.WHITELIST_APPLICATION,
                     entityId = application.id.value.toString(),
                     performedBy = discordUser,
                     details = "Applied for whitelist: ${profile.name} (${profile.id})"
@@ -738,8 +763,8 @@ class WhitelistService private constructor() {
                 
                 // Create audit log
                 WhitelistDatabase.createAuditLog(
-                    actionType = "APPLICATION_APPROVE",
-                    entityType = "WhitelistApplication",
+                    actionType = WhitelistDatabase.AuditActionType.APPLICATION_APPROVE,
+                    entityType = WhitelistDatabase.EntityType.WHITELIST_APPLICATION,
                     entityId = application.id.value.toString(),
                     performedBy = moderator,
                     details = "Approved whitelist application for ${application.minecraftUser.currentUsername}" +
@@ -799,8 +824,8 @@ class WhitelistService private constructor() {
                 
                 // Create audit log
                 WhitelistDatabase.createAuditLog(
-                    actionType = "APPLICATION_REJECT",
-                    entityType = "WhitelistApplication",
+                    actionType = WhitelistDatabase.AuditActionType.APPLICATION_REJECT,
+                    entityType = WhitelistDatabase.EntityType.WHITELIST_APPLICATION,
                     entityId = application.id.value.toString(),
                     performedBy = moderator,
                     details = "Rejected whitelist application for ${application.minecraftUser.currentUsername}" +
@@ -1211,7 +1236,8 @@ class WhitelistService private constructor() {
         try {
             val future = userCache?.findByNameAsync(username)
             if (future != null) {
-                val result = future.get(5, TimeUnit.SECONDS)
+                val timeout = ArgusConfig.get().timeouts.profileLookupSeconds
+                val result = future.get(timeout, TimeUnit.SECONDS)
                 if (result.isPresent) {
                     return result.get()
                 }

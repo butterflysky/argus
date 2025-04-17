@@ -21,6 +21,8 @@ import java.util.concurrent.TimeUnit
 import java.time.ZoneId
 import java.time.Instant
 import java.util.stream.Collectors
+import dev.butterflysky.config.ArgusConfig
+import dev.butterflysky.config.Constants
 
 /**
  * Handlers for whitelist-related Discord commands
@@ -79,7 +81,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
         try {
             val future = userCache?.findByNameAsync(username)
             if (future != null) {
-                val result = future.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                val timeout = ArgusConfig.get().timeouts.profileLookupSeconds
+                val result = future.get(timeout, java.util.concurrent.TimeUnit.SECONDS)
                 if (result.isPresent) {
                     return result.get()
                 }
@@ -245,7 +248,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             val embed = EmbedBuilder()
                 .setTitle("Minecraft Whitelist")
-                .setColor(if (isWhitelistEnabled) Color.GREEN else Color.RED)
+                .setColor(if (isWhitelistEnabled) Constants.SUCCESS_COLOR else Constants.ERROR_COLOR)
                 .setDescription("Whitelist is ${if (isWhitelistEnabled) "enabled" else "disabled"}")
                 
             if (whitelistedPlayers.isEmpty()) {
@@ -380,7 +383,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             val embed = EmbedBuilder()
                 .setTitle("Whitelist Test Results")
-                .setColor(Color.BLUE)
+                .setColor(Constants.INFO_COLOR)
                 .setDescription("Whitelist system is functioning correctly")
                 .addField("Status", if (isWhitelistEnabled) "Enabled" else "Disabled", true)
                 .addField("Whitelisted Players", whitelistedPlayers.size.toString(), true)
@@ -410,7 +413,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             val embed = EmbedBuilder()
                 .setTitle("Account Lookup")
-                .setColor(Color.BLUE)
+                .setColor(Constants.INFO_COLOR)
             
             if (discordUser != null) {
                 // Look up Minecraft accounts for this Discord user
@@ -482,13 +485,14 @@ class WhitelistCommands(private val server: MinecraftServer) {
         override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             val minecraftName = options.find { it.name == "minecraft_name" }?.asString
             val discordUser = options.find { it.name == "discord_user" }?.asUser
-            val limit = options.find { it.name == "limit" }?.asInt ?: 10
+            val defaultLimit = ArgusConfig.get().whitelist.defaultHistoryLimit
+            val limit = options.find { it.name == "limit" }?.asInt ?: defaultLimit
             
             logger.info("Fetching whitelist history (requested by ${event.user.name})")
             
             val embed = EmbedBuilder()
                 .setTitle("Whitelist History")
-                .setColor(Color.BLUE)
+                .setColor(Constants.INFO_COLOR)
             
             // Determine which history to fetch and the description to display
             val (history, description) = when {
@@ -606,7 +610,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     // Create a fancy embed for the success message
                     val embed = EmbedBuilder()
                         .setTitle("Whitelist Application Submitted")
-                        .setColor(Color.GREEN)
+                        .setColor(Constants.SUCCESS_COLOR)
                         .setDescription(
                             "Your application for **$minecraftName** has been submitted successfully. " +
                             "A moderator will review your application soon."
@@ -641,7 +645,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             val embed = EmbedBuilder()
                 .setTitle("Pending Whitelist Applications")
-                .setColor(Color.BLUE)
+                .setColor(Constants.INFO_COLOR)
             
             if (applications.isEmpty()) {
                 embed.setDescription("There are no pending whitelist applications.")
@@ -787,7 +791,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 // Create a fancy embed response
                 val embed = EmbedBuilder()
                     .setTitle("Account Linked Successfully")
-                    .setColor(Color.GREEN)
+                    .setColor(Constants.SUCCESS_COLOR)
                     .setDescription("Your Discord account has been linked to Minecraft account **${linkRequest.minecraftUsername}**")
                     .addField("Minecraft Username", linkRequest.minecraftUsername, true)
                     .addField("Minecraft UUID", linkRequest.minecraftUuid.toString(), true)
@@ -820,7 +824,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val hasDiscord = options.find { it.name == "has_discord" }?.asBoolean
             val isWhitelisted = options.find { it.name == "is_whitelisted" }?.asBoolean
             val addedBy = options.find { it.name == "added_by" }?.asUser
-            val limit = options.find { it.name == "limit" }?.asInt?.coerceIn(1, 50) ?: 20
+            val config = ArgusConfig.get().whitelist
+            val limit = options.find { it.name == "limit" }?.asInt?.coerceIn(1, config.maxSearchLimit) ?: config.defaultSearchLimit
             
             // Build filter object
             val filters = UserSearchFilters(
@@ -839,7 +844,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             // Create response embed
             val embed = EmbedBuilder()
                 .setTitle("User Search Results")
-                .setColor(Color.BLUE)
+                .setColor(Constants.INFO_COLOR)
                 .setDescription("Found ${results.size} users matching your criteria.")
                 .setFooter("Search performed by ${event.user.name}")
                 .setTimestamp(Instant.now())

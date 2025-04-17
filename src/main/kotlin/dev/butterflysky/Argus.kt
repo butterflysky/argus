@@ -11,6 +11,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.minecraft.server.command.CommandManager.literal
 import net.minecraft.text.Text
 import org.slf4j.LoggerFactory
+import dev.butterflysky.config.Constants
+import dev.butterflysky.config.ArgusConfig
 
 object Argus : ModInitializer {
     private val logger = LoggerFactory.getLogger("argus")
@@ -89,7 +91,7 @@ object Argus : ModInitializer {
                             source.sendFeedback({
                                 Text.literal("§6[Argus] §eGenerated a link token for your account.\n")
                                     .append(Text.literal("§eRun this command in Discord: §b/whitelist link $token\n"))
-                                    .append(Text.literal("§7(This token will expire in 10 minutes)"))
+                                    .append(Text.literal("§7(This token will expire in ${ArgusConfig.get().link.tokenExpiryMinutes} minutes)"))
                             }, false)
                             
                             logger.info("[ARGUS WHITELIST] Generated link token $token for player $username ($uuid)")

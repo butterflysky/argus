@@ -79,7 +79,10 @@ class ArgusConfig {
      */
     data class ConfigData(
         val discord: DiscordConfig = DiscordConfig(),
-        val reconnect: ReconnectConfig = ReconnectConfig()
+        val reconnect: ReconnectConfig = ReconnectConfig(),
+        val whitelist: WhitelistConfig = WhitelistConfig(),
+        val link: LinkConfig = LinkConfig(),
+        val timeouts: TimeoutConfig = TimeoutConfig()
     )
     
     /**
@@ -101,5 +104,29 @@ class ArgusConfig {
         val initialDelayMs: Long = 5000,
         val maxDelayMs: Long = 60000,
         val backoffMultiplier: Double = 1.5
+    )
+    
+    /**
+     * Whitelist-related configuration
+     */
+    data class WhitelistConfig(
+        val cooldownHours: Long = 48,
+        val defaultHistoryLimit: Int = 10,
+        val defaultSearchLimit: Int = 20,
+        val maxSearchLimit: Int = 50
+    )
+    
+    /**
+     * Account linking configuration
+     */
+    data class LinkConfig(
+        val tokenExpiryMinutes: Long = 10
+    )
+    
+    /**
+     * Timeout configuration for various operations
+     */
+    data class TimeoutConfig(
+        val profileLookupSeconds: Long = 5
     )
 }

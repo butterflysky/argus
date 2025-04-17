@@ -17,6 +17,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.slf4j.LoggerFactory
+import dev.butterflysky.config.ArgusConfig
 import java.time.Instant
 import java.util.UUID
 import java.io.File
@@ -283,22 +284,46 @@ object WhitelistDatabase {
         PENDING, APPROVED, REJECTED, REMOVED
     }
     
+    /**
+     * Enumeration of all possible audit log action types
+     */
+    enum class AuditActionType(val displayName: String) {
+        WHITELIST_ADD("Add to Whitelist"),
+        WHITELIST_REMOVE("Remove from Whitelist"),
+        WHITELIST_APPLY("Whitelist Application"),
+        APPLICATION_APPROVE("Application Approved"),
+        APPLICATION_REJECT("Application Rejected"),
+        ACCOUNT_LINK("Account Link"),
+        USER_LEFT("User Left"),
+        LEGACY_IMPORT("Legacy Import"),
+        ACCOUNT_TRANSFER("Account Transfer")
+    }
+    
+    /**
+     * Enumeration of entity types for audit logs
+     */
+    enum class EntityType(val displayName: String) {
+        DISCORD_USER("Discord User"),
+        MINECRAFT_USER("Minecraft User"),
+        WHITELIST_APPLICATION("Whitelist Application")
+    }
+    
     // Helper functions
     
     /**
      * Creates a detailed audit log entry for tracking all changes in the system.
      * This is crucial for security and accountability, as all actions are tracked.
      * 
-     * @param actionType The type of action performed (e.g., "CREATE", "UPDATE", "DELETE")
-     * @param entityType The type of entity affected (e.g., "DiscordUser", "MinecraftUser")
+     * @param actionType The type of action performed
+     * @param entityType The type of entity affected
      * @param entityId The ID of the affected entity
      * @param performedBy The user who performed the action, or null for system actions
      * @param details Additional details about the action
      * @return The created AuditLog entity
      */
     fun createAuditLog(
-        actionType: String,
-        entityType: String,
+        actionType: AuditActionType,
+        entityType: EntityType,
         entityId: String,
         performedBy: DiscordUser? = null,
         details: String
@@ -307,8 +332,8 @@ object WhitelistDatabase {
         val actor = performedBy ?: DiscordUser.getSystemUser()
         
         return AuditLog.new {
-            this.actionType = actionType
-            this.entityType = entityType
+            this.actionType = actionType.name
+            this.entityType = entityType.name
             this.entityId = entityId
             this.performedBy = actor
             this.details = details
@@ -321,7 +346,8 @@ object WhitelistDatabase {
      * Moderators can override this with appropriate reasoning.
      */
     fun calculateEligibleTimestamp(appliedAt: Instant): Instant {
-        return appliedAt.plusSeconds(48 * 60 * 60) // 48 hours in seconds
+        val cooldownHours = ArgusConfig.get().whitelist.cooldownHours
+        return appliedAt.plusSeconds(cooldownHours * 60 * 60) // Convert hours to seconds
     }
     
     /**
@@ -334,8 +360,8 @@ object WhitelistDatabase {
             DiscordUser.findById(discordId)?.apply {
                 markAsLeft()
                 createAuditLog(
-                    actionType = "USER_LEFT",
-                    entityType = "DiscordUser",
+                    actionType = AuditActionType.USER_LEFT,
+                    entityType = EntityType.DISCORD_USER,
                     entityId = id.value.toString(),
                     performedBy = performedBy,
                     details = "User left the Discord server"
@@ -374,8 +400,8 @@ object WhitelistDatabase {
                 it.status = ApplicationStatus.REMOVED
                 
                 createAuditLog(
-                    actionType = "WHITELIST_REMOVED",
-                    entityType = "WhitelistApplication",
+                    actionType = AuditActionType.WHITELIST_REMOVE,
+                    entityType = EntityType.WHITELIST_APPLICATION,
                     entityId = it.id.value.toString(),
                     performedBy = performedBy,
                     details = "Automatically removed due to account transfer: $reason"
@@ -384,8 +410,8 @@ object WhitelistDatabase {
             
             // Create audit log for the transfer
             createAuditLog(
-                actionType = "ACCOUNT_TRANSFER",
-                entityType = "MinecraftUser",
+                actionType = AuditActionType.ACCOUNT_TRANSFER,
+                entityType = EntityType.MINECRAFT_USER,
                 entityId = account.id.value.toString(),
                 performedBy = performedBy,
                 details = "Account transferred from ${previousOwner?.currentUsername ?: "Unknown"} " +
@@ -436,8 +462,8 @@ object WhitelistDatabase {
             
             // Create audit log
             createAuditLog(
-                actionType = "LEGACY_IMPORT",
-                entityType = "MinecraftUser",
+                actionType = AuditActionType.LEGACY_IMPORT,
+                entityType = EntityType.MINECRAFT_USER,
                 entityId = account.id.value.toString(),
                 performedBy = performedBy,
                 details = "Imported legacy Minecraft account $username from whitelist.json"

@@ -259,6 +259,16 @@ class DiscordService : ListenerAdapter() {
         // Link subcommand - for linking Discord to Minecraft accounts
         val linkSubcommand = SubcommandData("link", "Link your Discord account to your Minecraft account")
             .addOption(OptionType.STRING, "token", "The token generated in Minecraft with /whitelist link", true)
+            
+        // Search subcommand - for searching users with various filters
+        val searchSubcommand = SubcommandData("search", "Search for users with filters")
+            .addOption(OptionType.STRING, "minecraft_name", "Search by Minecraft username (partial match)", false)
+            .addOption(OptionType.STRING, "discord_name", "Search by Discord username (partial match)", false)
+            .addOption(OptionType.USER, "discord_user", "Search by Discord user", false)
+            .addOption(OptionType.BOOLEAN, "has_discord", "Filter by whether account has Discord link", false)
+            .addOption(OptionType.BOOLEAN, "is_whitelisted", "Filter by whitelist status", false)
+            .addOption(OptionType.USER, "added_by", "Filter by who added the user", false)
+            .addOption(OptionType.INTEGER, "limit", "Maximum number of results (max 50)", false)
         
         whitelistCommand.addSubcommands(
             addSubcommand,
@@ -274,6 +284,7 @@ class DiscordService : ListenerAdapter() {
             rejectSubcommand,
             reloadSubcommand,
             removeSubcommand,
+            searchSubcommand,
             testSubcommand
         )
         

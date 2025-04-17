@@ -928,6 +928,129 @@ class WhitelistService private constructor() {
     }
     
     /**
+     * Search users based on filters
+     */
+    fun searchUsers(filters: UserSearchFilters): List<UserSearchResult> {
+        return transaction {
+            // Start with all possible Minecraft users
+            var minecraftUserQuery = MinecraftUser.all()
+            
+            // Apply Minecraft username filter (case-insensitive substring match)
+            if (filters.minecraftUsername != null) {
+                minecraftUserQuery = MinecraftUser.find {
+                    WhitelistDatabase.MinecraftUsers.currentUsername.lowerCase() like 
+                        "%${filters.minecraftUsername.lowercase()}%"
+                }
+            }
+            
+            // Convert to a list we can filter in memory
+            val minecraftUsers = minecraftUserQuery.toList()
+            
+            // Apply Discord username filter - this is more complex as we need to join
+            val filteredUsers = if (filters.discordUsername != null) {
+                minecraftUsers.filter { minecraftUser ->
+                    val owner = minecraftUser.currentOwner
+                    owner != null && 
+                    owner.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID &&
+                    owner.currentUsername.lowercase().contains(filters.discordUsername.lowercase())
+                }
+            } else {
+                minecraftUsers
+            }
+            
+            // Apply Discord ID filter
+            val afterDiscordIdFilter = if (filters.discordId != null) {
+                val discordIdLong = filters.discordId.toLongOrNull()
+                if (discordIdLong != null) {
+                    filteredUsers.filter { minecraftUser ->
+                        val owner = minecraftUser.currentOwner
+                        owner != null && owner.id.value == discordIdLong
+                    }
+                } else {
+                    filteredUsers
+                }
+            } else {
+                filteredUsers
+            }
+            
+            // Apply has Discord link filter
+            val afterDiscordLinkFilter = if (filters.hasDiscordLink != null) {
+                afterDiscordIdFilter.filter { minecraftUser ->
+                    val hasLink = minecraftUser.currentOwner != null && 
+                                 minecraftUser.currentOwner?.id?.value != WhitelistDatabase.UNMAPPED_DISCORD_ID
+                    filters.hasDiscordLink == hasLink
+                }
+            } else {
+                afterDiscordIdFilter
+            }
+            
+            // Get approval status for each user
+            val results = afterDiscordLinkFilter.map { minecraftUser ->
+                // Find the most recent approved application for timing info
+                val application = WhitelistApplication.find {
+                    (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                    (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                }.sortedByDescending { it.appliedAt }.firstOrNull()
+                
+                val isWhitelisted = application != null
+                
+                // Apply whitelist status filter
+                if (filters.isWhitelisted != null && filters.isWhitelisted != isWhitelisted) {
+                    return@map null
+                }
+                
+                // Apply added by filter
+                if (filters.addedBy != null && application != null) {
+                    val processedBy = application.processedBy
+                    if (processedBy == null || processedBy.id.value.toString() != filters.addedBy) {
+                        return@map null
+                    }
+                }
+                
+                // Apply time range filters
+                if (application != null) {
+                    if (filters.addedBefore != null && application.appliedAt.isAfter(filters.addedBefore)) {
+                        return@map null
+                    }
+                    if (filters.addedAfter != null && application.appliedAt.isBefore(filters.addedAfter)) {
+                        return@map null
+                    }
+                }
+                
+                val discordUser = minecraftUser.currentOwner
+                val discordInfo = if (discordUser != null && discordUser.id.value != WhitelistDatabase.UNMAPPED_DISCORD_ID) {
+                    DiscordUserInfo(
+                        id = discordUser.id.value.toString(),
+                        username = discordUser.currentUsername
+                    )
+                } else {
+                    null
+                }
+                
+                val minecraftInfo = MinecraftUserInfo(
+                    uuid = minecraftUser.id.value,
+                    username = minecraftUser.currentUsername,
+                    addedAt = application?.appliedAt ?: minecraftUser.createdAt,
+                    addedBy = application?.processedBy?.id?.value?.toString() ?: "unknown",
+                    discordUserId = discordInfo?.id,
+                    discordUsername = discordInfo?.username
+                )
+                
+                UserSearchResult(
+                    minecraftInfo = minecraftInfo,
+                    discordInfo = discordInfo,
+                    isWhitelisted = isWhitelisted,
+                    addedAt = application?.appliedAt,
+                    addedBy = application?.processedBy?.id?.value?.toString()
+                )
+            }
+            
+            // Filter out nulls and limit results
+            results.filterNotNull().take(filters.limit)
+        }
+    }
+    
+    /**
      * Get a game profile from the Minecraft server
      */
     private fun getGameProfile(username: String): GameProfile? {
@@ -1009,6 +1132,32 @@ data class MinecraftUserInfo(
 data class DiscordUserInfo(
     val id: String,
     val username: String
+)
+
+/**
+ * Search filters for user lookup
+ */
+data class UserSearchFilters(
+    val minecraftUsername: String? = null,         // Substring match for Minecraft username
+    val discordUsername: String? = null,           // Substring match for Discord username
+    val discordId: String? = null,                 // Exact match for Discord ID
+    val hasDiscordLink: Boolean? = null,           // Whether the account has a Discord link
+    val isWhitelisted: Boolean? = null,            // Whether the account is whitelisted
+    val addedBefore: Instant? = null,              // Added before this time
+    val addedAfter: Instant? = null,               // Added after this time
+    val addedBy: String? = null,                   // Added by this Discord ID
+    val limit: Int = 20                            // Maximum number of results to return
+)
+
+/**
+ * Combined user information for search results
+ */
+data class UserSearchResult(
+    val minecraftInfo: MinecraftUserInfo? = null,
+    val discordInfo: DiscordUserInfo? = null,
+    val isWhitelisted: Boolean = false,
+    val addedAt: Instant? = null,
+    val addedBy: String? = null
 )
 
 /**

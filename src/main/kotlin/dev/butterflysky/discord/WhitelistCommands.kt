@@ -4,6 +4,8 @@ import dev.butterflysky.service.WhitelistService
 import dev.butterflysky.service.MinecraftUserInfo
 import dev.butterflysky.service.ApplicationInfo
 import dev.butterflysky.service.ApplicationResult
+import dev.butterflysky.service.UserSearchFilters
+import dev.butterflysky.service.UserSearchResult
 import net.dv8tion.jda.api.EmbedBuilder
 import net.dv8tion.jda.api.entities.User
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent
@@ -54,6 +56,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
         
         // Account linking command
         discordService.registerCommandHandler("link", LinkHandler())
+        
+        // Search command
+        discordService.registerCommandHandler("search", SearchHandler())
         
         logger.info("Registered all whitelist command handlers")
     }
@@ -823,6 +828,128 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 event.hook.editOriginal("Failed to link accounts. Please try again later.").queue()
                 logger.error("Failed to link Discord user ${event.user.name} (${event.user.id}) to Minecraft account ${linkRequest.minecraftUsername} (${linkRequest.minecraftUuid})")
             }
+        }
+    }
+    
+    /**
+     * Handler for the 'search' subcommand - search users with various filters
+     */
+    private inner class SearchHandler : BaseHandler() {
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions - only admins and moderators can use this search
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use the search command.").queue()
+                return
+            }
+            
+            logger.info("Performing user search (requested by ${event.user.name})")
+            
+            // Extract filters from options
+            val minecraftName = options.find { it.name == "minecraft_name" }?.asString
+            val discordName = options.find { it.name == "discord_name" }?.asString
+            val discordUser = options.find { it.name == "discord_user" }?.asUser
+            val hasDiscord = options.find { it.name == "has_discord" }?.asBoolean
+            val isWhitelisted = options.find { it.name == "is_whitelisted" }?.asBoolean
+            val addedBy = options.find { it.name == "added_by" }?.asUser
+            val limit = options.find { it.name == "limit" }?.asInt?.coerceIn(1, 50) ?: 20
+            
+            // Build filter object
+            val filters = UserSearchFilters(
+                minecraftUsername = minecraftName,
+                discordUsername = discordName,
+                discordId = discordUser?.id,
+                hasDiscordLink = hasDiscord,
+                isWhitelisted = isWhitelisted,
+                addedBy = addedBy?.id,
+                limit = limit
+            )
+            
+            // Execute search
+            val results = whitelistService.searchUsers(filters)
+            
+            // Create response embed
+            val embed = EmbedBuilder()
+                .setTitle("User Search Results")
+                .setColor(Color.BLUE)
+                .setDescription("Found ${results.size} users matching your criteria.")
+                .setFooter("Search performed by ${event.user.name}")
+                .setTimestamp(Instant.now())
+            
+            // Display search filters that were used
+            val filterDescription = StringBuilder()
+            if (minecraftName != null) filterDescription.append("• Minecraft name: *$minecraftName*\n")
+            if (discordName != null) filterDescription.append("• Discord name: *$discordName*\n")
+            if (discordUser != null) filterDescription.append("• Discord user: ${discordUser.asMention}\n")
+            if (hasDiscord != null) filterDescription.append("• Has Discord link: ${if (hasDiscord) "Yes" else "No"}\n")
+            if (isWhitelisted != null) filterDescription.append("• Whitelisted: ${if (isWhitelisted) "Yes" else "No"}\n")
+            if (addedBy != null) filterDescription.append("• Added by: ${addedBy.asMention}\n")
+            if (filterDescription.isNotEmpty()) {
+                embed.addField("Search Filters", filterDescription.toString(), false)
+            }
+            
+            // Display search results
+            if (results.isEmpty()) {
+                embed.addField("Results", "No users found matching your search criteria", false)
+            } else {
+                // Group results into chunks to stay within Discord embed limits
+                val maxResultsPerField = 5
+                results.chunked(maxResultsPerField).forEachIndexed { index, chunk ->
+                    val resultText = StringBuilder()
+                    
+                    chunk.forEach { result ->
+                        // Minecraft info
+                        val minecraftInfo = result.minecraftInfo
+                        if (minecraftInfo != null) {
+                            resultText.append("**MC:** ${minecraftInfo.username} (${minecraftInfo.uuid})\n")
+                        }
+                        
+                        // Discord info
+                        val discordInfo = result.discordInfo
+                        if (discordInfo != null) {
+                            resultText.append("**Discord:** <@${discordInfo.id}> (${discordInfo.username})\n")
+                        } else {
+                            resultText.append("**Discord:** Not linked\n")
+                        }
+                        
+                        // Whitelist status
+                        val statusEmoji = if (result.isWhitelisted) "✅" else "❌"
+                        resultText.append("**Status:** ${if (result.isWhitelisted) "Whitelisted" else "Not whitelisted"} $statusEmoji\n")
+                        
+                        // Added info
+                        if (result.addedAt != null) {
+                            val addedDate = dateFormatter.format(result.addedAt)
+                            val addedByText = if (result.addedBy != null) {
+                                try {
+                                    val addedById = result.addedBy.toLongOrNull()
+                                    if (addedById != null) {
+                                        "<@${result.addedBy}>"
+                                    } else {
+                                        result.addedBy
+                                    }
+                                } catch (e: Exception) {
+                                    result.addedBy
+                                }
+                            } else {
+                                "unknown"
+                            }
+                            resultText.append("**Added:** $addedDate by $addedByText\n")
+                        }
+                        
+                        resultText.append("\n") // Add spacing between results
+                    }
+                    
+                    val fieldTitle = if (results.size <= maxResultsPerField) {
+                        "Results"
+                    } else {
+                        "Results (${index + 1}/${(results.size + maxResultsPerField - 1) / maxResultsPerField})"
+                    }
+                    
+                    embed.addField(fieldTitle, resultText.toString(), false)
+                }
+            }
+            
+            // Send response
+            event.hook.editOriginalEmbeds(embed.build()).queue()
         }
     }
 }

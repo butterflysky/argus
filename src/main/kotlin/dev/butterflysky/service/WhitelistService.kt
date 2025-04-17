@@ -24,7 +24,17 @@ import net.minecraft.server.Whitelist
 import java.util.concurrent.TimeUnit
 
 /**
- * Service for managing whitelist operations
+ * Service for managing whitelist operations.
+ * 
+ * This service provides the business logic for all whitelist-related operations, including:
+ * - Adding and removing players from the whitelist
+ * - Managing whitelist applications
+ * - Tracking account links between Discord and Minecraft
+ * - Searching for users with various filters
+ * - Querying whitelist history
+ * 
+ * The service uses both the vanilla Minecraft whitelist and our custom database
+ * to ensure consistency between the two systems.
  */
 class WhitelistService private constructor() {
     companion object {

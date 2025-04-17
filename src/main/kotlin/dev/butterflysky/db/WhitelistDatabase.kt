@@ -24,13 +24,21 @@ import java.io.File
 
 /**
  * WhitelistDatabase contains the schema definition for the Abcraft whitelist management system.
+ * This class manages database interactions for the whitelist system, including tables for
+ * Discord users, Minecraft accounts, whitelist applications, and audit logs.
  * 
  * Core design principles:
  * 1. Discord accounts are the primary identifier for players (using immutable Discord IDs)
  * 2. Minecraft accounts can be transferred between players
  * 3. All username changes are tracked for both platforms
  * 4. Moderator actions are audited
- * 5. Whitelist eligibility follows a 48-hour cooldown by default
+ * 5. Whitelist eligibility follows a configurable cooldown period
+ * 
+ * @property logger The SLF4J logger instance for database operations
+ * @property initialized Indicates whether the database has been successfully initialized
+ * @property dbFile The SQLite database file
+ * @property UNMAPPED_DISCORD_ID Special constant for legacy Minecraft accounts without Discord mapping
+ * @property SYSTEM_USER_ID Special constant for actions taken by the system rather than a human
  */
 object WhitelistDatabase {
     private val logger = LoggerFactory.getLogger("argus-db")
@@ -51,17 +59,29 @@ object WhitelistDatabase {
     const val SYSTEM_USER_ID: Long = -2L
     
     // Tables
+    /**
+     * Table for storing Discord user information.
+     * Uses Discord's numeric ID as the primary key since it's immutable.
+     *
+     * @property currentUsername The current Discord username
+     * @property currentServername The current Discord server nickname if set
+     * @property joinedServerAt Timestamp when the user joined the server
+     * @property isInServer Whether the user is currently in the server
+     * @property leftServerAt Timestamp when the user left the server (if applicable)
+     * @property createdAt Timestamp when this record was created
+     */
     object DiscordUsers : LongIdTable("discord_users") {
-        // Using Discord's numeric ID as the primary key since it's immutable
         val currentUsername = varchar("current_username", 128)
         val currentServername = varchar("current_servername", 128).nullable()
         val joinedServerAt = timestamp("joined_server_at")
-        // Track if user has left the Discord server
         val isInServer = bool("is_in_server").default(true)
         val leftServerAt = timestamp("left_server_at").nullable()
         val createdAt = timestamp("created_at").default(Instant.now())
     }
 
+    /**
+     * Table for tracking historical Discord username and nickname changes
+     */
     object DiscordUserNameHistory : IntIdTable("discord_username_history") {
         val discordUser = reference("discord_id", DiscordUsers, onDelete = ReferenceOption.CASCADE)
         val username = varchar("username", 128)
@@ -70,6 +90,9 @@ object WhitelistDatabase {
         val recordedBy = reference("recorded_by", DiscordUsers, onDelete = ReferenceOption.SET_NULL).nullable()
     }
 
+    /**
+     * Table for storing Minecraft user accounts
+     */
     object MinecraftUsers : UUIDTable("minecraft_users") {
         val currentUsername = varchar("current_username", 128)
         val createdAt = timestamp("created_at").default(Instant.now())
@@ -77,6 +100,9 @@ object WhitelistDatabase {
         val transferredAt = timestamp("transferred_at").nullable()
     }
 
+    /**
+     * Table for tracking historical Minecraft username changes
+     */
     object MinecraftUsernameHistory : IntIdTable("minecraft_username_history") {
         val minecraftUser = reference("minecraft_uuid", MinecraftUsers, onDelete = ReferenceOption.CASCADE)
         val username = varchar("username", 128)
@@ -106,6 +132,9 @@ object WhitelistDatabase {
         val notes = text("notes").nullable()
     }
 
+    /**
+     * Table for storing audit logs of all significant system actions
+     */
     object AuditLogs : IntIdTable("audit_logs") {
         val actionType = varchar("action_type", 32)
         val entityType = varchar("entity_type", 32)
@@ -116,6 +145,9 @@ object WhitelistDatabase {
     }
 
     // Entities
+    /**
+     * Entity class representing a Discord user in the database
+     */
     class DiscordUser(id: EntityID<Long>) : LongEntity(id) {
         companion object : LongEntityClass<DiscordUser>(DiscordUsers) {
             /**
@@ -174,6 +206,9 @@ object WhitelistDatabase {
         }
     }
 
+    /**
+     * Entity class representing a Discord username history entry
+     */
     class DiscordUserName(id: EntityID<Int>) : IntEntity(id) {
         companion object : IntEntityClass<DiscordUserName>(DiscordUserNameHistory)
 
@@ -184,6 +219,9 @@ object WhitelistDatabase {
         var recordedBy by DiscordUser optionalReferencedOn DiscordUserNameHistory.recordedBy
     }
 
+    /**
+     * Entity class representing a Minecraft user account
+     */
     class MinecraftUser(id: EntityID<UUID>) : UUIDEntity(id) {
         companion object : UUIDEntityClass<MinecraftUser>(MinecraftUsers)
 
@@ -196,6 +234,9 @@ object WhitelistDatabase {
         val applications by WhitelistApplication referrersOn WhitelistApplications.minecraftUser
     }
 
+    /**
+     * Entity class representing a Minecraft username history entry
+     */
     class MinecraftUserName(id: EntityID<Int>) : IntEntity(id) {
         companion object : IntEntityClass<MinecraftUserName>(MinecraftUsernameHistory)
 
@@ -205,6 +246,9 @@ object WhitelistDatabase {
         var recordedBy by DiscordUser optionalReferencedOn MinecraftUsernameHistory.recordedBy
     }
 
+    /**
+     * Entity class representing a whitelist application
+     */
     class WhitelistApplication(id: EntityID<Int>) : IntEntity(id) {
         companion object : IntEntityClass<WhitelistApplication>(WhitelistApplications) {
             /**
@@ -264,6 +308,9 @@ object WhitelistDatabase {
         var notes by WhitelistApplications.notes
     }
 
+    /**
+     * Entity class representing an audit log entry
+     */
     class AuditLog(id: EntityID<Int>) : IntEntity(id) {
         companion object : IntEntityClass<AuditLog>(AuditLogs)
 
@@ -276,16 +323,27 @@ object WhitelistDatabase {
     }
 
     // Enums
+    /**
+     * Types of Discord name changes that can be recorded
+     */
     enum class NameType {
-        USERNAME, SERVERNAME, NICKNAME
+        USERNAME,    // Discord username
+        SERVERNAME,  // Server nickname
+        NICKNAME     // Other nickname
     }
 
+    /**
+     * Possible statuses for whitelist applications
+     */
     enum class ApplicationStatus {
-        PENDING, APPROVED, REJECTED, REMOVED
+        PENDING,   // Application is waiting for review
+        APPROVED,  // Application has been approved
+        REJECTED,  // Application has been rejected
+        REMOVED    // User was removed from whitelist
     }
     
     /**
-     * Enumeration of all possible audit log action types
+     * Enumeration of all possible audit log action types with display names
      */
     enum class AuditActionType(val displayName: String) {
         WHITELIST_ADD("Add to Whitelist"),
@@ -300,7 +358,7 @@ object WhitelistDatabase {
     }
     
     /**
-     * Enumeration of entity types for audit logs
+     * Enumeration of entity types that can be referenced in audit logs
      */
     enum class EntityType(val displayName: String) {
         DISCORD_USER("Discord User"),
@@ -342,8 +400,11 @@ object WhitelistDatabase {
 
     /**
      * Calculates when a player becomes eligible for whitelisting.
-     * By default, there's a 48-hour cooldown period to prevent griefing.
+     * Uses a configurable cooldown period to prevent griefing.
      * Moderators can override this with appropriate reasoning.
+     *
+     * @param appliedAt The timestamp when the application was submitted
+     * @return The timestamp when the application becomes eligible for approval
      */
     fun calculateEligibleTimestamp(appliedAt: Instant): Instant {
         val cooldownHours = ArgusConfig.get().whitelist.cooldownHours
@@ -354,6 +415,10 @@ object WhitelistDatabase {
      * Handles the case when a user leaves the Discord server.
      * We keep their records but mark them as no longer in the server,
      * which allows us to unwhitelist them while preserving history.
+     *
+     * @param discordId The Discord ID of the user who left
+     * @param performedBy The Discord user who recorded this action (or null for system)
+     * @return The updated Discord user entity, or null if not found
      */
     fun handleUserLeft(discordId: Long, performedBy: DiscordUser?): DiscordUser? {
         return transaction {
@@ -426,6 +491,11 @@ object WhitelistDatabase {
      * Imports legacy Minecraft accounts from whitelist.json that don't have
      * associated Discord accounts yet. These are temporarily mapped to the
      * special UNMAPPED_DISCORD_ID until a proper Discord mapping is established.
+     *
+     * @param minecraftUuid The UUID of the Minecraft user to import
+     * @param username The username of the Minecraft user
+     * @param performedBy The Discord user who performed the import (or system user)
+     * @return A pair of the created Minecraft user and whitelist application, or null if the user already exists
      */
     fun importLegacyMinecraftUser(
         minecraftUuid: UUID,
@@ -474,7 +544,10 @@ object WhitelistDatabase {
     }
 
     /**
-     * Initialize the database
+     * Initialize the database connection and create tables if they don't exist
+     *
+     * @param runDirectory The server's run directory where the database will be stored
+     * @return True if initialization was successful, false otherwise
      */
     fun initialize(runDirectory: File): Boolean {
         if (initialized) {

@@ -141,6 +141,27 @@ class WhitelistCommands(private val server: MinecraftServer) {
     }
     
     /**
+     * Base handler that requires moderator or admin permissions
+     */
+    private abstract inner class ModeratorCommandHandler : BaseHandler() {
+        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
+            // Check permissions
+            if (!isModeratorOrAdmin(event)) {
+                event.hook.editOriginal("You don't have permission to use this command.").queue()
+                return
+            }
+            
+            // Call the implementation
+            executeWithPermission(event, options)
+        }
+        
+        /**
+         * Execute the command once permissions are verified
+         */
+        protected abstract fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>)
+    }
+    
+    /**
      * Handler for the 'add' subcommand - admin only
      */
     private inner class AddHandler : BaseHandler() {
@@ -834,14 +855,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
     /**
      * Handler for the 'search' subcommand - search users with various filters
      */
-    private inner class SearchHandler : BaseHandler() {
-        override fun execute(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
-            // Check permissions - only admins and moderators can use this search
-            if (!isModeratorOrAdmin(event)) {
-                event.hook.editOriginal("You don't have permission to use the search command.").queue()
-                return
-            }
-            
+    private inner class SearchHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(event: SlashCommandInteractionEvent, options: List<OptionMapping>) {
             logger.info("Performing user search (requested by ${event.user.name})")
             
             // Extract filters from options

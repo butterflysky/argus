@@ -60,6 +60,13 @@ dependencies {
 	implementation "org.jetbrains.exposed:exposed-jdbc:${project.exposed_version}"
 	include "org.jetbrains.exposed:exposed-java-time:${project.exposed_version}"
 	implementation "org.jetbrains.exposed:exposed-java-time:${project.exposed_version}"
+	
+	// Testing dependencies
+	testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.0"
+	testImplementation "org.junit.jupiter:junit-jupiter-engine:5.10.0"
+	testImplementation "io.mockk:mockk:1.13.8"
+	testImplementation "org.assertj:assertj-core:3.24.2"
+	testImplementation "com.h2database:h2:2.2.224"  // In-memory database for testing
 }
 
 processResources {
@@ -88,6 +95,13 @@ java {
 
 	sourceCompatibility = JavaVersion.VERSION_21
 	targetCompatibility = JavaVersion.VERSION_21
+}
+
+test {
+	useJUnitPlatform()
+	testLogging {
+		events "passed", "skipped", "failed"
+	}
 }
 
 jar {

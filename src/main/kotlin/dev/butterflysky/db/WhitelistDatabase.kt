@@ -544,6 +544,52 @@ object WhitelistDatabase {
     }
 
     /**
+     * Creates all database tables required by the application
+     */
+    private fun createTables() {
+        transaction {
+            SchemaUtils.create(
+                DiscordUsers,
+                DiscordUserNameHistory,
+                MinecraftUsers,
+                MinecraftUsernameHistory,
+                WhitelistApplications,
+                AuditLogs
+            )
+        }
+    }
+    
+    /**
+     * Initialize the database with a specific JDBC URL (useful for testing)
+     *
+     * @param jdbcUrl The JDBC URL to connect to (e.g., "jdbc:h2:mem:test" for in-memory testing)
+     * @param driver The JDBC driver to use
+     * @return True if initialization was successful, false otherwise
+     */
+    fun initializeWithJdbcUrl(jdbcUrl: String, driver: String): Boolean {
+        if (initialized) {
+            return true
+        }
+        
+        logger.info("Initializing database with JDBC URL: $jdbcUrl")
+        
+        try {
+            // Connect to database
+            Database.connect(jdbcUrl, driver)
+            
+            // Create tables if they don't exist
+            createTables()
+            
+            initialized = true
+            logger.info("Whitelist database initialized successfully")
+            return true
+        } catch (e: Exception) {
+            logger.error("Failed to initialize whitelist database", e)
+            return false
+        }
+    }
+
+    /**
      * Initialize the database connection and create tables if they don't exist
      *
      * @param runDirectory The server's run directory where the database will be stored
@@ -586,24 +632,7 @@ object WhitelistDatabase {
             
             // Use file:// protocol to ensure proper handling of absolute paths
             val jdbcUrl = "jdbc:sqlite:${dbFile!!.absolutePath}"
-            logger.info("Connecting to database with URL: $jdbcUrl")
-            Database.connect(jdbcUrl, "org.sqlite.JDBC")
-            
-            // Create tables if they don't exist
-            transaction {
-                SchemaUtils.create(
-                    DiscordUsers,
-                    DiscordUserNameHistory,
-                    MinecraftUsers,
-                    MinecraftUsernameHistory,
-                    WhitelistApplications,
-                    AuditLogs
-                )
-            }
-            
-            initialized = true
-            logger.info("Whitelist database initialized successfully")
-            return true
+            return initializeWithJdbcUrl(jdbcUrl, "org.sqlite.JDBC")
         } catch (e: Exception) {
             logger.error("Failed to initialize whitelist database", e)
             return false

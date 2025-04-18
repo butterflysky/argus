@@ -340,7 +340,8 @@ object WhitelistDatabase {
         PENDING,   // Application is waiting for review
         APPROVED,  // Application has been approved
         REJECTED,  // Application has been rejected
-        REMOVED    // User was removed from whitelist
+        REMOVED,   // User was removed from whitelist
+        BANNED     // User was banned from the server
     }
     
     /**
@@ -355,7 +356,9 @@ object WhitelistDatabase {
         ACCOUNT_LINK("Account Link"),
         USER_LEFT("User Left"),
         LEGACY_IMPORT("Legacy Import"),
-        ACCOUNT_TRANSFER("Account Transfer")
+        ACCOUNT_TRANSFER("Account Transfer"),
+        PLAYER_BANNED("Player Banned"),
+        PLAYER_UNBANNED("Player Unbanned")
     }
     
     /**

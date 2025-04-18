@@ -4,7 +4,8 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"WhitelistCommandExecuteMixin",
-		"WhitelistAccessorMixin"
+		"WhitelistAccessorMixin",
+		"BanCommandMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

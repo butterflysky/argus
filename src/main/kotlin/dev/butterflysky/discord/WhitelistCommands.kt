@@ -62,7 +62,10 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             // Account management
             "link" to LinkHandler(),
-            "search" to SearchHandler()
+            "search" to SearchHandler(),
+            
+            // Ban management
+            "ban" to BanHandler()
         )
         
         // Register all handlers
@@ -999,6 +1002,158 @@ class WhitelistCommands(private val server: MinecraftServer) {
             }
             
             // Send response
+            event.hook.editOriginalEmbeds(embed.build()).queue()
+        }
+    }
+    
+    /**
+     * Handler for the 'ban' subcommand - admin only, for banning players
+     * Supports banning by Minecraft username or Discord user
+     */
+    private inner class BanHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
+            val minecraftUser = options.find { it.name == "minecraft_user" }?.asString
+            val targetDiscordUser = options.find { it.name == "discord_user" }?.asUser
+            val reason = options.find { it.name == "reason" }?.asString
+            
+            // Reason is mandatory in the Discord command
+            if (reason == null || reason.isBlank()) {
+                event.hook.editOriginal("Please provide a reason for the ban.").queue()
+                return
+            }
+            
+            // Check if we have either a Minecraft user or Discord user
+            if (minecraftUser == null && targetDiscordUser == null) {
+                event.hook.editOriginal("Please provide either a Minecraft username or Discord user to ban.").queue()
+                return
+            }
+            
+            // Step 1: Determine the list of Minecraft accounts to ban
+            val accountsToBan = mutableListOf<MinecraftUserInfo>()
+            
+            if (targetDiscordUser != null) {
+                // Banning by Discord user - get all associated Minecraft accounts
+                logger.info("Identifying Minecraft accounts linked to Discord user: ${targetDiscordUser.name} (${targetDiscordUser.id})")
+                val linkedAccounts = whitelistService.getMinecraftAccountsForDiscordUser(targetDiscordUser.id)
+                
+                if (linkedAccounts.isEmpty()) {
+                    event.hook.editOriginal("No Minecraft accounts found linked to Discord user ${targetDiscordUser.asMention}.").queue()
+                    return
+                }
+                
+                accountsToBan.addAll(linkedAccounts)
+                logger.info("Found ${accountsToBan.size} Minecraft accounts linked to ${targetDiscordUser.name}")
+            } else {
+                // Banning by Minecraft username - get single account
+                logger.info("Looking up Minecraft user: $minecraftUser")
+                val profile = getGameProfileByName(minecraftUser!!)
+                
+                if (profile == null) {
+                    event.hook.editOriginal("Could not find Minecraft player: $minecraftUser").queue()
+                    return
+                }
+                
+                // Check if this account exists in our database
+                val minecraftUserInfo = whitelistService.findMinecraftUserByName(profile.name)
+                
+                if (minecraftUserInfo != null) {
+                    accountsToBan.add(minecraftUserInfo)
+                } else {
+                    // Create a minimal info object for display purposes only - the actual user
+                    // will be properly created in the service layer
+                    accountsToBan.add(
+                        MinecraftUserInfo(
+                            uuid = profile.id,
+                            username = profile.name,
+                            addedAt = Instant.now(),
+                            addedBy = "unknown"
+                        )
+                    )
+                }
+            }
+            
+            // Step 2: Process bans for all identified accounts
+            val bannedAccounts = mutableListOf<MinecraftUserInfo>()
+            val failedBans = mutableListOf<MinecraftUserInfo>()
+            
+            accountsToBan.forEach { account ->
+                logger.info("Banning Minecraft account: ${account.username} (${account.uuid})")
+                
+                // Use our service method to ban the player properly
+                val success = whitelistService.banPlayer(
+                    uuid = account.uuid,
+                    username = account.username,
+                    discordId = event.user.id,
+                    reason = reason
+                )
+                
+                if (success) {
+                    bannedAccounts.add(account)
+                } else {
+                    failedBans.add(account)
+                    logger.warn("Failed to ban ${account.username}")
+                }
+            }
+            
+            // Step 3: Create response with results
+            if (bannedAccounts.isEmpty()) {
+                event.hook.editOriginal("Failed to ban any accounts.").queue()
+                return
+            }
+            
+            // Create an embed with ban details
+            val embed = EmbedBuilder()
+                .setColor(Color.RED)
+                .setTimestamp(Instant.now())
+            
+            if (targetDiscordUser != null) {
+                // Discord user ban summary
+                embed.setTitle("Discord User Banned")
+                    .setDescription("Discord user ${targetDiscordUser.asMention} and their linked Minecraft accounts have been banned.")
+                    .addField("Discord User", targetDiscordUser.name, true)
+                    .addField("Discord ID", targetDiscordUser.id, true)
+            } else {
+                // Single Minecraft user ban
+                val account = bannedAccounts.first()
+                embed.setTitle("Minecraft Player Banned")
+                    .setDescription("Player **${account.username}** has been banned from the server.")
+                    .addField("Minecraft User", account.username, true)
+                    .addField("UUID", account.uuid.toString(), true)
+                
+                // Add Discord info if available
+                if (account.discordUserId != null) {
+                    val discordMention = DiscordService.getInstance().formatDiscordMention(account.discordUserId)
+                    embed.addField("Linked Discord", discordMention, true)
+                }
+            }
+            
+            // Add common fields
+            embed.addField("Banned by", event.user.asMention, true)
+                .addField("Reason", reason, false)
+            
+            // Add banned accounts details for Discord user bans
+            if (targetDiscordUser != null && bannedAccounts.size > 1) {
+                val accountList = bannedAccounts.joinToString("\n") { "• ${it.username} (${it.uuid})" }
+                embed.addField("Banned Minecraft Accounts (${bannedAccounts.size})", accountList, false)
+            }
+            
+            // Add failed bans if any
+            if (failedBans.isNotEmpty()) {
+                val failedList = failedBans.joinToString("\n") { "• ${it.username}" }
+                embed.addField("Failed to Ban (${failedBans.size})", failedList, false)
+            }
+            
+            // Add footer with whitelist information
+            if (bannedAccounts.size == 1) {
+                embed.setFooter("This player has been removed from the whitelist")
+            } else {
+                embed.setFooter("These ${bannedAccounts.size} linked Minecraft accounts have been removed from the whitelist")
+            }
+            
             event.hook.editOriginalEmbeds(embed.build()).queue()
         }
     }

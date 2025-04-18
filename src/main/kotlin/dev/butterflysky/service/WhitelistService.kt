@@ -4,6 +4,7 @@ import dev.butterflysky.db.WhitelistDatabase
 import dev.butterflysky.db.WhitelistDatabase.DiscordUser
 import dev.butterflysky.db.WhitelistDatabase.MinecraftUser
 import dev.butterflysky.db.WhitelistDatabase.WhitelistApplication
+import dev.butterflysky.db.WhitelistDatabase.WhitelistApplications
 import dev.butterflysky.db.WhitelistDatabase.ApplicationStatus
 import dev.butterflysky.db.WhitelistDatabase.NameType
 import net.minecraft.server.MinecraftServer
@@ -1063,6 +1064,163 @@ class WhitelistService private constructor() {
         
         // Get history using UUID
         return getWhitelistHistory(minecraftUser.id.value, limit)
+    }
+    
+    /**
+     * Ban a player from the server, removing them from whitelist and updating application status
+     *
+     * This method handles both the vanilla server ban and our database updates.
+     * It will not re-ban a player who is already banned.
+     *
+     * @param uuid Minecraft UUID of the player to ban
+     * @param username Minecraft username of the player
+     * @param discordId Discord ID of the moderator issuing the ban, or null for system actions
+     * @param reason Reason for the ban
+     * @return true if ban was successful, false otherwise
+     */
+    fun banPlayer(uuid: UUID, username: String, discordId: String, reason: String): Boolean {
+        try {
+            val server = this.server ?: return false
+            
+            // Get the Discord moderator
+            val moderatorDiscordUser = transaction {
+                DiscordUser.findById(discordId.toLong()) ?: DiscordUser.getSystemUser()
+            }
+            
+            // Get or create the Minecraft user
+            val minecraftUser = getOrCreateMinecraftUser(uuid, username)
+                ?: return false
+            
+            // Add to vanilla ban list
+            val playerManager = server.playerManager
+            val gameProfile = com.mojang.authlib.GameProfile(uuid, username)
+            
+            // Check if player is already banned
+            if (playerManager.userBanList.contains(gameProfile)) {
+                logger.info("Player $username ($uuid) is already banned")
+                // Update our database to ensure consistency - they might be banned in vanilla but not in our DB
+                handlePlayerBannedInternally(minecraftUser, moderatorDiscordUser, reason)
+                return true
+            }
+            
+            // Add the player to the ban list
+            try {
+                val banEntry = net.minecraft.server.BannedPlayerEntry(gameProfile, null, moderatorDiscordUser.currentUsername, null, reason)
+                playerManager.userBanList.add(banEntry)
+                
+                // Disconnect the player if they're online
+                val onlinePlayer = playerManager.getPlayer(uuid)
+                if (onlinePlayer != null) {
+                    onlinePlayer.networkHandler.disconnect(net.minecraft.text.Text.translatable("multiplayer.disconnect.banned"))
+                }
+            } catch (e: Exception) {
+                logger.error("Error adding player to vanilla ban list: ${e.message}", e)
+                return false
+            }
+            
+            // Update our database
+            val success = handlePlayerBannedInternally(minecraftUser, moderatorDiscordUser, reason)
+            
+            logger.info("Player $username ($uuid) has been banned by ${moderatorDiscordUser.currentUsername}")
+            return success
+        } catch (e: Exception) {
+            logger.error("Error banning player $username ($uuid): ${e.message}", e)
+            return false
+        }
+    }
+    
+    /**
+     * Internal method to handle database updates when a player is banned
+     * This is used both by the banPlayer method and the mixin when catching native bans
+     */
+    private fun handlePlayerBannedInternally(
+        minecraftUser: MinecraftUser,
+        moderatorDiscordUser: DiscordUser,
+        reason: String
+    ): Boolean {
+        return try {
+            val server = this.server ?: return false
+            val username = minecraftUser.currentUsername
+            val uuid = minecraftUser.id.value
+            
+            // Check if the player is whitelisted and remove them if needed
+            val wasWhitelisted = isWhitelisted(uuid)
+            if (wasWhitelisted) {
+                // Remove from vanilla whitelist
+                try {
+                    val user = com.mojang.authlib.GameProfile(uuid, username)
+                    val entry = net.minecraft.server.WhitelistEntry(user)
+                    server.playerManager.whitelist.remove(entry)
+                } catch (e: Exception) {
+                    logger.error("Error removing banned player from vanilla whitelist: ${e.message}", e)
+                    // Continue anyway to update our database
+                }
+            }
+            
+            // Update our database
+            transaction {
+                // Find any active whitelist applications
+                val applications = WhitelistApplication.find {
+                    (WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                    (WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                }
+                
+                // Mark all approved applications as banned
+                applications.forEach { application ->
+                    application.status = ApplicationStatus.BANNED
+                    application.processedAt = Instant.now()
+                    application.processedBy = moderatorDiscordUser
+                    application.notes = "Banned: $reason"
+                }
+                
+                // Create audit log entry
+                WhitelistDatabase.createAuditLog(
+                    actionType = WhitelistDatabase.AuditActionType.PLAYER_BANNED,
+                    entityType = WhitelistDatabase.EntityType.MINECRAFT_USER,
+                    entityId = uuid.toString(),
+                    performedBy = moderatorDiscordUser,
+                    details = "Banned player $username. Reason: $reason"
+                )
+            }
+            
+            logger.info("Updated database for banned player $username ($uuid)")
+            true
+        } catch (e: Exception) {
+            logger.error("Error updating database for banned player ${minecraftUser.currentUsername}: ${e.message}", e)
+            false
+        }
+    }
+    
+    /**
+     * Handle when a player is banned via vanilla command, updating our database
+     * This is primarily called from the BanCommandMixin
+     *
+     * @param uuid Minecraft UUID of the banned player
+     * @param username Minecraft username of the banned player
+     * @param discordId Discord ID of the moderator who issued the ban, or null for system/console
+     * @param reason Reason for the ban
+     * @return true if database update was successful, false otherwise
+     */
+    fun handlePlayerBanned(uuid: UUID, username: String, discordId: String?, reason: String): Boolean {
+        try {
+            // Get the Discord moderator - if discordId is null, use system account
+            val moderatorDiscordUser = transaction {
+                if (discordId != null) {
+                    DiscordUser.findById(discordId.toLong()) ?: DiscordUser.getSystemUser()
+                } else {
+                    DiscordUser.getSystemUser()
+                }
+            }
+            
+            // Get or create the Minecraft user being banned
+            val minecraftUser = getOrCreateMinecraftUser(uuid, username) ?: return false
+            
+            // Update our database
+            return handlePlayerBannedInternally(minecraftUser, moderatorDiscordUser, reason)
+        } catch (e: Exception) {
+            logger.error("Error handling ban for player $username ($uuid): ${e.message}", e)
+            return false
+        }
     }
     
     /**

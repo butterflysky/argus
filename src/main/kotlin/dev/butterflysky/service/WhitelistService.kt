@@ -380,7 +380,7 @@ class WhitelistService private constructor() {
                     )
                 }
                 
-                logger.info("Player $username ($uuid) whitelisted directly by moderator $discordId")
+                logger.info("Player $username ($uuid) whitelisted directly by moderator ${discordUser.currentUsername}")
                 return true
             } catch (e: Exception) {
                 // Database operation failed after vanilla whitelist succeeded
@@ -467,7 +467,7 @@ class WhitelistService private constructor() {
                     )
                 }
                 
-                logger.info("Player ${minecraftUser.currentUsername} ($uuid) removed from whitelist by moderator $discordId")
+                logger.info("Player ${minecraftUser.currentUsername} ($uuid) removed from whitelist by moderator ${discordUser.currentUsername}")
                 return true
             } catch (e: Exception) {
                 // If database update fails but vanilla removal succeeded, try to add back to vanilla whitelist
@@ -698,7 +698,7 @@ class WhitelistService private constructor() {
                 )
             }
             
-            logger.info("Created whitelist application for Minecraft user ${profile.name} (${profile.id}) by Discord user $discordId")
+            logger.info("Created whitelist application for Minecraft user ${profile.name} (${profile.id}) by Discord user ${discordUser.currentUsername}")
             
             return ApplicationResult.Success(
                 applicationId = application.id.value,
@@ -788,7 +788,7 @@ class WhitelistService private constructor() {
                     logger.error("Error adding to vanilla whitelist: ${e.message}")
                 }
                 
-                logger.info("Approved whitelist application #$applicationId for ${application.minecraftUser.currentUsername} by $moderatorDiscordId")
+                logger.info("Approved whitelist application #$applicationId for ${application.minecraftUser.currentUsername} by ${moderator.currentUsername}")
                 true
             }
             
@@ -836,7 +836,7 @@ class WhitelistService private constructor() {
                             (if (notes != null) ". Notes: $notes" else "")
                 )
                 
-                logger.info("Rejected whitelist application #$applicationId for ${application.minecraftUser.currentUsername} by $moderatorDiscordId")
+                logger.info("Rejected whitelist application #$applicationId for ${application.minecraftUser.currentUsername} by ${moderator.currentUsername}")
                 true
             }
             

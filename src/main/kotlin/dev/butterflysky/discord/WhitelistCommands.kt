@@ -237,7 +237,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             }
             
             // Add to whitelist using our service
-            val success = whitelistService.addToWhitelist(
+            val (success, alreadyWhitelisted) = whitelistService.addToWhitelist(
                 uuid = profile.id,
                 username = profile.name,
                 discordId = event.user.id,
@@ -245,10 +245,16 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 reason = "Added by moderator via Discord command"
             )
             
-            if (success) {
-                event.hook.editOriginal("Added $playerName to whitelist.").queue()
-            } else {
-                event.hook.editOriginal("Failed to add $playerName to whitelist.").queue()
+            when {
+                alreadyWhitelisted -> {
+                    event.hook.editOriginal("Player $playerName is already on the whitelist.").queue()
+                }
+                success -> {
+                    event.hook.editOriginal("Added $playerName to whitelist.").queue()
+                }
+                else -> {
+                    event.hook.editOriginal("Failed to add $playerName to whitelist.").queue()
+                }
             }
         }
     }

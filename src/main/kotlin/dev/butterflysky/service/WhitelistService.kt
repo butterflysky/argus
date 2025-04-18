@@ -291,10 +291,12 @@ class WhitelistService private constructor() {
     
     /**
      * Add a Minecraft user to the whitelist
+     * @return A pair of (success, alreadyWhitelisted) where success indicates if the operation succeeded,
+     * and alreadyWhitelisted indicates if the player was already on the whitelist
      */
-    fun addToWhitelist(uuid: UUID, username: String, discordId: String, override: Boolean = false, reason: String? = null): Boolean {
+    fun addToWhitelist(uuid: UUID, username: String, discordId: String, override: Boolean = false, reason: String? = null): Pair<Boolean, Boolean> {
         try {
-            val server = this.server ?: return false
+            val server = this.server ?: return Pair(false, false)
             
             // Get the Discord user or create a new one
             val discordUser = transaction {
@@ -345,7 +347,7 @@ class WhitelistService private constructor() {
             
             if (alreadyWhitelisted) {
                 logger.info("Player $username ($uuid) is already whitelisted")
-                return true
+                return Pair(true, true)
             }
             
             // Add to vanilla whitelist first to ensure it succeeds
@@ -356,7 +358,7 @@ class WhitelistService private constructor() {
             } catch (e: Exception) {
                 logger.error("Error adding to vanilla whitelist: ${e.message}", e)
                 // If vanilla whitelist update fails, abort the whole operation
-                return false
+                return Pair(false, false)
             }
             
             // If vanilla whitelist succeeded, create our database entry
@@ -384,7 +386,7 @@ class WhitelistService private constructor() {
                 }
                 
                 logger.info("Player $username ($uuid) whitelisted directly by moderator ${discordUser.currentUsername}")
-                return true
+                return Pair(true, false)
             } catch (e: Exception) {
                 // Database operation failed after vanilla whitelist succeeded
                 // Try to revert vanilla whitelist change
@@ -396,11 +398,11 @@ class WhitelistService private constructor() {
                 } catch (revertError: Exception) {
                     logger.error("Failed to revert vanilla whitelist change. System may be in inconsistent state!", revertError)
                 }
-                return false
+                return Pair(false, false)
             }
         } catch (e: Exception) {
             logger.error("Error adding $username ($uuid) to whitelist", e)
-            return false
+            return Pair(false, false)
         }
     }
     

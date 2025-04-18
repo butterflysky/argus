@@ -270,6 +270,10 @@ class DiscordService : ListenerAdapter() {
             .addOption(OptionType.BOOLEAN, "is_whitelisted", "Filter by whitelist status", false)
             .addOption(OptionType.USER, "added_by", "Filter by who added the user", false)
             .addOption(OptionType.INTEGER, "limit", "Maximum number of results (max 50)", false)
+            
+        // Unwhitelist unlinked subcommand - for bulk removing unlinked accounts from whitelist
+        val unwhitelistUnlinkedSubcommand = SubcommandData("unwhitelist_unlinked", "Remove all unlinked Minecraft accounts from whitelist")
+            .addOption(OptionType.INTEGER, "batch_size", "Number of accounts to process in each batch (default: 50)", false)
         
         whitelistCommand.addSubcommands(
             addSubcommand,
@@ -286,7 +290,8 @@ class DiscordService : ListenerAdapter() {
             reloadSubcommand,
             removeSubcommand,
             searchSubcommand,
-            testSubcommand
+            testSubcommand,
+            unwhitelistUnlinkedSubcommand
         )
         
         // Register the commands with Discord

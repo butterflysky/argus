@@ -65,7 +65,10 @@ class WhitelistCommands(private val server: MinecraftServer) {
             "search" to SearchHandler(),
             
             // Ban management
-            "ban" to BanHandler()
+            "ban" to BanHandler(),
+            
+            // Advanced management
+            "unwhitelist_unlinked" to UnwhitelistUnlinkedHandler()
         )
         
         // Register all handlers
@@ -237,7 +240,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             }
             
             // Add to whitelist using our service
-            val (success, alreadyWhitelisted) = whitelistService.addToWhitelist(
+            val result = whitelistService.addToWhitelist(
                 uuid = profile.id,
                 username = profile.name,
                 discordId = event.user.id,
@@ -245,15 +248,15 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 reason = "Added by moderator via Discord command"
             )
             
-            when {
-                alreadyWhitelisted -> {
+            when (result) {
+                is WhitelistService.AddResult.AlreadyWhitelisted -> {
                     event.hook.editOriginal("Player $playerName is already on the whitelist.").queue()
                 }
-                success -> {
+                is WhitelistService.AddResult.Success -> {
                     event.hook.editOriginal("Added $playerName to whitelist.").queue()
                 }
-                else -> {
-                    event.hook.editOriginal("Failed to add $playerName to whitelist.").queue()
+                is WhitelistService.AddResult.Error -> {
+                    event.hook.editOriginal("Failed to add $playerName to whitelist: ${result.errorMessage}").queue()
                 }
             }
         }
@@ -284,15 +287,24 @@ class WhitelistCommands(private val server: MinecraftServer) {
             }
             
             // Remove from whitelist
-            val success = whitelistService.removeFromWhitelist(
+            val result = whitelistService.removeFromWhitelist(
                 uuid = user.uuid,
                 discordId = event.user.id
             )
             
-            if (success) {
-                event.hook.editOriginal("Removed $playerName from whitelist.").queue()
-            } else {
-                event.hook.editOriginal("Failed to remove $playerName from whitelist.").queue()
+            when (result) {
+                is WhitelistService.RemoveResult.Success -> {
+                    event.hook.editOriginal("Removed $playerName from whitelist.").queue()
+                }
+                is WhitelistService.RemoveResult.OperatorProtected -> {
+                    event.hook.editOriginal("Cannot remove $playerName from whitelist as they are a server operator.").queue()
+                }
+                is WhitelistService.RemoveResult.NotWhitelisted -> {
+                    event.hook.editOriginal("Player $playerName is not on the whitelist.").queue()
+                }
+                is WhitelistService.RemoveResult.Error -> {
+                    event.hook.editOriginal("Failed to remove $playerName from whitelist: ${result.errorMessage}").queue()
+                }
             }
         }
     }
@@ -1009,6 +1021,68 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             // Send response
             event.hook.editOriginalEmbeds(embed.build()).queue()
+        }
+    }
+    
+    /**
+     * Handler for the 'unwhitelist_unlinked' subcommand - admin only, for bulk unwhitelisting unlinked accounts
+     * This is a dangerous operation that should be used carefully.
+     */
+    private inner class UnwhitelistUnlinkedHandler : ModeratorCommandHandler() {
+        override fun executeWithPermission(
+            event: SlashCommandInteractionEvent, 
+            options: List<OptionMapping>,
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+        ) {
+            // Get the batch size parameter if provided (default to 50)
+            val batchSize = options.find { it.name == "batch_size" }?.asInt ?: 50
+            
+            // This command might take a while, so first acknowledge that we received it
+            event.hook.editOriginal("⚠️ **Starting bulk removal of unlinked accounts from whitelist**\nThis may take a while for large numbers of accounts...").queue()
+            
+            // Launch the operation in a separate thread to prevent blocking Discord
+            Thread {
+                try {
+                    logger.info("Starting bulk unwhitelisting of unlinked accounts (requested by ${event.user.name}, batch size: $batchSize)")
+                    
+                    // Get all unlinked accounts and remove them from whitelist
+                    val result = whitelistService.bulkUnwhitelistUnlinkedAccounts(
+                        discordId = event.user.id,
+                        batchSize = batchSize
+                    )
+                    
+                    // Create a fancy embed with the results
+                    val embedColor = if (result.errors.isEmpty()) Constants.SUCCESS_COLOR else Constants.WARNING_COLOR
+                    val embed = EmbedBuilder()
+                        .setTitle("Bulk Unwhitelist Operation Complete")
+                        .setColor(embedColor)
+                        .setDescription("Removed unlinked accounts from the whitelist")
+                        .addField("Processed Accounts", result.processedCount.toString(), true)
+                        .addField("Successfully Removed", result.successCount.toString(), true)
+                        .addField("Skipped Operators", result.skippedOperators.toString(), true)
+                        .setFooter("Operation performed by ${event.user.name}")
+                        .setTimestamp(Instant.now())
+                    
+                    // Add errors if any
+                    if (result.errors.isNotEmpty()) {
+                        val errorText = if (result.errors.size > 5) {
+                            result.errors.take(5).joinToString("\n") + "\n...and ${result.errors.size - 5} more errors"
+                        } else {
+                            result.errors.joinToString("\n")
+                        }
+                        embed.addField("Errors", errorText, false)
+                    }
+                    
+                    // Send the response
+                    event.hook.editOriginalEmbeds(embed.build()).queue()
+                    
+                    logger.info("Completed bulk unwhitelisting operation: ${result.successCount} accounts removed, " +
+                               "${result.skippedOperators} operators skipped, ${result.errors.size} errors")
+                } catch (e: Exception) {
+                    logger.error("Error during bulk unwhitelisting operation", e)
+                    event.hook.editOriginal("❌ **Error during bulk unwhitelisting operation**\n${e.message}").queue()
+                }
+            }.start()
         }
     }
     

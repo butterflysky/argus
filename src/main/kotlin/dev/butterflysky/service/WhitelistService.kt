@@ -83,6 +83,25 @@ class WhitelistService private constructor() {
     }
     
     /**
+     * Check if we can confirm a player is NOT a server operator
+     * This is a safety-first approach - if we can't definitively prove they're not an op, we assume they might be
+     * 
+     * @param uuid The UUID of the player to check
+     * @return True if we can confirm they are NOT an op, false if they are an op OR if we can't tell
+     */
+    private fun isDefinitelyNotOperator(uuid: UUID): Boolean {
+        val server = this.server ?: return false // If server unavailable, be safe and assume they might be an op
+        
+        try {
+            // Check if they're in the op list using isOp method
+            return !server.playerManager.isOperator(com.mojang.authlib.GameProfile(uuid, ""))
+        } catch (e: Exception) {
+            logger.error("Error checking if player is operator: $uuid", e)
+            return false // If any error, be safe and assume they might be an op
+        }
+    }
+    
+    /**
      * Get or create a Discord user with improved error handling
      * 
      * @param discordId The Discord user ID
@@ -290,13 +309,59 @@ class WhitelistService private constructor() {
     }
     
     /**
-     * Add a Minecraft user to the whitelist
-     * @return A pair of (success, alreadyWhitelisted) where success indicates if the operation succeeded,
-     * and alreadyWhitelisted indicates if the player was already on the whitelist
+     * Result of a whitelist add operation
      */
-    fun addToWhitelist(uuid: UUID, username: String, discordId: String, override: Boolean = false, reason: String? = null): Pair<Boolean, Boolean> {
+    sealed class AddResult {
+        /**
+         * Player was successfully added to the whitelist
+         */
+        object Success : AddResult()
+        
+        /**
+         * Player was already on the whitelist
+         */
+        object AlreadyWhitelisted : AddResult()
+        
+        /**
+         * Failed to add player to whitelist due to an error
+         * @param errorMessage Description of the error
+         */
+        data class Error(val errorMessage: String) : AddResult()
+    }
+    
+    /**
+     * Result of a whitelist remove operation
+     */
+    sealed class RemoveResult {
+        /**
+         * Player was successfully removed from the whitelist
+         */
+        object Success : RemoveResult()
+        
+        /**
+         * Player is a server operator or might be, so removal was rejected for safety
+         */
+        object OperatorProtected : RemoveResult()
+        
+        /**
+         * Player was not on the whitelist
+         */
+        object NotWhitelisted : RemoveResult() 
+        
+        /**
+         * Failed to remove player from whitelist due to an error
+         * @param errorMessage Description of the error
+         */
+        data class Error(val errorMessage: String) : RemoveResult()
+    }
+    
+    /**
+     * Add a Minecraft user to the whitelist
+     * @return Result indicating success, already whitelisted, or error
+     */
+    fun addToWhitelist(uuid: UUID, username: String, discordId: String, override: Boolean = false, reason: String? = null): AddResult {
         try {
-            val server = this.server ?: return Pair(false, false)
+            val server = this.server ?: return AddResult.Error("Server is not available")
             
             // Get the Discord user or create a new one
             val discordUser = transaction {
@@ -347,7 +412,7 @@ class WhitelistService private constructor() {
             
             if (alreadyWhitelisted) {
                 logger.info("Player $username ($uuid) is already whitelisted")
-                return Pair(true, true)
+                return AddResult.AlreadyWhitelisted
             }
             
             // Add to vanilla whitelist first to ensure it succeeds
@@ -358,7 +423,7 @@ class WhitelistService private constructor() {
             } catch (e: Exception) {
                 logger.error("Error adding to vanilla whitelist: ${e.message}", e)
                 // If vanilla whitelist update fails, abort the whole operation
-                return Pair(false, false)
+                return AddResult.Error("Failed to add to vanilla whitelist: ${e.message}")
             }
             
             // If vanilla whitelist succeeded, create our database entry
@@ -381,12 +446,12 @@ class WhitelistService private constructor() {
                         entityType = WhitelistDatabase.EntityType.MINECRAFT_USER,
                         entityId = uuid.toString(),
                         performedBy = discordUser,
-                        details = "Added $username to whitelist by moderator action"
+                        details = "Added $username to whitelist"
                     )
                 }
                 
                 logger.info("Player $username ($uuid) whitelisted directly by moderator ${discordUser.currentUsername}")
-                return Pair(true, false)
+                return AddResult.Success
             } catch (e: Exception) {
                 // Database operation failed after vanilla whitelist succeeded
                 // Try to revert vanilla whitelist change
@@ -398,30 +463,40 @@ class WhitelistService private constructor() {
                 } catch (revertError: Exception) {
                     logger.error("Failed to revert vanilla whitelist change. System may be in inconsistent state!", revertError)
                 }
-                return Pair(false, false)
+                return AddResult.Error("Database operation failed: ${e.message}")
             }
         } catch (e: Exception) {
             logger.error("Error adding $username ($uuid) to whitelist", e)
-            return Pair(false, false)
+            return AddResult.Error("Unexpected error: ${e.message}")
         }
     }
     
     /**
      * Remove a Minecraft user from the whitelist
+     * 
+     * @param uuid The UUID of the player to remove
+     * @param discordId The Discord ID of the moderator performing the removal
+     * @return Result indicating success, server op protection, not whitelisted, or error
      */
-    fun removeFromWhitelist(uuid: UUID, discordId: String): Boolean {
+    fun removeFromWhitelist(uuid: UUID, discordId: String): RemoveResult {
         try {
-            val server = this.server ?: return false
+            val server = this.server ?: return RemoveResult.Error("Server is not available")
+            
+            // Safety check: Never unwhitelist server operators
+            if (!isDefinitelyNotOperator(uuid)) {
+                logger.warn("Attempted to remove possible server operator (UUID: $uuid) from whitelist - operation aborted for safety")
+                return RemoveResult.OperatorProtected
+            }
             
             // Get the Discord user
             val discordUser = transaction {
                 DiscordUser.findById(discordId.toLong())
-            } ?: return false
+            } ?: return RemoveResult.Error("Could not find Discord user with ID $discordId")
             
             // Find the Minecraft user
             val minecraftUser = transaction {
                 MinecraftUser.findById(uuid)
-            } ?: return false
+            } ?: return RemoveResult.Error("Could not find Minecraft user with UUID $uuid")
             
             // Check if the player is actually whitelisted
             val applications = transaction {
@@ -433,7 +508,7 @@ class WhitelistService private constructor() {
             
             if (applications.isEmpty()) {
                 logger.info("Player ${minecraftUser.currentUsername} ($uuid) is not whitelisted, nothing to remove")
-                return false
+                return RemoveResult.NotWhitelisted
             }
             
             // Remove from vanilla whitelist first
@@ -446,7 +521,7 @@ class WhitelistService private constructor() {
                 } catch (e: Exception) {
                     logger.error("Error removing from vanilla whitelist: ${e.message}", e)
                     // If we can't remove from vanilla whitelist, abort
-                    return false
+                    return RemoveResult.Error("Failed to remove from vanilla whitelist: ${e.message}")
                 }
             } else {
                 logger.warn("Could not find user profile for $uuid in user cache - removing from database only")
@@ -480,7 +555,7 @@ class WhitelistService private constructor() {
                 }
                 
                 logger.info("Player ${minecraftUser.currentUsername} ($uuid) removed from whitelist by moderator ${discordUser.currentUsername}")
-                return true
+                return RemoveResult.Success
             } catch (e: Exception) {
                 // If database update fails but vanilla removal succeeded, try to add back to vanilla whitelist
                 logger.error("Database operation failed after vanilla whitelist removal. Attempting to revert...", e)
@@ -492,11 +567,11 @@ class WhitelistService private constructor() {
                         logger.error("Failed to revert vanilla whitelist removal. System may be in inconsistent state!", revertError)
                     }
                 }
-                return false
+                return RemoveResult.Error("Database operation failed: ${e.message}")
             }
         } catch (e: Exception) {
             logger.error("Error removing $uuid from whitelist", e)
-            return false
+            return RemoveResult.Error("Unexpected error: ${e.message}")
         }
     }
     
@@ -1229,6 +1304,127 @@ class WhitelistService private constructor() {
         } catch (e: Exception) {
             logger.error("Error handling ban for player $username ($uuid): ${e.message}", e)
             return false
+        }
+    }
+    
+    /**
+     * Result of a bulk unwhitelist operation
+     * @param processedCount The number of accounts processed
+     * @param successCount The number of accounts successfully removed
+     * @param skippedOperators The number of accounts skipped because they are operators
+     * @param errors A list of errors encountered during the operation
+     */
+    data class BulkUnwhitelistResult(
+        val processedCount: Int,
+        val successCount: Int,
+        val skippedOperators: Int,
+        val errors: List<String>
+    )
+    
+    /**
+     * Remove all whitelisted Minecraft users that are not linked to a Discord account
+     * This is a potentially dangerous operation and should only be performed by administrators.
+     * We use a safety-first approach and will never remove server operators.
+     * 
+     * @param discordId The Discord ID of the moderator performing the bulk removal
+     * @param batchSize The maximum number of accounts to process in a single batch to avoid server lag
+     * @return Result of the bulk unwhitelist operation
+     */
+    fun bulkUnwhitelistUnlinkedAccounts(discordId: String, batchSize: Int = 50): BulkUnwhitelistResult {
+        try {
+            val server = this.server ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Server not available"))
+            
+            // Get the moderator Discord user
+            val discordUser = transaction {
+                DiscordUser.findById(discordId.toLong())
+            } ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Could not find Discord user with ID $discordId"))
+            
+            // Get all whitelisted Minecraft accounts that are not linked to a Discord user
+            // or are linked to the UNMAPPED_DISCORD_ID
+            val unlinkedAccounts = transaction {
+                // Find applications that are approved and belong to unmapped Discord user
+                WhitelistApplication.find {
+                    (WhitelistApplications.status eq ApplicationStatus.APPROVED) and
+                    (WhitelistApplications.discordUser eq EntityID(WhitelistDatabase.UNMAPPED_DISCORD_ID, WhitelistDatabase.DiscordUsers))
+                }.map { 
+                    it.minecraftUser 
+                }.toList()
+            }
+            
+            logger.info("Found ${unlinkedAccounts.size} unlinked whitelisted accounts")
+            
+            // Process removal in batches to avoid server lag
+            var processedCount = 0
+            var successCount = 0
+            var skippedOperators = 0
+            val errors = mutableListOf<String>()
+            
+            // Process in batches
+            unlinkedAccounts.chunked(batchSize).forEach { batch ->
+                batch.forEach { minecraftUser ->
+                    val uuid = minecraftUser.id.value
+                    val username = minecraftUser.currentUsername
+                    processedCount++
+                    
+                    // Use our existing remove method which already has operator safety checks
+                    logger.info("Processing [$processedCount/${unlinkedAccounts.size}] ${minecraftUser.currentUsername} (${minecraftUser.id.value})")
+                    
+                    when (val result = removeFromWhitelist(uuid, discordId)) {
+                        is RemoveResult.Success -> {
+                            successCount++
+                        }
+                        is RemoveResult.OperatorProtected -> {
+                            skippedOperators++
+                            logger.warn("Skipped removing operator: $username ($uuid)")
+                        }
+                        is RemoveResult.NotWhitelisted -> {
+                            // This shouldn't happen since we queried for whitelisted accounts,
+                            // but database might have changed between query and removal
+                            logger.warn("Account not whitelisted (changed since query?): $username ($uuid)")
+                        }
+                        is RemoveResult.Error -> {
+                            errors.add("Error processing $username ($uuid): ${result.errorMessage}")
+                            logger.error("Error processing $username ($uuid): ${result.errorMessage}")
+                        }
+                    }
+                    
+                    // Short delay between each player to reduce server impact
+                    try {
+                        Thread.sleep(100)
+                    } catch (e: InterruptedException) {
+                        // Ignore
+                    }
+                }
+                
+                // Pause briefly between batches to let the server breathe
+                try {
+                    Thread.sleep(1000)
+                } catch (e: InterruptedException) {
+                    // Ignore
+                }
+            }
+            
+            // Create a summary audit log
+            WhitelistDatabase.createAuditLog(
+                actionType = WhitelistDatabase.AuditActionType.WHITELIST_REMOVE,
+                entityType = WhitelistDatabase.EntityType.MINECRAFT_USER, 
+                entityId = "bulk-unlinked-" + System.currentTimeMillis(),
+                performedBy = discordUser,
+                details = "Bulk removed $successCount unlinked accounts from whitelist. " +
+                          "Skipped $skippedOperators operators. " +
+                          "Encountered ${errors.size} errors.",
+                entityName = "Bulk Unwhitelist (${successCount} accounts)"
+            )
+            
+            return BulkUnwhitelistResult(
+                processedCount = processedCount,
+                successCount = successCount,
+                skippedOperators = skippedOperators,
+                errors = errors.take(10) // Limit number of errors returned to avoid huge responses
+            )
+        } catch (e: Exception) {
+            logger.error("Error during bulk unwhitelist operation", e)
+            return BulkUnwhitelistResult(0, 0, 0, listOf("Unexpected error: ${e.message}"))
         }
     }
     

@@ -321,28 +321,15 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     val playerCards = StringBuilder()
                     
                     players.forEach { player ->
-                        // Discord mention if linked
-                        val discordMention = if (player.discordUserId != null) {
-                            "<@${player.discordUserId}>"
-                        } else {
-                            "Not Linked"
-                        }
+                        // Discord mention if linked, using helper method
+                        val discordService = DiscordService.getInstance()
+                        val discordMention = discordService.formatDiscordMention(player.discordUserId)
                         
                         // Format date
                         val addedDate = dateFormatter.format(player.addedAt)
                         
-                        // Display who added the player as a Discord mention if it's a valid Discord ID
-                        val addedByMention = try {
-                            // Try to parse as a Long to see if it's a valid Discord ID
-                            val addedById = player.addedBy.toLongOrNull()
-                            if (addedById != null) {
-                                "<@${player.addedBy}>" // Discord ID format
-                            } else {
-                                player.addedBy // Fallback to string (for system imports)
-                            }
-                        } catch (e: Exception) {
-                            player.addedBy
-                        }
+                        // Display who added the player using the helper method
+                        val addedByMention = discordService.formatDiscordMention(player.addedBy)
                         
                         // Build a card-like entry for each player
                         playerCards.append("**${player.username}**\n")
@@ -539,7 +526,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                             ""
                         }
                         
-                        "<@${discordId}>${roleList}"
+                        "${DiscordService.getInstance().formatDiscordMention(discordId)}${roleList}"
                     }
                     
                     // Create a cleaner, more concise display
@@ -604,16 +591,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
             } else {
                 val historyFormatter: (dev.butterflysky.service.WhitelistEventInfo) -> String = when {
                     minecraftName != null -> { event ->
-                        // Format the actor as a Discord mention if possible
-                        val actor = if (event.actorDiscordId != null) {
-                            "<@${event.actorDiscordId}>"
-                        } else {
-                            "system"
-                        }
+                        // Format the actor as a Discord mention with helper method
+                        val discordService = DiscordService.getInstance()
+                        val actor = discordService.formatDiscordMention(event.actorDiscordId, "System")
                         
-                        // Format Discord user if available
+                        // Format Discord user if available using helper method
                         val discordInfo = if (event.discordUserId != null) {
-                            " with Discord <@${event.discordUserId}>"
+                            " with Discord ${discordService.formatDiscordMention(event.discordUserId)}"
                         } else {
                             ""
                         }
@@ -628,16 +612,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         "${dateFormatter.format(event.timestamp)} - ${event.eventType}$discordInfo by $actor$commentInfo"
                     }
                     else -> { event ->
-                        // Format the actor as a Discord mention if possible
-                        val actor = if (event.actorDiscordId != null) {
-                            "<@${event.actorDiscordId}>"
-                        } else {
-                            "system"
-                        }
+                        // Format the actor as a Discord mention with helper method
+                        val discordService = DiscordService.getInstance()
+                        val actor = discordService.formatDiscordMention(event.actorDiscordId, "System")
                         
-                        // Format Discord user if available
+                        // Format Discord user if available using helper method
                         val discordInfo = if (event.discordUserId != null) {
-                            " with Discord <@${event.discordUserId}>"
+                            " with Discord ${discordService.formatDiscordMention(event.discordUserId)}"
                         } else {
                             ""
                         }
@@ -752,7 +733,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     // Build a card-like entry for each application
                     applicationsText.append("**Application #${app.id}**\n")
                     applicationsText.append("• Minecraft: **${app.minecraftUsername}**\n")
-                    applicationsText.append("• Discord: <@${app.discordId}>\n")
+                    applicationsText.append("• Discord: ${DiscordService.getInstance().formatDiscordMention(app.discordId)}\n")
                     applicationsText.append("• Applied: $appliedDate\n")
                     applicationsText.append("• Eligible: $eligibleDate")
                     
@@ -984,7 +965,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         // Discord info
                         val discordInfo = result.discordInfo
                         if (discordInfo != null) {
-                            resultText.append("**Discord:** <@${discordInfo.id}> (${discordInfo.username})\n")
+                            resultText.append("**Discord:** ${DiscordService.getInstance().formatDiscordMention(discordInfo.id)} (${discordInfo.username})\n")
                         } else {
                             resultText.append("**Discord:** Not linked\n")
                         }
@@ -997,16 +978,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         if (result.addedAt != null) {
                             val addedDate = dateFormatter.format(result.addedAt)
                             val addedByText = if (result.addedBy != null) {
-                                try {
-                                    val addedById = result.addedBy.toLongOrNull()
-                                    if (addedById != null) {
-                                        "<@${result.addedBy}>"
-                                    } else {
-                                        result.addedBy
-                                    }
-                                } catch (e: Exception) {
-                                    result.addedBy
-                                }
+                                DiscordService.getInstance().formatDiscordMention(result.addedBy, result.addedBy)
                             } else {
                                 "unknown"
                             }

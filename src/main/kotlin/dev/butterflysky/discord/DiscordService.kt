@@ -477,6 +477,48 @@ class DiscordService : ListenerAdapter() {
     }
     
     /**
+     * Format a Discord ID for display in embeds, properly handling special IDs
+     * This will convert system user IDs (-2) to "System" and unmapped IDs (-1) to "Unmapped"
+     * Normal Discord IDs will be formatted as mentions: <@123456789>
+     *
+     * @param discordId The Discord ID to format, can be null
+     * @param defaultText Text to display if the ID is null (default: "Not Linked")
+     * @return Properly formatted text for display in Discord embeds
+     */
+    fun formatDiscordMention(discordId: Long?, defaultText: String = "Not Linked"): String {
+        return when (discordId) {
+            null -> defaultText
+            dev.butterflysky.db.WhitelistDatabase.SYSTEM_USER_ID -> "System"
+            dev.butterflysky.db.WhitelistDatabase.UNMAPPED_DISCORD_ID -> "Unmapped"
+            else -> "<@$discordId>"
+        }
+    }
+
+    /**
+     * Format a Discord ID (as String) for display in embeds, properly handling special IDs
+     * This will convert system user IDs (-2) to "System" and unmapped IDs (-1) to "Unmapped"
+     * Normal Discord IDs will be formatted as mentions: <@123456789>
+     *
+     * @param discordIdStr The Discord ID as a string to format, can be null
+     * @param defaultText Text to display if the ID is null or invalid (default: "Not Linked")
+     * @return Properly formatted text for display in Discord embeds
+     */
+    fun formatDiscordMention(discordIdStr: String?, defaultText: String = "Not Linked"): String {
+        if (discordIdStr == null) return defaultText
+        
+        return try {
+            val discordId = discordIdStr.toLongOrNull()
+            if (discordId != null) {
+                formatDiscordMention(discordId, defaultText)
+            } else {
+                discordIdStr // Not a number, return as is
+            }
+        } catch (e: Exception) {
+            discordIdStr // Not a valid number, return as is
+        }
+    }
+    
+    /**
      * Shutdown the Discord service
      */
     fun shutdown() {

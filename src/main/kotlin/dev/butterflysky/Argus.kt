@@ -111,10 +111,36 @@ object Argus : ModInitializer {
                     .requires { it.hasPermissionLevel(4) } // Operator permission level
                     .then(
                         literal("reload")
+                            .requires { it.hasPermissionLevel(4) } // Operator permission level
                             .executes { context ->
-                                ArgusConfig.load()
-                                context.source.sendFeedback({ Text.literal("[Argus] Configuration reloaded") }, true)
-                                logger.info("Configuration reloaded by ${context.source.name}")
+                                try {
+                                    // Reload the configuration
+                                    ArgusConfig.load()
+                                    
+                                    context.source.sendFeedback({ 
+                                        Text.literal("§6[Argus] Configuration reloaded from disk")
+                                    }, true)
+                                    
+                                    // Reinitialize Discord if enabled
+                                    if (ArgusConfig.get().discord.enabled) {
+                                        // Restart Discord service with new config
+                                        restartDiscordService(context.source, "Restarting with new configuration by ${context.source.name}")
+                                    }
+                                    
+                                    // Update Link Manager with new config
+                                    LinkManager.getInstance().updateConfig()
+                                    
+                                    context.source.sendFeedback({ 
+                                        Text.literal("§a[Argus] Configuration reload completed")
+                                    }, true)
+                                    
+                                    logger.info("Configuration reloaded by ${context.source.name}")
+                                } catch (e: Exception) {
+                                    context.source.sendFeedback({ 
+                                        Text.literal("§c[Argus] Error reloading configuration: ${e.message}")
+                                    }, true)
+                                    logger.error("Error reloading configuration", e)
+                                }
                                 1
                             }
                     )
@@ -147,6 +173,23 @@ object Argus : ModInitializer {
                                 1
                             }
                     )
+                    .then(
+                        literal("reconnect")
+                            .requires { it.hasPermissionLevel(4) } // Operator permission level
+                            .executes { context ->
+                                if (!ArgusConfig.get().discord.enabled) {
+                                    context.source.sendFeedback({ 
+                                        Text.literal("§c[Argus] Discord integration is disabled in config.")
+                                    }, true)
+                                    return@executes 0
+                                }
+                                
+                                // Disconnect and reconnect to Discord
+                                restartDiscordService(context.source, "Discord reconnection initiated by ${context.source.name}")
+                                
+                                1
+                            }
+                    )
             )
         }
     }
@@ -162,6 +205,43 @@ object Argus : ModInitializer {
                 logger.error("Failed to initialize Discord service", e)
             }
         }
+    }
+    
+    /**
+     * Helper method to restart the Discord service
+     */
+    private fun restartDiscordService(source: net.minecraft.server.command.ServerCommandSource, logMessage: String) {
+        Thread {
+            try {
+                source.sendFeedback({ 
+                    Text.literal("§6[Argus] Disconnecting from Discord...")
+                }, true)
+                
+                // Disconnect from Discord
+                discordService.shutdown()
+                
+                // Small delay to ensure clean shutdown
+                Thread.sleep(1000)
+                
+                source.sendFeedback({ 
+                    Text.literal("§6[Argus] Reconnecting to Discord...")
+                }, true)
+                
+                // Reconnect to Discord
+                discordService.init()
+                
+                source.sendFeedback({ 
+                    Text.literal("§a[Argus] Discord service restarted successfully")
+                }, true)
+                
+                logger.info(logMessage)
+            } catch (e: Exception) {
+                source.sendFeedback({ 
+                    Text.literal("§c[Argus] Error restarting Discord service: ${e.message}")
+                }, true)
+                logger.error("Error restarting Discord service: $logMessage", e)
+            }
+        }.start()
     }
     
     /**

@@ -136,6 +136,21 @@ class LinkManager private constructor() {
     }
     
     /**
+     * Update configuration for the link manager
+     * This ensures any changes to token expiry times are applied
+     */
+    fun updateConfig() {
+        try {
+            logger.info("Updating link manager configuration")
+            
+            // Clean up tokens that might have expired due to config changes
+            cleanupExpiredTokens()
+        } catch (e: Exception) {
+            logger.error("Error updating link manager configuration", e)
+        }
+    }
+    
+    /**
      * Shutdown the link manager
      */
     fun shutdown() {

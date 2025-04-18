@@ -1037,6 +1037,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
             // Get the batch size parameter if provided (default to 50)
             val batchSize = options.find { it.name == "batch_size" }?.asInt ?: 50
             
+            // Check if an operation is already running
+            if (WhitelistService.isBulkUnwhitelistRunning()) {
+                event.hook.editOriginal("⚠️ **Another bulk unwhitelist operation is already in progress**\nPlease try again later when the current operation completes.").queue()
+                logger.warn("Bulk unwhitelist operation requested by ${event.user.name} but another operation is already in progress")
+                return
+            }
+            
             // This command might take a while, so first acknowledge that we received it
             event.hook.editOriginal("⚠️ **Starting bulk removal of unlinked accounts from whitelist**\nThis may take a while for large numbers of accounts...").queue()
             
@@ -1050,6 +1057,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         discordId = event.user.id,
                         batchSize = batchSize
                     )
+                    
+                    // Check if operation was rejected due to already running
+                    if (result.errors.isNotEmpty() && result.errors.first().contains("already in progress")) {
+                        event.hook.editOriginal("⚠️ **Another bulk unwhitelist operation started running just now**\nPlease try again later when the current operation completes.").queue()
+                        logger.warn("Bulk unwhitelist operation rejected because another one started simultaneously")
+                        return@Thread
+                    }
                     
                     // Create a fancy embed with the results
                     val embedColor = if (result.errors.isEmpty()) Constants.SUCCESS_COLOR else Constants.WARNING_COLOR

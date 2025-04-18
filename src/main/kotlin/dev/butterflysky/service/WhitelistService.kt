@@ -43,9 +43,19 @@ class WhitelistService private constructor() {
         private val instance = WhitelistService()
         private var databaseConnected = false
         
+        // Lock object and flag for bulk unwhitelisting synchronization
+        private val bulkOperationLock = Object()
+        @Volatile private var isBulkUnwhitelistRunning = false
+        
         fun getInstance() = instance
         
         fun isDatabaseConnected() = databaseConnected
+        
+        /**
+         * Check if a bulk unwhitelist operation is currently running
+         * @return True if an operation is in progress, false otherwise
+         */
+        fun isBulkUnwhitelistRunning(): Boolean = isBulkUnwhitelistRunning
         
         /**
          * Run a database transaction with error handling and logging
@@ -1326,18 +1336,41 @@ class WhitelistService private constructor() {
      * This is a potentially dangerous operation and should only be performed by administrators.
      * We use a safety-first approach and will never remove server operators.
      * 
+     * This method is synchronized to ensure only one bulk operation can run at a time,
+     * regardless of which user or thread initiates it.
+     * 
      * @param discordId The Discord ID of the moderator performing the bulk removal
      * @param batchSize The maximum number of accounts to process in a single batch to avoid server lag
-     * @return Result of the bulk unwhitelist operation
+     * @return Result of the bulk unwhitelist operation, or an error result if another operation is already in progress
      */
     fun bulkUnwhitelistUnlinkedAccounts(discordId: String, batchSize: Int = 50): BulkUnwhitelistResult {
+        // First check if an operation is already running
+        synchronized(bulkOperationLock) {
+            if (isBulkUnwhitelistRunning) {
+                logger.warn("Bulk unwhitelist operation requested by $discordId but another operation is already in progress")
+                return BulkUnwhitelistResult(
+                    processedCount = 0,
+                    successCount = 0,
+                    skippedOperators = 0,
+                    errors = listOf("Another bulk unwhitelist operation is already in progress. Please try again later.")
+                )
+            }
+            
+            // Mark as running before we exit the synchronized block
+            isBulkUnwhitelistRunning = true
+        }
+        
         try {
-            val server = this.server ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Server not available"))
+            val server = this.server ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Server not available")).also {
+                isBulkUnwhitelistRunning = false
+            }
             
             // Get the moderator Discord user
             val discordUser = transaction {
                 DiscordUser.findById(discordId.toLong())
-            } ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Could not find Discord user with ID $discordId"))
+            } ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Could not find Discord user with ID $discordId")).also {
+                isBulkUnwhitelistRunning = false
+            }
             
             // Get all whitelisted Minecraft accounts that are not linked to a Discord user
             // or are linked to the UNMAPPED_DISCORD_ID
@@ -1425,6 +1458,12 @@ class WhitelistService private constructor() {
         } catch (e: Exception) {
             logger.error("Error during bulk unwhitelist operation", e)
             return BulkUnwhitelistResult(0, 0, 0, listOf("Unexpected error: ${e.message}"))
+        } finally {
+            // Always reset the running flag when we finish, regardless of success or failure
+            synchronized(bulkOperationLock) {
+                isBulkUnwhitelistRunning = false
+                logger.info("Bulk unwhitelist operation completed, releasing lock")
+            }
         }
     }
     

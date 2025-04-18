@@ -2,6 +2,9 @@ package dev.butterflysky.config
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import net.fabricmc.loader.api.FabricLoader
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -9,6 +12,9 @@ import java.io.FileReader
 import java.io.FileWriter
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.reflect.KClass
+import kotlin.reflect.full.memberProperties
+import kotlin.reflect.full.primaryConstructor
 
 /**
  * Configuration handler for Argus mod
@@ -32,14 +38,91 @@ class ArgusConfig {
                     save()
                 } else {
                     logger.info("Loading config from ${configFile.absolutePath}")
-                    FileReader(configFile).use { reader ->
-                        instance = gson.fromJson(reader, ConfigData::class.java)
-                    }
+                    val loadedConfig = parseWithDefaults(ConfigData::class)
+                    instance = loadedConfig
+                    logger.info("Config loaded successfully")
                 }
             } catch (e: Exception) {
                 logger.error("Failed to load config, using defaults", e)
                 instance = ConfigData()
             }
+        }
+        
+        /**
+         * Parse the config file, merging with defaults for any missing properties
+         */
+        private fun <T : Any> parseWithDefaults(configClass: KClass<T>): T {
+            val defaultInstance = configClass.primaryConstructor?.callBy(emptyMap()) ?: 
+                throw IllegalArgumentException("Config class must have a default constructor")
+            
+            if (!configFile.exists()) {
+                return defaultInstance
+            }
+            
+            val jsonElement = JsonParser.parseReader(FileReader(configFile))
+            if (!jsonElement.isJsonObject) {
+                logger.warn("Config file is not a JSON object, using defaults")
+                return defaultInstance
+            }
+            
+            val mergedJson = mergeWithDefaults(jsonElement.asJsonObject, defaultInstance)
+            
+            // If we found missing values during merging, save the updated config
+            if (mergedJson != jsonElement) {
+                logger.info("Found missing config values, updating config file with defaults")
+                FileWriter(configFile).use { writer ->
+                    gson.toJson(mergedJson, writer)
+                }
+            }
+            
+            return gson.fromJson(mergedJson, configClass.java)
+        }
+        
+        /**
+         * Recursively merge loaded JSON with defaults for any missing properties
+         */
+        private fun mergeWithDefaults(loadedJson: JsonObject, defaultInstance: Any): JsonElement {
+            val defaultJson = gson.toJsonTree(defaultInstance)
+            if (!defaultJson.isJsonObject) {
+                return loadedJson
+            }
+            
+            val result = loadedJson.deepCopy()
+            var modified = false
+            
+            for (entry in defaultJson.asJsonObject.entrySet()) {
+                val propertyName = entry.key
+                val defaultValue = entry.value
+                
+                if (!result.has(propertyName)) {
+                    // Property missing in loaded config, add it from defaults
+                    result.add(propertyName, defaultValue)
+                    modified = true
+                    logger.debug("Added missing property '$propertyName' with default value")
+                } else if (defaultValue.isJsonObject && result.get(propertyName).isJsonObject) {
+                    // For nested objects, recursively merge
+                    val propertyType = defaultInstance::class.memberProperties
+                        .firstOrNull { it.name == propertyName }
+                        ?.returnType?.classifier as? KClass<*>
+                    
+                    if (propertyType != null) {
+                        val defaultPropertyInstance = propertyType.primaryConstructor?.callBy(emptyMap())
+                        if (defaultPropertyInstance != null) {
+                            val mergedProperty = mergeWithDefaults(
+                                result.get(propertyName).asJsonObject,
+                                defaultPropertyInstance
+                            )
+                            
+                            if (mergedProperty != result.get(propertyName)) {
+                                result.add(propertyName, mergedProperty)
+                                modified = true
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return if (modified) result else loadedJson
         }
         
         /**

@@ -286,10 +286,11 @@ object WhitelistDatabase {
                 this.discordUser = DiscordUser.getUnmappedUser()
                 this.minecraftUser = minecraftUser
                 this.status = ApplicationStatus.APPROVED
-                this.appliedAt = Instant.EPOCH  // Set to a very old date to indicate legacy
-                this.eligibleAt = Instant.EPOCH
+                val now = Instant.now()
+                this.appliedAt = now  // Use current time instead of Epoch
+                this.eligibleAt = now
                 this.isModeratorCreated = true
-                this.processedAt = Instant.now()
+                this.processedAt = now
                 this.processedBy = moderator
                 this.overrideReason = "Legacy whitelist import"
                 this.notes = notes

@@ -162,8 +162,20 @@ class WhitelistApplicationTest : DatabaseTestBase() {
             assertThat(application.minecraftUser.id.value).isEqualTo(minecraftUser.id.value)
             assertThat(application.status).isEqualTo(WhitelistDatabase.ApplicationStatus.APPROVED)
             assertThat(application.isModeratorCreated).isTrue()
-            assertThat(application.appliedAt).isEqualTo(Instant.EPOCH)
-            assertThat(application.eligibleAt).isEqualTo(Instant.EPOCH)
+            assertThat(application.appliedAt).isNotEqualTo(Instant.EPOCH)
+            assertThat(application.eligibleAt).isNotEqualTo(Instant.EPOCH)
+            
+            // Both timestamps should be very close to now
+            val now = Instant.now()
+            val tolerance = 5L // seconds
+            assertThat(application.appliedAt).isBetween(
+                now.minusSeconds(tolerance),
+                now.plusSeconds(tolerance)
+            )
+            assertThat(application.eligibleAt).isBetween(
+                now.minusSeconds(tolerance),
+                now.plusSeconds(tolerance)
+            )
             assertThat(application.processedAt).isNotNull()
             assertThat(application.processedBy?.id?.value).isEqualTo(moderator.id.value)
             assertThat(application.overrideReason).isEqualTo("Legacy whitelist import")

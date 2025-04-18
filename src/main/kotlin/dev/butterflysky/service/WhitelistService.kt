@@ -305,11 +305,11 @@ class WhitelistService private constructor() {
                 }
             }
             
-            // Get or create Minecraft user
+            // Get or create Minecraft user - don't link to moderator's Discord account
             val minecraftUser = transaction {
                 MinecraftUser.findById(uuid) ?: MinecraftUser.new(uuid) {
                     currentUsername = username
-                    currentOwner = discordUser
+                    currentOwner = null  // Don't link to a Discord account until explicitly requested
                 }
             }
             
@@ -362,10 +362,12 @@ class WhitelistService private constructor() {
             try {
                 transaction {
                     // Create a whitelist entry directly added by moderator
+                    // Use the unmapped user instead of linking to the moderator's Discord
+                    val unmappedUser = DiscordUser.getUnmappedUser()
                     WhitelistApplication.createModeratorWhitelist(
-                        discordUser = discordUser,
+                        discordUser = unmappedUser,  // Use unmapped user, not the moderator's account
                         minecraftUser = minecraftUser,
-                        moderator = discordUser,
+                        moderator = discordUser,     // Moderator is still recorded as who did the action
                         overrideReason = reason ?: "Added by moderator",
                         notes = null
                     )

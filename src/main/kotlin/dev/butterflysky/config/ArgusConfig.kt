@@ -113,7 +113,8 @@ class ArgusConfig {
         val cooldownHours: Long = 48,
         val defaultHistoryLimit: Int = 10,
         val defaultSearchLimit: Int = 20,
-        val maxSearchLimit: Int = 50
+        val maxSearchLimit: Int = 50,
+        val autoRemoveOnLeave: Boolean = false
     )
     
     /**

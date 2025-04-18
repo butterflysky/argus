@@ -368,6 +368,48 @@ class DiscordService : ListenerAdapter() {
     }
     
     /**
+     * Handle guild member leave events
+     * This is triggered when a user leaves or is kicked from the server
+     */
+    override fun onGuildMemberRemove(event: net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent) {
+        val user = event.user
+        logger.info("User left server: ${user.name} (${user.id})")
+        
+        try {
+            // Handle the user leaving in the whitelist service
+            val whitelistService = WhitelistService.getInstance()
+            val success = whitelistService.handleUserLeft(user.id)
+            
+            if (success != null) {
+                logger.info("Successfully processed server leave for ${user.name}, updated database records")
+                
+                // Get the configuration for auto-removal
+                val config = ArgusConfig.get()
+                if (config.whitelist.autoRemoveOnLeave) {
+                    logger.info("Auto-removal on leave is enabled, removing ${user.name} from whitelist")
+                    
+                    // Get all Minecraft accounts for this Discord user
+                    val minecraftAccounts = whitelistService.getMinecraftAccountsForDiscordUser(user.id)
+                    
+                    // Remove each account from the whitelist
+                    minecraftAccounts.forEach { account ->
+                        logger.info("Removing ${account.username} from whitelist due to Discord user ${user.name} leaving")
+                        whitelistService.removeFromWhitelist(account.uuid, user.id)
+                    }
+                    
+                    logger.info("Removed ${minecraftAccounts.size} Minecraft accounts from whitelist for user ${user.name}")
+                } else {
+                    logger.info("Auto-removal on leave is disabled, ${user.name} remains whitelisted")
+                }
+            } else {
+                logger.warn("Failed to process server leave for ${user.name}")
+            }
+        } catch (e: Exception) {
+            logger.error("Error handling user leave event for ${user.name}", e)
+        }
+    }
+    
+    /**
      * Check if a member has any of the required admin roles
      */
     private fun hasRequiredRole(member: Member?): Boolean {

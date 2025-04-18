@@ -489,6 +489,26 @@ class WhitelistService private constructor() {
     }
     
     /**
+     * Handle when a user leaves the Discord server
+     * Updates their database record and optionally removes them from the whitelist
+     * 
+     * @param discordId The Discord ID of the user who left
+     * @return The updated Discord user entity, or null if not found
+     */
+    fun handleUserLeft(discordId: String): DiscordUser? {
+        try {
+            val numericDiscordId = discordId.toLongOrNull() ?: return null
+            
+            // Mark the user as having left in the database
+            // We don't pass a performedBy parameter, so it will use the system user
+            return WhitelistDatabase.handleUserLeft(numericDiscordId, null)
+        } catch (e: Exception) {
+            logger.error("Error handling user left event for Discord ID $discordId", e)
+            return null
+        }
+    }
+    
+    /**
      * Map a Discord user to a Minecraft account
      */
     fun mapDiscordToMinecraft(

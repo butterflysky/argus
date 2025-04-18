@@ -165,7 +165,8 @@ class ArgusConfig {
         val reconnect: ReconnectConfig = ReconnectConfig(),
         val whitelist: WhitelistConfig = WhitelistConfig(),
         val link: LinkConfig = LinkConfig(),
-        val timeouts: TimeoutConfig = TimeoutConfig()
+        val timeouts: TimeoutConfig = TimeoutConfig(),
+        val threadPools: ThreadPoolConfig = ThreadPoolConfig()
     )
     
     /**
@@ -213,5 +214,21 @@ class ArgusConfig {
      */
     data class TimeoutConfig(
         val profileLookupSeconds: Long = 5
+    )
+    
+    /**
+     * Thread pool configuration
+     */
+    data class ThreadPoolConfig(
+        // Discord command executor - moderate capacity for handling command spikes
+        val discordCommandQueueSize: Int = 10,
+        val discordCommandPoolSize: Int = 4,
+        
+        // Background task executor for bulk operations
+        val backgroundTaskQueueSize: Int = 20,
+        val backgroundTaskPoolSize: Int = 4,
+        
+        // Default for custom executors if not specified
+        val defaultQueueSize: Int = 100
     )
 }

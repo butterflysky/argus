@@ -6,6 +6,7 @@ import dev.butterflysky.discord.DiscordService
 import dev.butterflysky.discord.WhitelistCommands
 import dev.butterflysky.service.WhitelistService
 import dev.butterflysky.whitelist.LinkManager
+import dev.butterflysky.util.ThreadPools
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -198,11 +199,16 @@ object Argus : ModInitializer {
      * Initialize Discord integration in a separate thread
      */
     private fun initializeDiscord() {
-        kotlin.concurrent.thread(start = true, name = "DiscordInitThread") {
+        ThreadPools.backgroundTaskExecutor.execute {
             try {
+                logger.info("Initializing Discord service on thread ${Thread.currentThread().name}")
                 discordService.init()
             } catch (e: Exception) {
                 logger.error("Failed to initialize Discord service", e)
+                // Signal thread error to uncaught exception handler if available
+                Thread.currentThread().uncaughtExceptionHandler?.uncaughtException(
+                    Thread.currentThread(), e
+                )
             }
         }
     }
@@ -211,7 +217,7 @@ object Argus : ModInitializer {
      * Helper method to restart the Discord service
      */
     private fun restartDiscordService(source: net.minecraft.server.command.ServerCommandSource, logMessage: String) {
-        Thread {
+        ThreadPools.backgroundTaskExecutor.execute {
             try {
                 source.sendFeedback({ 
                     Text.literal("§6[Argus] Disconnecting from Discord...")
@@ -221,7 +227,13 @@ object Argus : ModInitializer {
                 discordService.shutdown()
                 
                 // Small delay to ensure clean shutdown
-                Thread.sleep(1000)
+                try {
+                    Thread.sleep(1000)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt() // Restore interrupt status
+                    logger.warn("Discord restart thread interrupted during shutdown delay")
+                    throw e // Re-throw to abort the operation
+                }
                 
                 source.sendFeedback({ 
                     Text.literal("§6[Argus] Reconnecting to Discord...")
@@ -240,8 +252,12 @@ object Argus : ModInitializer {
                     Text.literal("§c[Argus] Error restarting Discord service: ${e.message}")
                 }, true)
                 logger.error("Error restarting Discord service: $logMessage", e)
+                // Signal thread error to uncaught exception handler if available
+                Thread.currentThread().uncaughtExceptionHandler?.uncaughtException(
+                    Thread.currentThread(), e
+                )
             }
-        }.start()
+        }
     }
     
     /**
@@ -275,6 +291,9 @@ object Argus : ModInitializer {
                 
                 // Shutdown the link manager
                 LinkManager.getInstance().shutdown()
+                
+                // Shutdown all thread pools
+                ThreadPools.shutdownAll()
                 
                 logger.info("Shutting down Argus services")
             } catch (e: Exception) {

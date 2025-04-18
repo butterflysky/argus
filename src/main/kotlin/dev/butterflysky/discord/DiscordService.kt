@@ -22,6 +22,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import dev.butterflysky.util.ThreadPools
+import dev.butterflysky.util.RateLimiter
 import java.util.function.Consumer
 import net.minecraft.server.MinecraftServer
 import java.util.UUID
@@ -46,13 +48,14 @@ class DiscordService : ListenerAdapter() {
     
     private var jda: JDA? = null
     private var guild: Guild? = null
-    private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    private val scheduler: ScheduledExecutorService = ThreadPools.discordReconnectExecutor
     private var reconnectTask: ScheduledFuture<*>? = null
     private var currentReconnectDelay: Long = 0
     private var adminRoles: List<String> = listOf()
     private var patronRole: String = ""
     private var adultRole: String = ""
     private var loggingChannel: String = ""
+    private val commandRateLimiter = RateLimiter(20, 10000) // 20 commands per 10 seconds
     
     private var minecraftServer: MinecraftServer? = null
     private val whitelistService = WhitelistService.getInstance()
@@ -364,15 +367,23 @@ class DiscordService : ListenerAdapter() {
         // Acknowledge the command immediately with ephemeral response (only visible to command invoker)
         event.deferReply(true).queue()
         
-        // Execute the command in a separate thread to not block Discord
-        Thread {
+        // Check rate limiting before executing command
+        if (!commandRateLimiter.tryAcquire()) {
+            event.hook.editOriginal("The server is experiencing high load. Please try again in a few seconds.").queue()
+            logger.warn("Rate limit exceeded for command ${subcommandName} by user ${event.user.name}")
+            return
+        }
+        
+        // Execute the command in a dedicated thread pool to not block Discord
+        ThreadPools.discordCommandExecutor.execute {
             try {
+                logger.info("Executing command ${subcommandName} on thread ${Thread.currentThread().name}")
                 handler.execute(event, event.options)
             } catch (e: Exception) {
                 logger.error("Error executing command", e)
                 event.hook.editOriginal("An error occurred while executing the command. Check the server logs.").queue()
             }
-        }.start()
+        }
     }
     
     /**
@@ -668,12 +679,31 @@ class DiscordService : ListenerAdapter() {
      */
     fun shutdown() {
         try {
+            logger.info("Shutting down Discord service")
             reconnectTask?.cancel(true)
-            scheduler.shutdown()
+            
+            // Shutdown JDA with a timeout
             jda?.shutdown()
-            logger.info("Discord service shutdown")
+            try {
+                // Give JDA up to 10 seconds to disconnect
+                if (jda?.awaitShutdown(10, TimeUnit.SECONDS) == false) {
+                    logger.warn("JDA did not shut down in time, forcing shutdown")
+                    jda?.shutdownNow()
+                }
+            } catch (e: InterruptedException) {
+                logger.error("Interrupted while waiting for JDA shutdown", e)
+                Thread.currentThread().interrupt()
+                jda?.shutdownNow()
+            }
+            
+            logger.info("Discord service shutdown complete")
         } catch (e: Exception) {
             logger.error("Error during Discord service shutdown", e)
+            try {
+                jda?.shutdownNow()
+            } catch (e2: Exception) {
+                logger.error("Error during forced shutdown", e2)
+            }
         }
     }
     

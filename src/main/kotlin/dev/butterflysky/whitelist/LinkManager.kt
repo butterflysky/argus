@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import dev.butterflysky.util.ThreadPools
 import org.slf4j.LoggerFactory
 import dev.butterflysky.config.ArgusConfig
 
@@ -26,7 +27,7 @@ class LinkManager private constructor() {
     private val playerTokens = ConcurrentHashMap<UUID, String>()
     
     // Scheduler for token cleanup
-    private val scheduler = Executors.newSingleThreadScheduledExecutor()
+    private val scheduler = ThreadPools.linkCleanupExecutor
     
     init {
         // Schedule token cleanup task
@@ -132,6 +133,10 @@ class LinkManager private constructor() {
             }
         } catch (e: Exception) {
             logger.error("Error cleaning up expired tokens", e)
+            // Don't let exceptions in the scheduled task crash the scheduler
+            Thread.currentThread().uncaughtExceptionHandler?.uncaughtException(
+                Thread.currentThread(), e
+            )
         }
     }
     
@@ -155,14 +160,18 @@ class LinkManager private constructor() {
      */
     fun shutdown() {
         try {
-            scheduler.shutdown()
-            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                scheduler.shutdownNow()
-            }
+            logger.info("Shutting down link manager")
+            
+            // Note: The scheduler itself is shut down by ThreadPools.shutdownAll()
+            // Just cancel any specific tasks we have in progress
+            
+            // Clear any cached data
+            linkTokens.clear()
+            playerTokens.clear()
+            
             logger.info("Link manager shutdown complete")
         } catch (e: Exception) {
             logger.error("Error shutting down link manager", e)
-            scheduler.shutdownNow()
         }
     }
     

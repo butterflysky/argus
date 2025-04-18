@@ -16,13 +16,15 @@ import dev.butterflysky.config.ArgusConfig
 import java.io.File
 import java.time.Instant
 import java.util.*
+import java.util.concurrent.*
+import java.util.concurrent.atomic.AtomicInteger
 import com.mojang.authlib.GameProfile
 import net.minecraft.util.Uuids
 import java.time.format.DateTimeFormatter
 import org.jetbrains.exposed.dao.id.EntityID
 import net.minecraft.server.PlayerManager
 import net.minecraft.server.Whitelist
-import java.util.concurrent.TimeUnit
+import dev.butterflysky.util.ThreadPools
 
 /**
  * Service for managing whitelist operations.
@@ -1360,20 +1362,25 @@ class WhitelistService private constructor() {
             isBulkUnwhitelistRunning = true
         }
         
+        // Set a timeout for the entire operation
+        val operationTimeout = 600L // 10 minutes in seconds
+        val operationTimeoutMs = TimeUnit.SECONDS.toMillis(operationTimeout)
+        val operationStart = System.currentTimeMillis()
+        
         try {
             val server = this.server ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Server not available")).also {
-                isBulkUnwhitelistRunning = false
+                markBulkOperationComplete()
             }
             
             // Get the moderator Discord user
             val discordUser = transaction {
                 DiscordUser.findById(discordId.toLong())
             } ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Could not find Discord user with ID $discordId")).also {
-                isBulkUnwhitelistRunning = false
+                markBulkOperationComplete()
             }
             
-            // Get all whitelisted Minecraft accounts that are not linked to a Discord user
-            // or are linked to the UNMAPPED_DISCORD_ID
+            // Get all whitelisted accounts that need processing
+            // This query is done up front to avoid long database transactions
             val unlinkedAccounts = transaction {
                 // Find applications that are approved and belong to unmapped Discord user
                 WhitelistApplication.find {
@@ -1386,85 +1393,152 @@ class WhitelistService private constructor() {
             
             logger.info("Found ${unlinkedAccounts.size} unlinked whitelisted accounts")
             
-            // Process removal in batches to avoid server lag
+            // Track metrics
             var processedCount = 0
             var successCount = 0
             var skippedOperators = 0
-            val errors = mutableListOf<String>()
+            val errors = ConcurrentLinkedQueue<String>()
             
-            // Process in batches
-            unlinkedAccounts.chunked(batchSize).forEach { batch ->
-                batch.forEach { minecraftUser ->
-                    val uuid = minecraftUser.id.value
-                    val username = minecraftUser.currentUsername
-                    processedCount++
-                    
-                    // Use our existing remove method which already has operator safety checks
-                    logger.info("Processing [$processedCount/${unlinkedAccounts.size}] ${minecraftUser.currentUsername} (${minecraftUser.id.value})")
-                    
-                    when (val result = removeFromWhitelist(uuid, discordId)) {
-                        is RemoveResult.Success -> {
-                            successCount++
+            // Process in batches - use the backgroundTaskExecutor for this
+            val batchExecutor = ThreadPools.backgroundTaskExecutor
+            
+            try {
+                val batches = unlinkedAccounts.chunked(batchSize)
+                val completedBatches = AtomicInteger(0)
+                val totalBatches = batches.size
+                
+                // Submit all batches for processing
+                val futures = batches.map { batch ->
+                    CompletableFuture.runAsync({
+                        val batchResults = processBatchUnwhitelist(batch, discordId)
+                        
+                        // Aggregate results
+                        synchronized(this) {
+                            processedCount += batchResults.processedCount
+                            successCount += batchResults.successCount
+                            skippedOperators += batchResults.skippedOperators
+                            errors.addAll(batchResults.errors)
                         }
-                        is RemoveResult.OperatorProtected -> {
-                            skippedOperators++
-                            logger.warn("Skipped removing operator: $username ($uuid)")
+                        
+                        val completed = completedBatches.incrementAndGet()
+                        logger.info("Completed batch $completed/$totalBatches (${batchResults.processedCount} accounts)")
+                        
+                        // Check if we're out of time
+                        val elapsed = System.currentTimeMillis() - operationStart
+                        if (elapsed > operationTimeoutMs) {
+                            logger.warn("Bulk operation timeout reached after ${elapsed}ms, stopping")
+                            throw TimeoutException("Operation timed out after ${elapsed}ms")
                         }
-                        is RemoveResult.NotWhitelisted -> {
-                            // This shouldn't happen since we queried for whitelisted accounts,
-                            // but database might have changed between query and removal
-                            logger.warn("Account not whitelisted (changed since query?): $username ($uuid)")
-                        }
-                        is RemoveResult.Error -> {
-                            errors.add("Error processing $username ($uuid): ${result.errorMessage}")
-                            logger.error("Error processing $username ($uuid): ${result.errorMessage}")
-                        }
-                    }
-                    
-                    // Short delay between each player to reduce server impact
-                    try {
-                        Thread.sleep(100)
-                    } catch (e: InterruptedException) {
-                        // Ignore
-                    }
+                    }, batchExecutor)
                 }
                 
-                // Pause briefly between batches to let the server breathe
+                // Wait for all batches to complete
                 try {
-                    Thread.sleep(1000)
-                } catch (e: InterruptedException) {
-                    // Ignore
+                    CompletableFuture.allOf(*futures.toTypedArray())
+                        .get(operationTimeout, TimeUnit.SECONDS)
+                } catch (e: TimeoutException) {
+                    logger.warn("Timeout waiting for all batches to complete")
+                    errors.add("Operation timed out after ${operationTimeout} seconds, partial results returned")
+                    // We'll continue with partial results
+                } catch (e: Exception) {
+                    logger.error("Error waiting for batch completion", e)
+                    errors.add("Error during batch processing: ${e.message}")
                 }
+            } finally {
+                // No need to shut down the executor as it's shared and managed by ThreadPools
             }
             
             // Create a summary audit log
-            WhitelistDatabase.createAuditLog(
-                actionType = WhitelistDatabase.AuditActionType.WHITELIST_REMOVE,
-                entityType = WhitelistDatabase.EntityType.MINECRAFT_USER, 
-                entityId = "bulk-unlinked-" + System.currentTimeMillis(),
-                performedBy = discordUser,
-                details = "Bulk removed $successCount unlinked accounts from whitelist. " +
-                          "Skipped $skippedOperators operators. " +
-                          "Encountered ${errors.size} errors.",
-                entityName = "Bulk Unwhitelist (${successCount} accounts)"
-            )
+            transaction {
+                WhitelistDatabase.createAuditLog(
+                    actionType = WhitelistDatabase.AuditActionType.WHITELIST_REMOVE,
+                    entityType = WhitelistDatabase.EntityType.MINECRAFT_USER, 
+                    entityId = "bulk-unlinked-" + System.currentTimeMillis(),
+                    performedBy = discordUser,
+                    details = "Bulk removed $successCount unlinked accounts from whitelist. " +
+                            "Skipped $skippedOperators operators. " +
+                            "Encountered ${errors.size} errors.",
+                    entityName = "Bulk Unwhitelist (${successCount} accounts)"
+                )
+            }
             
             return BulkUnwhitelistResult(
                 processedCount = processedCount,
                 successCount = successCount,
                 skippedOperators = skippedOperators,
-                errors = errors.take(10) // Limit number of errors returned to avoid huge responses
+                errors = errors.take(10).toList() // Limit number of errors returned to avoid huge responses
             )
         } catch (e: Exception) {
             logger.error("Error during bulk unwhitelist operation", e)
             return BulkUnwhitelistResult(0, 0, 0, listOf("Unexpected error: ${e.message}"))
         } finally {
-            // Always reset the running flag when we finish, regardless of success or failure
-            synchronized(bulkOperationLock) {
-                isBulkUnwhitelistRunning = false
-                logger.info("Bulk unwhitelist operation completed, releasing lock")
+            markBulkOperationComplete()
+        }
+    }
+    
+    // Helper method to mark the bulk operation as complete
+    private fun markBulkOperationComplete() {
+        synchronized(bulkOperationLock) {
+            isBulkUnwhitelistRunning = false
+            logger.info("Bulk unwhitelist operation completed, releasing lock")
+        }
+    }
+    
+    // Helper method to process a batch of accounts
+    private data class BatchResult(
+        val processedCount: Int,
+        val successCount: Int,
+        val skippedOperators: Int,
+        val errors: List<String>
+    )
+    
+    private fun processBatchUnwhitelist(batch: List<MinecraftUser>, discordId: String): BatchResult {
+        var processedCount = 0
+        var successCount = 0
+        var skippedOperators = 0
+        val errors = mutableListOf<String>()
+        
+        batch.forEach { minecraftUser ->
+            val uuid = minecraftUser.id.value
+            val username = minecraftUser.currentUsername
+            processedCount++
+            
+            try {
+                // Use our existing remove method which already has operator safety checks
+                logger.info("Processing account ${minecraftUser.currentUsername} (${minecraftUser.id.value})")
+                
+                when (val result = removeFromWhitelist(uuid, discordId)) {
+                    is RemoveResult.Success -> {
+                        successCount++
+                    }
+                    is RemoveResult.OperatorProtected -> {
+                        skippedOperators++
+                        logger.warn("Skipped removing operator: $username ($uuid)")
+                    }
+                    is RemoveResult.NotWhitelisted -> {
+                        logger.warn("Account not whitelisted (changed since query?): $username ($uuid)")
+                    }
+                    is RemoveResult.Error -> {
+                        errors.add("Error processing $username ($uuid): ${result.errorMessage}")
+                        logger.error("Error processing $username ($uuid): ${result.errorMessage}")
+                    }
+                }
+            } catch (e: Exception) {
+                errors.add("Exception processing $username ($uuid): ${e.message}")
+                logger.error("Exception processing $username ($uuid)", e)
+            }
+            
+            // Short delay between each player to reduce server impact
+            try {
+                Thread.sleep(50)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                logger.warn("Thread interrupted during batch processing")
+                // We'll continue processing the batch
             }
         }
+        
+        return BatchResult(processedCount, successCount, skippedOperators, errors)
     }
     
     /**
@@ -1651,7 +1725,8 @@ class WhitelistService private constructor() {
         try {
             val future = userCache?.findByNameAsync(username)
             if (future != null) {
-                val timeout = ArgusConfig.get().timeouts.profileLookupSeconds
+                val config = ArgusConfig.get().timeouts
+                val timeout = config.profileLookupSeconds
                 val result = future.get(timeout, TimeUnit.SECONDS)
                 if (result.isPresent) {
                     return result.get()

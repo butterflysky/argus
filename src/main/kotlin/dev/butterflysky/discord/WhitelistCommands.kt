@@ -23,6 +23,7 @@ import java.time.Instant
 import java.util.stream.Collectors
 import dev.butterflysky.config.ArgusConfig
 import dev.butterflysky.config.Constants
+import dev.butterflysky.util.ThreadPools
 
 /**
  * Handlers for whitelist-related Discord commands
@@ -1047,10 +1048,10 @@ class WhitelistCommands(private val server: MinecraftServer) {
             // This command might take a while, so first acknowledge that we received it
             event.hook.editOriginal("⚠️ **Starting bulk removal of unlinked accounts from whitelist**\nThis may take a while for large numbers of accounts...").queue()
             
-            // Launch the operation in a separate thread to prevent blocking Discord
-            Thread {
+            // Use the background task executor to handle this potentially long-running operation
+            ThreadPools.backgroundTaskExecutor.execute {
                 try {
-                    logger.info("Starting bulk unwhitelisting of unlinked accounts (requested by ${event.user.name}, batch size: $batchSize)")
+                    logger.info("Starting bulk unwhitelisting of unlinked accounts (requested by ${event.user.name}, batch size: $batchSize) on thread ${Thread.currentThread().name}")
                     
                     // Get all unlinked accounts and remove them from whitelist
                     val result = whitelistService.bulkUnwhitelistUnlinkedAccounts(
@@ -1062,7 +1063,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     if (result.errors.isNotEmpty() && result.errors.first().contains("already in progress")) {
                         event.hook.editOriginal("⚠️ **Another bulk unwhitelist operation started running just now**\nPlease try again later when the current operation completes.").queue()
                         logger.warn("Bulk unwhitelist operation rejected because another one started simultaneously")
-                        return@Thread
+                        return@execute
                     }
                     
                     // Create a fancy embed with the results
@@ -1095,8 +1096,12 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 } catch (e: Exception) {
                     logger.error("Error during bulk unwhitelisting operation", e)
                     event.hook.editOriginal("❌ **Error during bulk unwhitelisting operation**\n${e.message}").queue()
+                    // Signal thread error to uncaught exception handler if available
+                    Thread.currentThread().uncaughtExceptionHandler?.uncaughtException(
+                        Thread.currentThread(), e
+                    )
                 }
-            }.start()
+            }
         }
     }
     

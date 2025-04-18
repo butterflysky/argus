@@ -466,8 +466,15 @@ class WhitelistService private constructor() {
                         entityType = WhitelistDatabase.EntityType.MINECRAFT_USER,
                         entityId = uuid.toString(),
                         performedBy = discordUser,
-                        details = "Removed ${minecraftUser.currentUsername} from whitelist by moderator action"
+                        details = "Removed ${minecraftUser.currentUsername} from whitelist"
                     )
+                }
+                
+                // Check if the player is currently online and kick them if they are
+                val onlinePlayer = playerManager.getPlayer(uuid)
+                if (onlinePlayer != null) {
+                    logger.info("Player ${minecraftUser.currentUsername} is currently online, disconnecting them due to whitelist removal")
+                    onlinePlayer.networkHandler.disconnect(net.minecraft.text.Text.translatable("multiplayer.disconnect.not_whitelisted"))
                 }
                 
                 logger.info("Player ${minecraftUser.currentUsername} ($uuid) removed from whitelist by moderator ${discordUser.currentUsername}")

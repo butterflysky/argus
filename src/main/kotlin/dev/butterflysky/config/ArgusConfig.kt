@@ -177,7 +177,8 @@ class ArgusConfig {
         val guildId: String = "YOUR_DISCORD_GUILD_ID",
         val adminRoles: List<String> = listOf("Admins", "Moderator"),
         val patronRole: String = "Patron",
-        val adultRole: String = "Adults"
+        val adultRole: String = "Adults",
+        val loggingChannel: String = "server-admin-messages"
     )
     
     /**

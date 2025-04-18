@@ -85,6 +85,39 @@ class AuditLogTest : DatabaseTestBase() {
     }
     
     @Test
+    fun `should create audit log with explicit entity name`() {
+        // Given
+        val discordUser = createTestDiscordUser("TestUser")
+        val actionType = WhitelistDatabase.AuditActionType.WHITELIST_ADD
+        val entityType = WhitelistDatabase.EntityType.MINECRAFT_USER
+        val entityId = UUID.randomUUID().toString()
+        val details = "Test audit log with explicit entity name"
+        val entityName = "ExplicitEntityName"
+        
+        // When
+        val auditLog = transaction {
+            WhitelistDatabase.createAuditLog(
+                actionType = actionType,
+                entityType = entityType,
+                entityId = entityId,
+                performedBy = discordUser,
+                details = details,
+                entityName = entityName
+            )
+        }
+        
+        // Then
+        transaction {
+            assertThat(auditLog.id.value).isGreaterThan(0)
+            assertThat(auditLog.actionType).isEqualTo(actionType.name)
+            assertThat(auditLog.entityType).isEqualTo(entityType.name)
+            assertThat(auditLog.entityId).isEqualTo(entityId)
+            assertThat(auditLog.performedBy?.id?.value).isEqualTo(discordUser.id.value)
+            assertThat(auditLog.details).isEqualTo(details)
+        }
+    }
+    
+    @Test
     fun `should handle user left event with audit logging`() {
         // Given
         val discordUser = createTestDiscordUser("LeavingUser")

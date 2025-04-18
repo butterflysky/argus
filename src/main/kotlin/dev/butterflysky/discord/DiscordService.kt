@@ -2,6 +2,7 @@ package dev.butterflysky.discord
 
 import dev.butterflysky.config.ArgusConfig
 import dev.butterflysky.service.WhitelistService
+import dev.butterflysky.db.WhitelistDatabase
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.Permission
@@ -51,6 +52,7 @@ class DiscordService : ListenerAdapter() {
     private var adminRoles: List<String> = listOf()
     private var patronRole: String = ""
     private var adultRole: String = ""
+    private var loggingChannel: String = ""
     
     private var minecraftServer: MinecraftServer? = null
     private val whitelistService = WhitelistService.getInstance()
@@ -70,6 +72,7 @@ class DiscordService : ListenerAdapter() {
         adminRoles = config.discord.adminRoles
         patronRole = config.discord.patronRole
         adultRole = config.discord.adultRole
+        loggingChannel = config.discord.loggingChannel
         connect()
     }
     
@@ -558,6 +561,101 @@ class DiscordService : ListenerAdapter() {
         } catch (e: Exception) {
             discordIdStr // Not a valid number, return as is
         }
+    }
+    
+    /**
+     * Sends a message to the configured logging channel with mentions suppressed
+     * 
+     * @param message The message text to send
+     * @return True if the message was sent successfully, false otherwise
+     */
+    fun sendLogMessage(message: String): Boolean {
+        if (!isConnected()) {
+            logger.warn("Cannot send log message: Discord not connected")
+            return false
+        }
+        
+        val guild = this.guild ?: return false
+        
+        try {
+            // Find the logging channel
+            val channel = guild.getTextChannelsByName(loggingChannel, true).firstOrNull()
+            
+            if (channel == null) {
+                logger.warn("Logging channel '$loggingChannel' not found")
+                return false
+            }
+            
+            // Send the message with all mentions suppressed
+            channel.sendMessage(message)
+                .setAllowedMentions(java.util.Collections.emptyList()) // Make it silent - no pings
+                .queue(
+                    { logger.debug("Sent log message to #$loggingChannel") },
+                    { error -> logger.error("Error sending message to #$loggingChannel", error) }
+                )
+            
+            return true
+        } catch (e: Exception) {
+            logger.error("Exception sending log message to channel #$loggingChannel", e)
+            return false
+        }
+    }
+    
+    /**
+     * Sends an audit log event to the configured logging channel with user-friendly formatting
+     * 
+     * @param actionType The type of action that occurred
+     * @param entityType The type of entity affected
+     * @param entityName The name or identifier of the affected entity
+     * @param performedBy The user who performed the action, or null for system actions
+     * @param details Additional details about the action
+     * @return True if the message was sent successfully, false otherwise
+     */
+    fun sendAuditLogMessage(
+        actionType: WhitelistDatabase.AuditActionType,
+        entityType: WhitelistDatabase.EntityType,
+        entityName: String,
+        performedBy: WhitelistDatabase.DiscordUser?,
+        details: String
+    ): Boolean {
+        if (!isConnected()) {
+            return false
+        }
+        
+        // Format the message for Discord display
+        val performedByText = if (performedBy == null || performedBy.id.value == WhitelistDatabase.SYSTEM_USER_ID) {
+            "System"
+        } else {
+            formatDiscordMention(performedBy.id.value)
+        }
+        
+        val formattedMessage = buildString {
+            append("**")
+            append(actionType.displayName)
+            append("**: ")
+            
+            when (entityType) {
+                WhitelistDatabase.EntityType.MINECRAFT_USER -> append("Minecraft player ")
+                WhitelistDatabase.EntityType.DISCORD_USER -> append("Discord user ")
+                WhitelistDatabase.EntityType.WHITELIST_APPLICATION -> append("Application ")
+            }
+            
+            append("**")
+            append(entityName)
+            append("**")
+            
+            if (performedBy != null) {
+                append(" by ")
+                append(performedByText)
+            }
+            
+            if (details.isNotEmpty()) {
+                append("\n> ")
+                append(details)
+            }
+        }
+        
+        return sendLogMessage(formattedMessage)
     }
     
     /**

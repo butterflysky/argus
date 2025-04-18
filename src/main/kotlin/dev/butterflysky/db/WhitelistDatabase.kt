@@ -375,12 +375,14 @@ object WhitelistDatabase {
     /**
      * Creates a detailed audit log entry for tracking all changes in the system.
      * This is crucial for security and accountability, as all actions are tracked.
+     * Also sends a notification to the configured Discord logging channel.
      * 
      * @param actionType The type of action performed
      * @param entityType The type of entity affected
      * @param entityId The ID of the affected entity
      * @param performedBy The user who performed the action, or null for system actions
      * @param details Additional details about the action
+     * @param entityName Optional human-readable name of the entity for Discord logging
      * @return The created AuditLog entity
      */
     fun createAuditLog(
@@ -388,18 +390,72 @@ object WhitelistDatabase {
         entityType: EntityType,
         entityId: String,
         performedBy: DiscordUser? = null,
-        details: String
+        details: String,
+        entityName: String? = null
     ): AuditLog {
         // If performedBy is null, use the system user
         val actor = performedBy ?: DiscordUser.getSystemUser()
         
-        return AuditLog.new {
+        // Create the audit log entry
+        val log = AuditLog.new {
             this.actionType = actionType.name
             this.entityType = entityType.name
             this.entityId = entityId
             this.performedBy = actor
             this.details = details
         }
+        
+        // Determine a display name for the entity in Discord logs
+        val displayName = when {
+            // If an explicit name was provided, use it
+            entityName != null -> entityName
+            
+            // Otherwise, try to derive a meaningful name based on entity type
+            entityType == EntityType.MINECRAFT_USER -> {
+                try {
+                    val uuid = UUID.fromString(entityId)
+                    MinecraftUser.findById(uuid)?.currentUsername ?: entityId
+                } catch (e: Exception) {
+                    entityId
+                }
+            }
+            entityType == EntityType.DISCORD_USER -> {
+                try {
+                    val discordId = entityId.toLong()
+                    DiscordUser.findById(discordId)?.currentUsername ?: entityId
+                } catch (e: Exception) {
+                    entityId
+                }
+            }
+            entityType == EntityType.WHITELIST_APPLICATION -> {
+                try {
+                    val appId = entityId.toInt()
+                    val app = WhitelistApplication.findById(appId)
+                    if (app != null) {
+                        "#$entityId (${app.minecraftUser.currentUsername})"
+                    } else {
+                        "#$entityId"
+                    }
+                } catch (e: Exception) {
+                    "#$entityId"
+                }
+            }
+            else -> entityId
+        }
+        
+        // Send to Discord logging channel if enabled
+        try {
+            val discordService = dev.butterflysky.discord.DiscordService.getInstance()
+            if (discordService.isConnected()) {
+                discordService.sendAuditLogMessage(actionType, entityType, displayName, actor, details)
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to send audit log message to Discord", e)
+            // Don't throw the exception - we still want to create the audit log entry
+            // even if Discord notification fails
+        }
+        
+        return log
     }
 
     /**

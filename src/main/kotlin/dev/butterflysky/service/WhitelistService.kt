@@ -25,6 +25,7 @@ import org.jetbrains.exposed.dao.id.EntityID
 import net.minecraft.server.PlayerManager
 import net.minecraft.server.Whitelist
 import dev.butterflysky.util.ThreadPools
+import dev.butterflysky.util.ProfileApiClient
 
 /**
  * Service for managing whitelist operations.
@@ -234,6 +235,7 @@ class WhitelistService private constructor() {
     
     /**
      * Import existing whitelist entries from the vanilla whitelist
+     * using our rate-limit-aware ProfileApiClient
      */
     fun importExistingWhitelist() {
         val server = this.server ?: return
@@ -242,52 +244,66 @@ class WhitelistService private constructor() {
             // System user to record audit logs
             val systemUser = transaction { DiscordUser.getSystemUser() }
             
-            // Import existing whitelist entries
+            // Get access to the whitelist
+            val playerManager = server.playerManager
+            val whitelist = playerManager.whitelist
+            
+            // Get all the names from the whitelist
+            val names = whitelist.getNames()
+            if (names.isEmpty()) {
+                logger.info("No whitelist entries to import")
+                return
+            }
+            
+            logger.info("Starting import of ${names.size} whitelist entries")
+            
+            // Use our custom ProfileApiClient for batch lookups
+            val profileApiClient = ProfileApiClient.getInstance()
+            val profilesByName = profileApiClient.findProfilesByNames(names.toList())
+            
+            // Process all found profiles in a transaction
             transaction {
-                val playerManager = server.playerManager
-                val whitelist = playerManager.whitelist
-                
-                // Use the names from the whitelist and get profiles from the user cache
-                val names = whitelist.getNames()
-                for (name in names) {
-                    val profile = server.getUserCache()?.findByName(name)?.orElse(null)
-                    if (profile != null) {
-                        val uuid = profile.id
-                        val username = profile.name
+                for (profile in profilesByName.values) {
+                    val uuid = profile.id
+                    val username = profile.name
+                    
+                    // Check if this player already exists in our database
+                    val existingPlayer = MinecraftUser.findById(uuid)
+                    
+                    if (existingPlayer == null) {
+                        // Import as a legacy entry with no Discord mapping
+                        WhitelistDatabase.importLegacyMinecraftUser(
+                            minecraftUuid = uuid,
+                            username = username,
+                            performedBy = systemUser
+                        )
                         
-                        // Check if this player already exists in our database
-                        val existingPlayer = MinecraftUser.findById(uuid)
+                        logger.info("Imported whitelist entry for $username ($uuid)")
+                    } else {
+                        // Player exists, check if there's a whitelist application
+                        val hasApplication = WhitelistApplication.find {
+                            (WhitelistDatabase.WhitelistApplications.minecraftUser eq existingPlayer.id) and
+                            (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                        }.count() > 0
                         
-                        if (existingPlayer == null) {
-                            // Import as a legacy entry with no Discord mapping
-                            val result = WhitelistDatabase.importLegacyMinecraftUser(
-                                minecraftUuid = uuid,
-                                username = username,
-                                performedBy = systemUser
+                        if (!hasApplication) {
+                            // Create a legacy whitelist entry for this player
+                            WhitelistApplication.createLegacyWhitelist(
+                                minecraftUser = existingPlayer,
+                                moderator = systemUser,
+                                notes = "Imported from vanilla whitelist"
                             )
                             
-                            logger.info("Imported whitelist entry for $username ($uuid)")
-                        } else {
-                            // Player exists, check if there's a whitelist application
-                            val hasApplication = WhitelistApplication.find {
-                                (WhitelistDatabase.WhitelistApplications.minecraftUser eq existingPlayer.id) and
-                                (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
-                            }.count() > 0
-                            
-                            if (!hasApplication) {
-                                // Create a legacy whitelist entry for this player
-                                WhitelistApplication.createLegacyWhitelist(
-                                    minecraftUser = existingPlayer,
-                                    moderator = systemUser,
-                                    notes = "Imported from vanilla whitelist"
-                                )
-                                
-                                logger.info("Created legacy whitelist application for $username ($uuid)")
-                            }
+                            logger.info("Created legacy whitelist application for $username ($uuid)")
                         }
                     }
                 }
             }
+            
+            // Log summary
+            val notFoundCount = names.size - profilesByName.size
+            logger.info("Whitelist import completed: ${profilesByName.size} profiles imported, $notFoundCount not found")
+            
         } catch (e: Exception) {
             logger.error("Error importing existing whitelist entries", e)
         }
@@ -1745,7 +1761,7 @@ class WhitelistService private constructor() {
     }
     
     /**
-     * Get a game profile from the Minecraft server
+     * Get a game profile using our custom API client with rate limit handling
      */
     private fun getGameProfile(username: String): GameProfile? {
         val server = this.server ?: return null
@@ -1757,19 +1773,17 @@ class WhitelistService private constructor() {
             return profileOptional.get()
         }
         
-        // If not in cache, try to get it asynchronously but with a timeout
+        // If not in cache, use our custom API client with proper rate limit handling
         try {
-            val future = userCache?.findByNameAsync(username)
-            if (future != null) {
-                val config = ArgusConfig.get().timeouts
-                val timeout = config.profileLookupSeconds
-                val result = future.get(timeout, TimeUnit.SECONDS)
-                if (result.isPresent) {
-                    return result.get()
-                }
+            val profileApiClient = ProfileApiClient.getInstance()
+            val profile = profileApiClient.findProfileByName(username)
+            
+            if (profile != null) {
+                // Return the profile without polluting the server's cache
+                return profile
             }
         } catch (e: Exception) {
-            logger.warn("Failed to get game profile for $username: ${e.message}")
+            logger.warn("Error looking up profile via custom API client: $username", e)
         }
         
         // If all else fails, try to create an offline profile

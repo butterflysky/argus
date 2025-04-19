@@ -218,15 +218,25 @@ class ArgusConfig {
     
     /**
      * Thread pool configuration
+     * 
+     * Default values are optimized for a system with 20 vCPUs where:
+     * - 1 vCPU is reserved for sysadmin tasks
+     * - 2 vCPUs are reserved for MySQL server
+     * - 1 vCPU is reserved for management console
+     * - 1 vCPU is reserved for the main Minecraft thread
+     * - ~5 vCPUs are used by Minecraft's internal workers
+     * - ~10 vCPUs are available for our thread pools
      */
     data class ThreadPoolConfig(
-        // Discord command executor - moderate capacity for handling command spikes
-        val discordCommandQueueSize: Int = 10,
-        val discordCommandPoolSize: Int = 4,
+        // Discord command executor - moderate capacity for handling user interactions
+        // These are typically short-lived, responsive operations
+        val discordCommandQueueSize: Int = 25,
+        val discordCommandPoolSize: Int = 5,
         
-        // Background task executor for bulk operations
-        val backgroundTaskQueueSize: Int = 20,
-        val backgroundTaskPoolSize: Int = 4,
+        // Background task executor for bulk operations that may be CPU or I/O intensive
+        // These are typically longer-running batch operations
+        val backgroundTaskQueueSize: Int = 40,
+        val backgroundTaskPoolSize: Int = 5,
         
         // Default for custom executors if not specified
         val defaultQueueSize: Int = 100

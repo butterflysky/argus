@@ -1,13 +1,11 @@
 package dev.butterflysky.util
 
 import com.google.gson.Gson
-import com.google.gson.JsonArray
-import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.mojang.authlib.GameProfile
-import dev.butterflysky.config.ArgusConfig
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.net.HttpURLConnection
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -15,8 +13,8 @@ import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.*
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
-import kotlin.math.pow
 
 /**
  * Custom API client for Minecraft profile lookups that properly handles rate limits.
@@ -24,36 +22,43 @@ import kotlin.math.pow
  * This client provides methods for looking up Minecraft profiles by username, with proper handling
  * of Mojang API rate limits. It respects Retry-After headers and implements exponential backoff
  * when rate limited.
+ *
+ * By design, this client:
+ * 1. Uses a single-threaded executor to avoid parallel requests to Mojang APIs
+ * 2. Maintains request rate to be a good API citizen
+ * 3. Properly handles HTTP 429 rate limit responses
+ * 4. Respects Retry-After headers from the server
  */
 class ProfileApiClient private constructor() {
     private val logger = LoggerFactory.getLogger("argus-profile-api")
     private val gson = Gson()
-    private val client: HttpClient
+    private val client: HttpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5))
+        .build()
+    
+    // Flag to signal when shutting down
+    private val isShuttingDown = AtomicBoolean(false)
     
     // API constants
     companion object {
-        // Base URL for Minecraft profile services
-        const val BASE_URL = "https://api.minecraftservices.com"
+        // Base URL for Minecraft API services
+        const val API_BASE_URL = "https://api.mojang.com"
         
-        // API endpoints
-        const val SINGLE_PROFILE_ENDPOINT = "$BASE_URL/minecraft/profile/lookup/name/"
-        const val BULK_PROFILE_ENDPOINT = "$BASE_URL/minecraft/profile/lookup/bulk/byname"
+        // API endpoints - use the older Mojang API for better compatibility
+        const val PROFILE_BY_NAME_ENDPOINT = "$API_BASE_URL/users/profiles/minecraft/"
         
         // HTTP headers
-        const val HEADER_CONTENT_TYPE = "Content-Type"
-        const val HEADER_CONTENT_TYPE_JSON = "application/json; charset=utf-8"
         const val HEADER_ACCEPT = "Accept"
         const val HEADER_ACCEPT_JSON = "application/json"
-        const val HEADER_USER_AGENT = "User-Agent"
-        const val HEADER_USER_AGENT_VALUE = "Argus Minecraft Mod"
+        const val HEADER_USER_AGENT = "User-Agent" 
+        const val HEADER_USER_AGENT_VALUE = "Minecraft Server"
         const val HEADER_RETRY_AFTER = "Retry-After"
         
         // Rate limiting and retry constants
         const val MAX_RETRIES = 5
         const val INITIAL_BACKOFF_MS = 1000L
         const val MAX_BACKOFF_MS = 30000L
-        const val BATCH_SIZE = 2
-        const val DELAY_BETWEEN_BATCHES_MS = 100L
+        const val DELAY_BETWEEN_REQUESTS_MS = 100L
         
         // Cache settings
         const val CACHE_EXPIRY_MS = 30 * 60 * 1000L // 30 minutes
@@ -75,78 +80,228 @@ class ProfileApiClient private constructor() {
      */
     private val profileCache = ConcurrentHashMap<String, CachedProfile>()
     
-    init {
-        client = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build()
+    /**
+     * Find a Minecraft profile by username.
+     * 
+     * @param username The Minecraft username to look up
+     * @return CompletableFuture with GameProfile if found, or null if not found or an error occurred
+     */
+    fun findProfileByNameAsync(username: String): CompletableFuture<GameProfile?> {
+        val normalizedUsername = username.lowercase(Locale.ROOT)
+        
+        // Check cache first (this happens in the calling thread)
+        val cachedProfile = profileCache[normalizedUsername]
+        if (cachedProfile != null && !cachedProfile.isExpired()) {
+            logger.debug("Cache hit for profile: $normalizedUsername")
+            return CompletableFuture.completedFuture(cachedProfile.profile)
+        }
+        
+        // Submit the lookup task to our dedicated single-threaded executor
+        return CompletableFuture.supplyAsync({
+            if (isShuttingDown.get()) {
+                return@supplyAsync null
+            }
+            
+            try {
+                // Add a small delay between requests to be a good citizen
+                try {
+                    Thread.sleep(DELAY_BETWEEN_REQUESTS_MS)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return@supplyAsync null
+                }
+                
+                // Perform the lookup
+                val endpoint = PROFILE_BY_NAME_ENDPOINT + normalizedUsername
+                
+                val request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .header(HEADER_ACCEPT, HEADER_ACCEPT_JSON)
+                    .header(HEADER_USER_AGENT, HEADER_USER_AGENT_VALUE)
+                    .GET()
+                    .build()
+                
+                // Simple retry with backoff logic
+                var retries = 0
+                var backoffMs = INITIAL_BACKOFF_MS
+                
+                while (!isShuttingDown.get() && !Thread.currentThread().isInterrupted && retries <= MAX_RETRIES) {
+                    try {
+                        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+                        
+                        when (response.statusCode()) {
+                            STATUS_OK -> {
+                                // Parse the response and create a GameProfile
+                                val responseBody = response.body()
+                                if (responseBody.isNotEmpty()) {
+                                    try {
+                                        val jsonElement = JsonParser.parseString(responseBody)
+                                        if (jsonElement.isJsonObject) {
+                                            val jsonObject = jsonElement.asJsonObject
+                                            if (jsonObject.has("id") && jsonObject.has("name")) {
+                                                val id = jsonObject.get("id").asString
+                                                val name = jsonObject.get("name").asString
+                                                
+                                                // Format the UUID correctly (Mojang APIs return UUIDs without hyphens)
+                                                val uuid = formatUuid(id)
+                                                val profile = GameProfile(uuid, name)
+                                                
+                                                // Cache the result
+                                                profileCache[normalizedUsername] = CachedProfile(profile)
+                                                
+                                                return@supplyAsync profile
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        logger.warn("Error parsing profile JSON for $normalizedUsername: ${e.message}")
+                                    }
+                                }
+                                // No valid profile found in response
+                                return@supplyAsync null
+                            }
+                            
+                            STATUS_NOT_FOUND -> {
+                                // Profile doesn't exist
+                                logger.debug("Profile not found: $normalizedUsername")
+                                return@supplyAsync null
+                            }
+                            
+                            STATUS_RATE_LIMITED -> {
+                                // Handle rate limiting
+                                if (retries >= MAX_RETRIES) {
+                                    logger.error("Maximum retries exceeded for profile lookup after rate limit: $normalizedUsername")
+                                    return@supplyAsync null
+                                }
+                                
+                                // Get retry delay from header if available
+                                val retryAfterHeader = response.headers().firstValue(HEADER_RETRY_AFTER).orElse(null)
+                                val sleepTime = if (retryAfterHeader != null) {
+                                    try {
+                                        retryAfterHeader.toLong() * 1000 // Convert to milliseconds
+                                    } catch (e: NumberFormatException) {
+                                        backoffMs
+                                    }
+                                } else {
+                                    backoffMs
+                                }
+                                
+                                logger.warn("Rate limited during profile lookup for $normalizedUsername. Retrying after ${sleepTime}ms")
+                                
+                                try {
+                                    Thread.sleep(sleepTime)
+                                } catch (e: InterruptedException) {
+                                    Thread.currentThread().interrupt()
+                                    return@supplyAsync null
+                                }
+                                
+                                // Increase backoff for next attempt (exponential backoff)
+                                backoffMs = min(MAX_BACKOFF_MS, backoffMs * 2)
+                                retries++
+                            }
+                            
+                            else -> {
+                                // Handle server errors with retry
+                                if (response.statusCode() >= STATUS_SERVER_ERROR_MIN) {
+                                    if (retries >= MAX_RETRIES) {
+                                        logger.error("Maximum retries exceeded for profile lookup after server error: $normalizedUsername")
+                                        return@supplyAsync null
+                                    }
+                                    
+                                    logger.warn("Server error (${response.statusCode()}) during profile lookup for $normalizedUsername. Retrying after ${backoffMs}ms")
+                                    
+                                    try {
+                                        Thread.sleep(backoffMs)
+                                    } catch (e: InterruptedException) {
+                                        Thread.currentThread().interrupt()
+                                        return@supplyAsync null
+                                    }
+                                    
+                                    // Increase backoff for next attempt
+                                    backoffMs = min(MAX_BACKOFF_MS, backoffMs * 2)
+                                    retries++
+                                } else {
+                                    // Other client error
+                                    logger.warn("Unexpected response for profile lookup [${response.statusCode()}]: $normalizedUsername")
+                                    return@supplyAsync null
+                                }
+                            }
+                        }
+                    } catch (e: IOException) {
+                        // Network or connection error
+                        if (retries >= MAX_RETRIES) {
+                            logger.error("Maximum retries exceeded for profile lookup after I/O error: $normalizedUsername", e)
+                            return@supplyAsync null
+                        }
+                        
+                        logger.warn("I/O error during profile lookup for $normalizedUsername: ${e.message}. Retrying after ${backoffMs}ms")
+                        
+                        try {
+                            Thread.sleep(backoffMs)
+                        } catch (ie: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            return@supplyAsync null
+                        }
+                        
+                        // Increase backoff for next attempt
+                        backoffMs = min(MAX_BACKOFF_MS, backoffMs * 2)
+                        retries++
+                    } catch (e: InterruptedException) {
+                        // Handle interruption explicitly
+                        Thread.currentThread().interrupt()
+                        return@supplyAsync null
+                    } catch (e: Exception) {
+                        // Unexpected error
+                        logger.error("Unexpected error during profile lookup for $normalizedUsername", e)
+                        return@supplyAsync null
+                    }
+                }
+                
+                // If we got here, we've exhausted retries or been interrupted
+                if (Thread.currentThread().isInterrupted) {
+                    logger.debug("Profile lookup for $normalizedUsername was interrupted")
+                } else {
+                    logger.error("Profile lookup for $normalizedUsername failed after $retries retries")
+                }
+                
+                return@supplyAsync null
+            } catch (e: Exception) {
+                logger.error("Error in profile lookup for $normalizedUsername", e)
+                return@supplyAsync null
+            }
+        }, ThreadPools.profileApiExecutor)
     }
     
     /**
-     * Find a Minecraft profile by username.
+     * Find a Minecraft profile by username, blocking until the result is available.
      * 
      * @param username The Minecraft username to look up
      * @return The GameProfile if found, or null if not found or an error occurred
      */
     fun findProfileByName(username: String): GameProfile? {
-        val normalizedUsername = username.lowercase(Locale.ROOT)
-        
-        // Check cache first
-        val cachedProfile = profileCache[normalizedUsername]
-        if (cachedProfile != null && !cachedProfile.isExpired()) {
-            logger.debug("Cache hit for profile: $normalizedUsername")
-            return cachedProfile.profile
-        }
-        
-        try {
-            // Single name lookup
-            val endpoint = SINGLE_PROFILE_ENDPOINT + normalizedUsername
-            
-            val request = HttpRequest.newBuilder()
-                .uri(URI.create(endpoint))
-                .header(HEADER_ACCEPT, HEADER_ACCEPT_JSON)
-                .header(HEADER_USER_AGENT, HEADER_USER_AGENT_VALUE)
-                .GET()
-                .build()
-            
-            val response = executeWithRetry { client.send(request, HttpResponse.BodyHandlers.ofString()) }
-            
-            if (response.statusCode() == STATUS_OK) {
-                try {
-                    val profileDto = gson.fromJson(response.body(), ProfileDTO::class.java)
-                    val profile = GameProfile(profileDto.getUUID(), profileDto.name)
-                    
-                    // Cache the result
-                    profileCache[normalizedUsername] = CachedProfile(profile)
-                    
-                    return profile
-                } catch (e: Exception) {
-                    logger.warn("Error parsing profile response for $normalizedUsername", e)
-                }
-            } else if (response.statusCode() == STATUS_NOT_FOUND) {
-                logger.debug("Profile not found: $normalizedUsername")
-                return null
-            } else {
-                logger.warn("Unexpected response for profile lookup [${response.statusCode()}]: $normalizedUsername")
-            }
+        return try {
+            findProfileByNameAsync(username).get(30, TimeUnit.SECONDS)
         } catch (e: Exception) {
-            logger.error("Error looking up profile for $normalizedUsername", e)
+            when (e) {
+                is InterruptedException -> Thread.currentThread().interrupt()
+                is TimeoutException -> logger.warn("Profile lookup timed out for $username")
+                else -> logger.error("Error getting profile for $username", e)
+            }
+            null
         }
-        
-        return null
     }
     
     /**
-     * Find multiple Minecraft profiles by username.
+     * Find multiple Minecraft profiles by username in a serial manner to respect rate limits.
      * 
      * @param usernames List of Minecraft usernames to look up
      * @return Map of usernames to their GameProfiles, excluding any that weren't found
      */
     fun findProfilesByNames(usernames: List<String>): Map<String, GameProfile> {
-        if (usernames.isEmpty()) {
+        if (usernames.isEmpty() || isShuttingDown.get()) {
             return emptyMap()
         }
         
-        val result = mutableMapOf<String, GameProfile>()
+        val result = ConcurrentHashMap<String, GameProfile>()
         val normalizedUsernames = usernames.map { it.lowercase(Locale.ROOT) }
         
         // Check cache first and collect usernames that need to be fetched
@@ -165,180 +320,225 @@ class ProfileApiClient private constructor() {
             return result
         }
         
-        // Split into batches to avoid overloading the API
-        for (batch in toFetch.chunked(BATCH_SIZE)) {
-            try {
-                val batchResult = fetchBatch(batch)
-                result.putAll(batchResult)
-                
-                // Sleep between batches to respect rate limits
-                if (batch.size == BATCH_SIZE) {
-                    Thread.sleep(DELAY_BETWEEN_BATCHES_MS)
+        logger.info("Looking up ${toFetch.size} profiles")
+        
+        // Process lookups one by one in the profile API thread to respect rate limits
+        val future = CompletableFuture.supplyAsync({
+            // Process each username sequentially
+            for (username in toFetch) {
+                if (isShuttingDown.get() || Thread.currentThread().isInterrupted) {
+                    logger.info("Profile lookup batch interrupted, processed ${result.size}/${toFetch.size} profiles")
+                    break
                 }
-            } catch (e: Exception) {
-                logger.error("Error fetching batch of profiles: ${batch.joinToString()}", e)
-            }
-        }
-        
-        return result
-    }
-    
-    /**
-     * Fetch a batch of profiles in a single API call.
-     * 
-     * @param usernames The usernames to fetch (should be limited to batchSize)
-     * @return Map of usernames to their GameProfiles
-     */
-    private fun fetchBatch(usernames: List<String>): Map<String, GameProfile> {
-        val result = mutableMapOf<String, GameProfile>()
-        if (usernames.isEmpty()) {
-            return result
-        }
-        
-        try {
-            // Build JSON array of usernames
-            val usernamesJson = JsonArray()
-            usernames.forEach { usernamesJson.add(it) }
-            
-            val requestBody = gson.toJson(usernamesJson)
-            
-            val request = HttpRequest.newBuilder()
-                .uri(URI.create(BULK_PROFILE_ENDPOINT))
-                .header(HEADER_CONTENT_TYPE, HEADER_CONTENT_TYPE_JSON)
-                .header(HEADER_ACCEPT, HEADER_ACCEPT_JSON)
-                .header(HEADER_USER_AGENT, HEADER_USER_AGENT_VALUE)
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                .build()
-            
-            val response = executeWithRetry { client.send(request, HttpResponse.BodyHandlers.ofString()) }
-            
-            if (response.statusCode() == STATUS_OK) {
+                
                 try {
-                    val profilesArray = gson.fromJson(response.body(), Array<ProfileDTO>::class.java)
-                    profilesArray.forEach { profile ->
-                        val gameProfile = GameProfile(profile.getUUID(), profile.name)
-                        result[profile.name.lowercase(Locale.ROOT)] = gameProfile
-                        
-                        // Cache the result
-                        profileCache[profile.name.lowercase(Locale.ROOT)] = CachedProfile(gameProfile)
+                    // Small delay between requests to respect rate limits
+                    try {
+                        Thread.sleep(DELAY_BETWEEN_REQUESTS_MS)
+                    } catch (e: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
+                    }
+                    
+                    // Do the lookup inline rather than creating another async task
+                    val endpoint = PROFILE_BY_NAME_ENDPOINT + username
+                    val request = HttpRequest.newBuilder()
+                        .uri(URI.create(endpoint))
+                        .header(HEADER_ACCEPT, HEADER_ACCEPT_JSON)
+                        .header(HEADER_USER_AGENT, HEADER_USER_AGENT_VALUE)
+                        .GET()
+                        .build()
+                    
+                    var retries = 0
+                    var backoffMs = INITIAL_BACKOFF_MS
+                    
+                    // Simple retry loop
+                    retryLoop@ while (retries <= MAX_RETRIES && !isShuttingDown.get() && !Thread.currentThread().isInterrupted) {
+                        try {
+                            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+                            
+                            when (response.statusCode()) {
+                                STATUS_OK -> {
+                                    // Parse the response and create a GameProfile
+                                    val responseBody = response.body()
+                                    if (responseBody.isNotEmpty()) {
+                                        try {
+                                            val jsonElement = JsonParser.parseString(responseBody)
+                                            if (jsonElement.isJsonObject) {
+                                                val jsonObject = jsonElement.asJsonObject
+                                                if (jsonObject.has("id") && jsonObject.has("name")) {
+                                                    val id = jsonObject.get("id").asString
+                                                    val name = jsonObject.get("name").asString
+                                                    
+                                                    // Format the UUID correctly
+                                                    val uuid = formatUuid(id)
+                                                    val profile = GameProfile(uuid, name)
+                                                    
+                                                    // Cache and add to results
+                                                    profileCache[username] = CachedProfile(profile)
+                                                    result[username] = profile
+                                                    
+                                                    logger.debug("Found profile for $username: $name ($uuid)")
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            logger.warn("Error parsing profile JSON for $username: ${e.message}")
+                                        }
+                                    }
+                                    // Continue to next username
+                                    break@retryLoop
+                                }
+                                
+                                STATUS_NOT_FOUND -> {
+                                    // Profile doesn't exist, continue to next username
+                                    logger.debug("Profile not found: $username")
+                                    break@retryLoop
+                                }
+                                
+                                STATUS_RATE_LIMITED -> {
+                                    // Handle rate limiting
+                                    if (retries >= MAX_RETRIES) {
+                                        logger.error("Maximum retries exceeded for profile lookup after rate limit: $username")
+                                        break@retryLoop
+                                    }
+                                    
+                                    // Get retry delay from header if available
+                                    val retryAfterHeader = response.headers().firstValue(HEADER_RETRY_AFTER).orElse(null)
+                                    val sleepTime = if (retryAfterHeader != null) {
+                                        try {
+                                            retryAfterHeader.toLong() * 1000
+                                        } catch (e: NumberFormatException) {
+                                            backoffMs
+                                        }
+                                    } else {
+                                        backoffMs
+                                    }
+                                    
+                                    logger.warn("Rate limited during profile lookup for $username. Retrying after ${sleepTime}ms")
+                                    
+                                    try {
+                                        Thread.sleep(sleepTime)
+                                    } catch (e: InterruptedException) {
+                                        Thread.currentThread().interrupt()
+                                        break@retryLoop
+                                    }
+                                    
+                                    backoffMs = min(MAX_BACKOFF_MS, backoffMs * 2)
+                                    retries++
+                                }
+                                
+                                else -> {
+                                    // Handle server errors with retry
+                                    if (response.statusCode() >= STATUS_SERVER_ERROR_MIN) {
+                                        if (retries >= MAX_RETRIES) {
+                                            logger.error("Maximum retries exceeded for profile lookup after server error: $username")
+                                            break@retryLoop
+                                        }
+                                        
+                                        logger.warn("Server error (${response.statusCode()}) during profile lookup for $username. Retrying after ${backoffMs}ms")
+                                        
+                                        try {
+                                            Thread.sleep(backoffMs)
+                                        } catch (e: InterruptedException) {
+                                            Thread.currentThread().interrupt()
+                                            break@retryLoop
+                                        }
+                                        
+                                        backoffMs = min(MAX_BACKOFF_MS, backoffMs * 2)
+                                        retries++
+                                    } else {
+                                        // Other client error, skip this username
+                                        logger.warn("Unexpected response for profile lookup [${response.statusCode()}]: $username")
+                                        break@retryLoop
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            when (e) {
+                                is InterruptedException -> {
+                                    // Handle interruption explicitly
+                                    Thread.currentThread().interrupt()
+                                    logger.debug("Profile lookup interrupted for $username")
+                                    break@retryLoop
+                                }
+                                is IOException -> {
+                                    // Network or connection error
+                                    if (retries >= MAX_RETRIES) {
+                                        logger.error("Maximum retries exceeded for profile lookup after I/O error: $username", e)
+                                        break@retryLoop
+                                    }
+                                    
+                                    logger.warn("I/O error during profile lookup for $username. Retrying after ${backoffMs}ms")
+                                    
+                                    try {
+                                        Thread.sleep(backoffMs)
+                                    } catch (ie: InterruptedException) {
+                                        Thread.currentThread().interrupt()
+                                        break@retryLoop
+                                    }
+                                    
+                                    backoffMs = min(MAX_BACKOFF_MS, backoffMs * 2)
+                                    retries++
+                                }
+                                else -> {
+                                    // Unexpected error, skip this username
+                                    logger.error("Unexpected error during profile lookup for $username", e)
+                                    break@retryLoop
+                                }
+                            }
+                        }
                     }
                 } catch (e: Exception) {
-                    logger.error("Error parsing batch profile response", e)
+                    logger.error("Error in profile lookup for $username", e)
+                    // Continue to next username
                 }
-                
-                logger.debug("Batch lookup found ${result.size}/${usernames.size} profiles")
-            } else {
-                logger.warn("Unexpected response for batch profile lookup [${response.statusCode()}]")
             }
-        } catch (e: Exception) {
-            logger.error("Error in batch profile lookup", e)
-        }
+            
+            logger.info("Completed profile lookup batch, found ${result.size}/${toFetch.size} profiles")
+            result
+        }, ThreadPools.profileApiExecutor)
         
-        return result
+        // Wait for all lookups to complete with a reasonable timeout
+        return try {
+            future.get(60, TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            when (e) {
+                is InterruptedException -> Thread.currentThread().interrupt()
+                is TimeoutException -> logger.warn("Bulk profile lookup timed out after 60 seconds")
+                else -> logger.error("Error in bulk profile lookup", e)
+            }
+            result // Return whatever we got so far
+        }
     }
     
     /**
-     * Execute an HTTP request with retry logic for rate limit handling.
-     * 
-     * @param request Function that performs the HTTP request
-     * @return HttpResponse from the successful request
-     * @throws IOException if all retries fail
+     * Signal the client to shutdown cleanly
      */
-    private fun <T> executeWithRetry(request: () -> HttpResponse<T>): HttpResponse<T> {
-        var retries = 0
-        var backoffMs = INITIAL_BACKOFF_MS
-        
-        while (true) {
-            try {
-                val response = request()
-                
-                // If we hit a rate limit, apply backoff strategy
-                if (response.statusCode() == STATUS_RATE_LIMITED) {
-                    if (retries >= MAX_RETRIES) {
-                        logger.error("Maximum retries exceeded for request after rate limit")
-                        throw IOException("Maximum retries exceeded for request after rate limit")
-                    }
-                    
-                    // Try to get Retry-After header for server-advised delay
-                    val retryAfter = response.headers().firstValue(HEADER_RETRY_AFTER).orElse(null)
-                    val sleepTime = if (retryAfter != null) {
-                        try {
-                            // Retry-After can be in seconds or an HTTP date
-                            // For simplicity, we'll assume it's seconds
-                            retryAfter.toLong() * 1000
-                        } catch (e: NumberFormatException) {
-                            // If we can't parse it, use exponential backoff
-                            backoffMs
-                        }
-                    } else {
-                        backoffMs
-                    }
-                    
-                    logger.warn("Rate limited by Mojang API. Retrying after ${sleepTime}ms (retry ${retries + 1}/${MAX_RETRIES})")
-                    try {
-                        Thread.sleep(sleepTime)
-                    } catch (ie: InterruptedException) {
-                        // Properly propagate the interrupt
-                        Thread.currentThread().interrupt()
-                        logger.info("Rate limit backoff interrupted, propagating interrupt")
-                        throw ie  // Rethrow the original InterruptedException
-                    }
-                    
-                    // Increase backoff for next attempt
-                    backoffMs = min(MAX_BACKOFF_MS, (backoffMs * 2))
-                    retries++
-                    continue
-                }
-                
-                // For server errors, also retry with backoff
-                if (response.statusCode() >= STATUS_SERVER_ERROR_MIN) {
-                    if (retries >= MAX_RETRIES) {
-                        logger.error("Maximum retries exceeded for request after server error")
-                        throw IOException("Maximum retries exceeded for request after server error")
-                    }
-                    
-                    logger.warn("Server error from Mojang API (${response.statusCode()}). Retrying after ${backoffMs}ms (retry ${retries + 1}/${MAX_RETRIES})")
-                    try {
-                        Thread.sleep(backoffMs)
-                    } catch (ie: InterruptedException) {
-                        // Properly propagate the interrupt
-                        Thread.currentThread().interrupt()
-                        logger.info("Server error backoff interrupted, propagating interrupt")
-                        throw ie  // Rethrow the original InterruptedException
-                    }
-                    
-                    // Increase backoff for next attempt
-                    backoffMs = min(MAX_BACKOFF_MS, (backoffMs * 2))
-                    retries++
-                    continue
-                }
-                
-                return response
-            } catch (e: InterruptedException) {
-                // Properly propagate the interrupt
-                Thread.currentThread().interrupt()
-                logger.info("Profile lookup interrupted, propagating interrupt")
-                throw e // Rethrow the original InterruptedException
-            } catch (e: IOException) {
-                if (retries >= MAX_RETRIES) {
-                    logger.error("Maximum retries exceeded for request after I/O error", e)
-                    throw e
-                }
-                
-                logger.warn("I/O error during request. Retrying after ${backoffMs}ms (retry ${retries + 1}/${MAX_RETRIES})", e)
-                try {
-                    Thread.sleep(backoffMs)
-                } catch (ie: InterruptedException) {
-                    // Properly propagate the interrupt
-                    Thread.currentThread().interrupt()
-                    logger.info("Retry backoff interrupted, propagating interrupt")
-                    throw ie // Rethrow the original InterruptedException
-                }
-                
-                // Increase backoff for next attempt
-                backoffMs = min(MAX_BACKOFF_MS, (backoffMs * 2))
-                retries++
+    fun shutdown() {
+        isShuttingDown.set(true)
+    }
+    
+    /**
+     * Convert a Mojang UUID string (without hyphens) to a proper UUID
+     */
+    private fun formatUuid(id: String): UUID {
+        return try {
+            // Insert hyphens into the UUID format if they're missing
+            // Convert from "8c2b80938d2a4719886ba877ae7968d1" to "8c2b8093-8d2a-4719-886b-a877ae7968d1"
+            if (id.length == 32 && !id.contains("-")) {
+                UUID.fromString(
+                    id.substring(0, 8) + "-" +
+                    id.substring(8, 12) + "-" +
+                    id.substring(12, 16) + "-" +
+                    id.substring(16, 20) + "-" +
+                    id.substring(20)
+                )
+            } else {
+                // Regular UUID format, parse directly
+                UUID.fromString(id)
             }
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Invalid UUID format: $id", e)
         }
     }
     
@@ -350,38 +550,6 @@ class ProfileApiClient private constructor() {
         
         fun isExpired(): Boolean {
             return System.currentTimeMillis() - timestamp > CACHE_EXPIRY_MS
-        }
-    }
-    
-    /**
-     * DTO for profile data in API responses
-     */
-    private data class ProfileDTO(
-        @SerializedName("id") val id: String,
-        @SerializedName("name") val name: String
-    ) {
-        /**
-         * Convert the Mojang API UUID string (without hyphens) to a proper UUID
-         */
-        fun getUUID(): UUID {
-            try {
-                // Insert hyphens into the UUID format if they're missing
-                // Convert from "8c2b80938d2a4719886ba877ae7968d1" to "8c2b8093-8d2a-4719-886b-a877ae7968d1"
-                if (id.length == 32 && !id.contains("-")) {
-                    return UUID.fromString(
-                        id.substring(0, 8) + "-" +
-                        id.substring(8, 12) + "-" +
-                        id.substring(12, 16) + "-" +
-                        id.substring(16, 20) + "-" +
-                        id.substring(20)
-                    )
-                }
-                
-                // Regular UUID format, parse directly
-                return UUID.fromString(id)
-            } catch (e: Exception) {
-                throw IllegalArgumentException("Invalid UUID format: $id", e)
-            }
         }
     }
 }

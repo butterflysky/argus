@@ -110,6 +110,14 @@ object ThreadPools {
     }
     
     /**
+     * Creates a single thread executor for profile API lookups
+     * A single thread is used to ensure we don't exceed rate limits
+     */
+    val profileApiExecutor: ExecutorService by lazy {
+        newFixedThreadPool("profile-api", 1, 50)
+    }
+    
+    /**
      * Shutdown all thread pools
      */
     fun shutdownAll() {
@@ -137,6 +145,7 @@ object ThreadPools {
         shutdownExecutor(backgroundTaskExecutor, "background-task")
         shutdownExecutor(discordReconnectExecutor, "discord-reconnect")
         shutdownExecutor(linkCleanupExecutor, "link-cleanup")
+        shutdownExecutor(profileApiExecutor, "profile-api")
     }
 }
 

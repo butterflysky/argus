@@ -7,6 +7,7 @@ import dev.butterflysky.discord.WhitelistCommands
 import dev.butterflysky.service.WhitelistService
 import dev.butterflysky.whitelist.LinkManager
 import dev.butterflysky.util.ThreadPools
+import dev.butterflysky.util.ProfileApiClient
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -291,6 +292,9 @@ object Argus : ModInitializer {
                 
                 // Shutdown the link manager
                 LinkManager.getInstance().shutdown()
+                
+                // Shutdown the profile API client
+                ProfileApiClient.getInstance().shutdown()
                 
                 // Shutdown all thread pools
                 ThreadPools.shutdownAll()

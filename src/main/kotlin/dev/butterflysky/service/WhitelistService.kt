@@ -258,6 +258,7 @@ class WhitelistService private constructor() {
             logger.info("Starting import of ${names.size} whitelist entries")
             
             // Use our custom ProfileApiClient for batch lookups
+            // This is off the main thread and handles rate limits properly
             val profileApiClient = ProfileApiClient.getInstance()
             val profilesByName = profileApiClient.findProfilesByNames(names.toList())
             
@@ -1765,21 +1766,14 @@ class WhitelistService private constructor() {
      */
     private fun getGameProfile(username: String): GameProfile? {
         val server = this.server ?: return null
-        val userCache = server.getUserCache()
         
-        // Try to find the player's profile in the cache first
-        val profileOptional = userCache?.findByName(username)
-        if (profileOptional != null && profileOptional.isPresent) {
-            return profileOptional.get()
-        }
-        
-        // If not in cache, use our custom API client with proper rate limit handling
+        // Use our custom API client exclusively for profile lookups
+        // This properly handles rate limits and gives us better control
         try {
             val profileApiClient = ProfileApiClient.getInstance()
             val profile = profileApiClient.findProfileByName(username)
             
             if (profile != null) {
-                // Return the profile without polluting the server's cache
                 return profile
             }
         } catch (e: Exception) {

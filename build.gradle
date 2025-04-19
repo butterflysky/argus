@@ -51,6 +51,10 @@ dependencies {
 	include "org.xerial:sqlite-jdbc:${project.sqlite_version}"
 	implementation "org.xerial:sqlite-jdbc:${project.sqlite_version}"
 	
+	// HikariCP for connection pooling
+	include "com.zaxxer:HikariCP:${project.hikaricp_version}"
+	implementation "com.zaxxer:HikariCP:${project.hikaricp_version}"
+	
 	// Exposed - Kotlin SQL framework
 	include "org.jetbrains.exposed:exposed-core:${project.exposed_version}"
 	implementation "org.jetbrains.exposed:exposed-core:${project.exposed_version}"

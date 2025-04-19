@@ -21,6 +21,9 @@ import dev.butterflysky.config.ArgusConfig
 import java.time.Instant
 import java.util.UUID
 import java.io.File
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
+import java.util.Properties
 
 /**
  * WhitelistDatabase contains the schema definition for the Abcraft whitelist management system.
@@ -620,6 +623,41 @@ object WhitelistDatabase {
     }
     
     /**
+     * Create and configure HikariCP DataSource for database connection pooling
+     */
+    private fun createDataSource(jdbcUrl: String, driver: String): HikariDataSource {
+        // Create HikariCP configuration
+        val config = HikariConfig()
+        
+        // Set basic connection properties
+        config.jdbcUrl = jdbcUrl
+        config.driverClassName = driver
+        
+        // Set pool configuration - keeping small due to Minecraft mod environment
+        config.minimumIdle = 1                 // Keep at least 1 connection ready
+        config.maximumPoolSize = 3             // Max 3 connections at once
+        config.connectionTimeout = 10000       // 10 second connection timeout
+        config.idleTimeout = 600000            // 10 minute idle timeout
+        config.maxLifetime = 1800000           // 30 minute max lifetime
+        config.leakDetectionThreshold = 60000  // 60 second leak detection
+        config.poolName = "ArgusDBPool"
+        
+        // SQLite specific configuration
+        if (driver == "org.sqlite.JDBC") {
+            val properties = Properties()
+            // Set pragmas for better SQLite performance
+            properties.setProperty("pragma.cache_size", "2000")
+            properties.setProperty("pragma.soft_heap_limit", "5000000")
+            properties.setProperty("pragma.temp_store", "MEMORY")
+            properties.setProperty("pragma.busy_timeout", "5000")
+            config.dataSourceProperties = properties
+        }
+        
+        // Create and return the data source
+        return HikariDataSource(config)
+    }
+
+    /**
      * Initialize the database with a specific JDBC URL (useful for testing)
      *
      * @param jdbcUrl The JDBC URL to connect to (e.g., "jdbc:h2:mem:test" for in-memory testing)
@@ -634,8 +672,12 @@ object WhitelistDatabase {
         logger.info("Initializing database with JDBC URL: $jdbcUrl")
         
         try {
-            // Connect to database
-            Database.connect(jdbcUrl, driver)
+            // Create connection pool
+            val dataSource = createDataSource(jdbcUrl, driver)
+            
+            // Connect to database using the connection pool
+            Database.connect(dataSource)
+            logger.info("Connected to database with HikariCP connection pool")
             
             // Create tables if they don't exist
             createTables()

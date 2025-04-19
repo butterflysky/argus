@@ -2,7 +2,6 @@ package dev.butterflysky.util
 
 import com.google.gson.Gson
 import com.google.gson.JsonArray
-import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 import com.mojang.authlib.GameProfile
 import dev.butterflysky.config.ArgusConfig
@@ -112,17 +111,16 @@ class ProfileApiClient private constructor() {
             val response = executeWithRetry { client.send(request, HttpResponse.BodyHandlers.ofString()) }
             
             if (response.statusCode() == STATUS_OK) {
-                val profileJson = gson.fromJson(response.body(), JsonObject::class.java)
-                if (profileJson != null) {
-                    val id = UUID.fromString(profileJson.get("id").asString)
-                    val name = profileJson.get("name").asString
-                    
-                    val profile = GameProfile(id, name)
+                try {
+                    val profileDto = gson.fromJson(response.body(), ProfileDTO::class.java)
+                    val profile = GameProfile(profileDto.id, profileDto.name)
                     
                     // Cache the result
                     profileCache[normalizedUsername] = CachedProfile(profile)
                     
                     return profile
+                } catch (e: Exception) {
+                    logger.warn("Error parsing profile response for $normalizedUsername", e)
                 }
             } else if (response.statusCode() == STATUS_NOT_FOUND) {
                 logger.debug("Profile not found: $normalizedUsername")
@@ -215,8 +213,8 @@ class ProfileApiClient private constructor() {
             val response = executeWithRetry { client.send(request, HttpResponse.BodyHandlers.ofString()) }
             
             if (response.statusCode() == STATUS_OK) {
-                val profilesResponse = gson.fromJson(response.body(), ProfileSearchResultsResponse::class.java)
-                profilesResponse.profiles.forEach { profile ->
+                val profilesArray = gson.fromJson(response.body(), Array<ProfileDTO>::class.java)
+                profilesArray.forEach { profile ->
                     val gameProfile = GameProfile(profile.id, profile.name)
                     result[profile.name.lowercase(Locale.ROOT)] = gameProfile
                     
@@ -332,13 +330,6 @@ class ProfileApiClient private constructor() {
             return System.currentTimeMillis() - timestamp > CACHE_EXPIRY_MS
         }
     }
-    
-    /**
-     * Response DTO for bulk profile lookup
-     */
-    private data class ProfileSearchResultsResponse(
-        @SerializedName("profiles") val profiles: List<ProfileDTO>
-    )
     
     /**
      * DTO for profile data in API responses

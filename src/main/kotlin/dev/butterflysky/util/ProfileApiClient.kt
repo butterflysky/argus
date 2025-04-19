@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.mojang.authlib.GameProfile
+import net.minecraft.SharedConstants
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.URI
@@ -41,17 +42,27 @@ class ProfileApiClient private constructor() {
     
     // API constants
     companion object {
-        // Base URL for Minecraft API services
-        const val API_BASE_URL = "https://api.mojang.com"
+        // Mojang API URLs from YggdrasilEnvironment.PROD
+        private const val SERVICES_HOST = "https://api.minecraftservices.com"
         
-        // API endpoints - use the older Mojang API for better compatibility
-        const val PROFILE_BY_NAME_ENDPOINT = "$API_BASE_URL/users/profiles/minecraft/"
+        // API endpoints - exactly match what Minecraft uses in YggdrasilGameProfileRepository
+        private val PROFILE_BY_NAME_BASE_URL = SERVICES_HOST + "/minecraft/profile/lookup/name/"
+        private val BULK_PROFILE_ENDPOINT = SERVICES_HOST + "/minecraft/profile/lookup/bulk/byname"
         
         // HTTP headers
         const val HEADER_ACCEPT = "Accept"
         const val HEADER_ACCEPT_JSON = "application/json"
-        const val HEADER_USER_AGENT = "User-Agent" 
-        const val HEADER_USER_AGENT_VALUE = "Minecraft Server"
+        const val HEADER_USER_AGENT = "User-Agent"
+        
+        // Get User-Agent header exactly as Minecraft does in AbstractTextFilterer.java
+        val HEADER_USER_AGENT_VALUE by lazy {
+            try {
+                "Minecraft server" + SharedConstants.getGameVersion().getName()
+            } catch (e: Exception) {
+                // Fallback if we can't get the game version
+                "Minecraft server 1.21.5"
+            }
+        }
         const val HEADER_RETRY_AFTER = "Retry-After"
         
         // Rate limiting and retry constants
@@ -112,7 +123,7 @@ class ProfileApiClient private constructor() {
                 }
                 
                 // Perform the lookup
-                val endpoint = PROFILE_BY_NAME_ENDPOINT + normalizedUsername
+                val endpoint = PROFILE_BY_NAME_BASE_URL + normalizedUsername
                 
                 val request = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
@@ -292,6 +303,8 @@ class ProfileApiClient private constructor() {
     
     /**
      * Find multiple Minecraft profiles by username in a serial manner to respect rate limits.
+     * This implementation mirrors YggdrasilGameProfileRepository's approach but with better
+     * rate limit handling.
      * 
      * @param usernames List of Minecraft usernames to look up
      * @return Map of usernames to their GameProfiles, excluding any that weren't found
@@ -341,7 +354,7 @@ class ProfileApiClient private constructor() {
                     }
                     
                     // Do the lookup inline rather than creating another async task
-                    val endpoint = PROFILE_BY_NAME_ENDPOINT + username
+                    val endpoint = PROFILE_BY_NAME_BASE_URL + username
                     val request = HttpRequest.newBuilder()
                         .uri(URI.create(endpoint))
                         .header(HEADER_ACCEPT, HEADER_ACCEPT_JSON)

@@ -7,8 +7,6 @@ import com.mojang.brigadier.context.CommandContext;
 import dev.butterflysky.db.WhitelistDatabase;
 import dev.butterflysky.service.DiscordUserInfo;
 import dev.butterflysky.service.WhitelistService;
-import dev.butterflysky.service.WhitelistService.AddResult;
-import dev.butterflysky.service.WhitelistService.RemoveResult;
 import dev.butterflysky.whitelist.LinkManager;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -50,32 +48,11 @@ public class WhitelistCommandExecuteMixin {
                 
                 // For commands that mutate whitelist state, check for Discord mapping
                 if (isMutatingCommand(subCommand)) {
-                    // For in-game players, require Discord link
-                    if (playerProfile != null) {
-                        DiscordUserInfo discordUser = WHITELIST_SERVICE.getDiscordUserForMinecraftAccount(playerProfile.getId());
-                        
-                        if (discordUser == null) {
-                            // Block the command and provide a token for linking
-                            String token = LINK_MANAGER.createLinkToken(playerProfile.getId(), playerProfile.getName());
-                            
-                            // Send a message to the player explaining they need to link their Discord account
-                            Text linkText = Text.literal("§c[Argus] §eYou need to link your Discord account to use whitelist commands.\n")
-                                .append(Text.literal("§ePlease run §b/whitelist link §eto generate a token, then use that token in Discord.\n"))
-                                .append(Text.literal("§7(Whitelist commands are restricted to users with linked Discord accounts)"));
-                            
-                            source.sendFeedback(() -> linkText, false);
-                            
-                            // Cancel the command execution
-                            ci.cancel();
-                            return;
-                        } else {
-                            // Discord account found, log the action with the Discord user
-                            ARGUS_LOGGER.info("[ARGUS WHITELIST] Command executed by player {} with linked Discord account {} ({})",
-                                playerProfile.getName(), discordUser.getUsername(), discordUser.getId());
-                        }
-                    } else {
-                        // Command issued by console/RCON, use the system account
-                        ARGUS_LOGGER.info("[ARGUS WHITELIST] Command executed from console or RCON, using system account");
+                    // Use our helper to check for Discord link
+                    if (!MixinHelper.checkDiscordLinkOrShowMessage(source, "whitelist")) {
+                        // Cancel the command execution if not linked
+                        ci.cancel();
+                        return;
                     }
                     
                     // For add/remove commands, handle the audit logging and Discord notifications
@@ -90,14 +67,8 @@ public class WhitelistCommandExecuteMixin {
                             ARGUS_LOGGER.info("[ARGUS WHITELIST] Found profile for target player: {} ({})", 
                                 targetProfile.getName(), targetProfile.getId());
                             
-                            // Determine the discord ID of the player executing the command (if any)
-                            String executorDiscordId = null;
-                            if (playerProfile != null) {
-                                DiscordUserInfo discordUser = WHITELIST_SERVICE.getDiscordUserForMinecraftAccount(playerProfile.getId());
-                                if (discordUser != null) {
-                                    executorDiscordId = discordUser.getId();
-                                }
-                            }
+                            // Get the Discord ID of the command executor
+                            String executorDiscordId = MixinHelper.getDiscordIdForPlayer(playerProfile);
                             
                             boolean successful = false;
                             try {

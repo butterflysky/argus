@@ -5,7 +5,8 @@
 	"mixins": [
 		"WhitelistCommandExecuteMixin",
 		"WhitelistAccessorMixin",
-		"BanCommandMixin"
+		"BanCommandMixin",
+		"PardonCommandMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

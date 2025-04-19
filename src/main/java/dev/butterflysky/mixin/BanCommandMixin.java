@@ -30,6 +30,25 @@ public class BanCommandMixin {
     private static final WhitelistService WHITELIST_SERVICE = WhitelistService.Companion.getInstance();
 
     /**
+     * Inject before the ban method to check for Discord link
+     */
+    @Inject(
+        method = "ban(Lnet/minecraft/server/command/ServerCommandSource;Ljava/util/Collection;Lnet/minecraft/text/Text;)I",
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private static void beforeBan(ServerCommandSource source, Collection<GameProfile> targets, Text reason, CallbackInfoReturnable<Integer> cir) {
+        ARGUS_LOGGER.info("[ARGUS BAN] Minecraft ban command executed");
+        
+        // Check if command executor has a linked Discord account
+        if (!MixinHelper.checkDiscordLinkOrShowMessage(source, "ban")) {
+            // Cancel the command if no Discord link
+            cir.setReturnValue(0);
+            cir.cancel();
+        }
+    }
+
+    /**
      * Inject at the return of the ban method to ensure it runs after successful banning
      */
     @Inject(
@@ -48,33 +67,17 @@ public class BanCommandMixin {
         // Get ban reason
         String banReason = reason != null ? reason.getString() : "Banned by an operator";
         
-        // Check if command was executed by a player or the console
+        // Get the Discord ID of the command executor (if any)
         GameProfile playerProfile = null;
         String discordId = null;
         
-        // Check if the command was executed by a player
-        if (source.getEntity() != null && source.isExecutedByPlayer()) {
-            try {
+        try {
+            if (source.getEntity() != null && source.isExecutedByPlayer()) {
                 playerProfile = source.getPlayer().getGameProfile();
-                
-                // If we have a player, try to get their Discord ID
-                if (playerProfile != null) {
-                    DiscordUserInfo discordUser = WHITELIST_SERVICE.getDiscordUserForMinecraftAccount(playerProfile.getId());
-                    if (discordUser != null) {
-                        discordId = discordUser.getId();
-                        ARGUS_LOGGER.info("[ARGUS BAN] Command executed by player {} with linked Discord account {} ({})",
-                            playerProfile.getName(), discordUser.getUsername(), discordId);
-                    } else {
-                        ARGUS_LOGGER.info("[ARGUS BAN] Command executed by player {} with no linked Discord account, using system account",
-                            playerProfile.getName());
-                    }
-                }
-            } catch (Exception e) {
-                ARGUS_LOGGER.warn("[ARGUS BAN] Error getting player information: {}", e.getMessage());
+                discordId = MixinHelper.getDiscordIdForPlayer(playerProfile);
             }
-        } else {
-            // Command was executed from console or RCON
-            ARGUS_LOGGER.info("[ARGUS BAN] Ban command executed from console or RCON, using system account");
+        } catch (Exception e) {
+            ARGUS_LOGGER.warn("[ARGUS BAN] Error getting player information: {}", e.getMessage());
         }
 
         // For each banned player, update their status in our system

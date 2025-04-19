@@ -1599,6 +1599,42 @@ class WhitelistService private constructor() {
     }
     
     /**
+     * Creates an audit log entry for player unbanning (pardon)
+     * Used by the PardonCommandMixin to handle audit logging
+     *
+     * @param uuid The UUID of the player who was pardoned
+     * @param playerName The username of the player who was pardoned
+     * @param discordId The Discord ID of the moderator who issued the pardon, or null for system actions
+     * @param reason The reason for the pardon
+     */
+    fun createUnbanAuditLogEntry(uuid: UUID, playerName: String, discordId: String?, reason: String) {
+        transaction {
+            // Get the Discord user that performed the action, or use system user
+            val performer = if (discordId != null) {
+                try {
+                    DiscordUser.findById(discordId.toLong())
+                } catch (e: Exception) {
+                    logger.warn("Could not find Discord user with ID $discordId, using system user")
+                    DiscordUser.getSystemUser()
+                }
+            } else {
+                DiscordUser.getSystemUser()
+            }
+            
+            // Create the audit log
+            WhitelistDatabase.createAuditLog(
+                actionType = WhitelistDatabase.AuditActionType.PLAYER_UNBANNED,
+                entityType = WhitelistDatabase.EntityType.MINECRAFT_USER,
+                entityId = uuid.toString(),
+                performedBy = performer,
+                details = "$reason: $playerName"
+            )
+            
+            logger.info("Created unban audit log for $playerName ($uuid)")
+        }
+    }
+    
+    /**
      * Search users based on filters
      */
     fun searchUsers(filters: UserSearchFilters): List<UserSearchResult> {

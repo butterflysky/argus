@@ -23,15 +23,6 @@ import dev.butterflysky.service.WhitelistService;
  */
 @Mixin(PlayerManager.class)
 public class WhitelistAccessorMixin {
-    
-    // We don't need to shadow fields anymore
-    
-    /**
-     * When the server starts, we capture the world directory path
-     * to access whitelist.json later
-     */
-    // Removed unused method
-    
     /**
      * When the whitelist is reloaded, we update our cached player list
      */

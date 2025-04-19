@@ -113,7 +113,7 @@ class ProfileApiClient private constructor() {
             if (response.statusCode() == STATUS_OK) {
                 try {
                     val profileDto = gson.fromJson(response.body(), ProfileDTO::class.java)
-                    val profile = GameProfile(profileDto.id, profileDto.name)
+                    val profile = GameProfile(profileDto.getUUID(), profileDto.name)
                     
                     // Cache the result
                     profileCache[normalizedUsername] = CachedProfile(profile)
@@ -213,13 +213,17 @@ class ProfileApiClient private constructor() {
             val response = executeWithRetry { client.send(request, HttpResponse.BodyHandlers.ofString()) }
             
             if (response.statusCode() == STATUS_OK) {
-                val profilesArray = gson.fromJson(response.body(), Array<ProfileDTO>::class.java)
-                profilesArray.forEach { profile ->
-                    val gameProfile = GameProfile(profile.id, profile.name)
-                    result[profile.name.lowercase(Locale.ROOT)] = gameProfile
-                    
-                    // Cache the result
-                    profileCache[profile.name.lowercase(Locale.ROOT)] = CachedProfile(gameProfile)
+                try {
+                    val profilesArray = gson.fromJson(response.body(), Array<ProfileDTO>::class.java)
+                    profilesArray.forEach { profile ->
+                        val gameProfile = GameProfile(profile.getUUID(), profile.name)
+                        result[profile.name.lowercase(Locale.ROOT)] = gameProfile
+                        
+                        // Cache the result
+                        profileCache[profile.name.lowercase(Locale.ROOT)] = CachedProfile(gameProfile)
+                    }
+                } catch (e: Exception) {
+                    logger.error("Error parsing batch profile response", e)
                 }
                 
                 logger.debug("Batch lookup found ${result.size}/${usernames.size} profiles")
@@ -271,7 +275,14 @@ class ProfileApiClient private constructor() {
                     }
                     
                     logger.warn("Rate limited by Mojang API. Retrying after ${sleepTime}ms (retry ${retries + 1}/${MAX_RETRIES})")
-                    Thread.sleep(sleepTime)
+                    try {
+                        Thread.sleep(sleepTime)
+                    } catch (ie: InterruptedException) {
+                        // Properly propagate the interrupt
+                        Thread.currentThread().interrupt()
+                        logger.info("Rate limit backoff interrupted, propagating interrupt")
+                        throw ie  // Rethrow the original InterruptedException
+                    }
                     
                     // Increase backoff for next attempt
                     backoffMs = min(MAX_BACKOFF_MS, (backoffMs * 2))
@@ -287,7 +298,14 @@ class ProfileApiClient private constructor() {
                     }
                     
                     logger.warn("Server error from Mojang API (${response.statusCode()}). Retrying after ${backoffMs}ms (retry ${retries + 1}/${MAX_RETRIES})")
-                    Thread.sleep(backoffMs)
+                    try {
+                        Thread.sleep(backoffMs)
+                    } catch (ie: InterruptedException) {
+                        // Properly propagate the interrupt
+                        Thread.currentThread().interrupt()
+                        logger.info("Server error backoff interrupted, propagating interrupt")
+                        throw ie  // Rethrow the original InterruptedException
+                    }
                     
                     // Increase backoff for next attempt
                     backoffMs = min(MAX_BACKOFF_MS, (backoffMs * 2))
@@ -297,8 +315,10 @@ class ProfileApiClient private constructor() {
                 
                 return response
             } catch (e: InterruptedException) {
+                // Properly propagate the interrupt
                 Thread.currentThread().interrupt()
-                throw IOException("Request interrupted", e)
+                logger.info("Profile lookup interrupted, propagating interrupt")
+                throw e // Rethrow the original InterruptedException
             } catch (e: IOException) {
                 if (retries >= MAX_RETRIES) {
                     logger.error("Maximum retries exceeded for request after I/O error", e)
@@ -309,8 +329,10 @@ class ProfileApiClient private constructor() {
                 try {
                     Thread.sleep(backoffMs)
                 } catch (ie: InterruptedException) {
+                    // Properly propagate the interrupt
                     Thread.currentThread().interrupt()
-                    throw IOException("Request interrupted", ie)
+                    logger.info("Retry backoff interrupted, propagating interrupt")
+                    throw ie // Rethrow the original InterruptedException
                 }
                 
                 // Increase backoff for next attempt
@@ -335,7 +357,31 @@ class ProfileApiClient private constructor() {
      * DTO for profile data in API responses
      */
     private data class ProfileDTO(
-        @SerializedName("id") val id: UUID,
+        @SerializedName("id") val id: String,
         @SerializedName("name") val name: String
-    )
+    ) {
+        /**
+         * Convert the Mojang API UUID string (without hyphens) to a proper UUID
+         */
+        fun getUUID(): UUID {
+            try {
+                // Insert hyphens into the UUID format if they're missing
+                // Convert from "8c2b80938d2a4719886ba877ae7968d1" to "8c2b8093-8d2a-4719-886b-a877ae7968d1"
+                if (id.length == 32 && !id.contains("-")) {
+                    return UUID.fromString(
+                        id.substring(0, 8) + "-" +
+                        id.substring(8, 12) + "-" +
+                        id.substring(12, 16) + "-" +
+                        id.substring(16, 20) + "-" +
+                        id.substring(20)
+                    )
+                }
+                
+                // Regular UUID format, parse directly
+                return UUID.fromString(id)
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Invalid UUID format: $id", e)
+            }
+        }
+    }
 }

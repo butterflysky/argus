@@ -218,8 +218,9 @@ class WhitelistService private constructor() {
                 return false
             }
             
-            // Import existing whitelist entries
-            importExistingWhitelist()
+            // We no longer import all whitelist entries at startup
+            // Instead, we'll import them on-demand when players try to login
+            // This is done in the LoginCheckMixin via importPlayerFromVanillaWhitelist()
             
             // Update database connection state
             databaseConnected = true
@@ -307,6 +308,77 @@ class WhitelistService private constructor() {
             
         } catch (e: Exception) {
             logger.error("Error importing existing whitelist entries", e)
+        }
+    }
+    
+    /**
+     * Import a specific player from the vanilla whitelist on login
+     * This is a per-player version of importExistingWhitelist that's called on-demand
+     * during login rather than importing all whitelist entries at startup
+     * 
+     * @param profile The player's GameProfile from the login attempt
+     * @return true if the player was imported or already exists, false if there was an error
+     */
+    fun importPlayerFromVanillaWhitelist(profile: GameProfile): Boolean {
+        try {
+            logger.info("Importing vanilla whitelist entry for player: ${profile.name} (${profile.id})")
+            
+            // System user to record audit logs
+            val systemUser = transaction { DiscordUser.getSystemUser() }
+            
+            // Process in a transaction
+            transaction {
+                // Check if this player already exists in our database
+                val existingPlayer = MinecraftUser.findById(profile.id)
+                
+                if (existingPlayer == null) {
+                    // Import as a legacy entry with no Discord mapping
+                    WhitelistDatabase.importLegacyMinecraftUser(
+                        minecraftUuid = profile.id,
+                        username = profile.name,
+                        performedBy = systemUser
+                    )
+                    
+                    logger.info("Imported whitelist entry for ${profile.name} (${profile.id})")
+                } else {
+                    // Update username if necessary
+                    if (existingPlayer.currentUsername != profile.name) {
+                        val oldUsername = existingPlayer.currentUsername
+                        existingPlayer.currentUsername = profile.name
+                        
+                        // Add to username history
+                        WhitelistDatabase.MinecraftUserName.new {
+                            this.minecraftUser = existingPlayer
+                            this.username = profile.name
+                            this.recordedBy = systemUser
+                        }
+                        
+                        logger.info("Updated Minecraft username from $oldUsername to ${profile.name}")
+                    }
+                    
+                    // Check if there's a whitelist application
+                    val hasApplication = WhitelistApplication.find {
+                        (WhitelistDatabase.WhitelistApplications.minecraftUser eq existingPlayer.id) and
+                        (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                    }.count() > 0
+                    
+                    if (!hasApplication) {
+                        // Create a legacy whitelist entry for this player
+                        WhitelistApplication.createLegacyWhitelist(
+                            minecraftUser = existingPlayer,
+                            moderator = systemUser,
+                            notes = "Imported from vanilla whitelist during login"
+                        )
+                        
+                        logger.info("Created legacy whitelist application for ${profile.name} (${profile.id})")
+                    }
+                }
+            }
+            
+            return true
+        } catch (e: Exception) {
+            logger.error("Error importing vanilla whitelist entry for ${profile.name} (${profile.id}): ${e.message}", e)
+            return false
         }
     }
     

@@ -1,6 +1,7 @@
 package dev.butterflysky.mixin;
 
 import com.mojang.authlib.GameProfile;
+import dev.butterflysky.config.ArgusConfig;
 import dev.butterflysky.service.WhitelistService;
 import dev.butterflysky.whitelist.LinkManager;
 import net.minecraft.network.ClientConnection;
@@ -43,7 +44,7 @@ public class LoginCheckMixin {
             if (!whitelistService.isWhitelisted(profile.getId())) {
                 // Import this specific player as a legacy whitelist entry
                 // This is called on-demand now, instead of as a bulk import on startup
-                LOGGER.info("Player {} is in vanilla whitelist but not in our database. Creating legacy entry.", 
+                LOGGER.info("Player {} is in vanilla whitelist but not in our database. Creating legacy entry, pending Discord link.", 
                     profile.getName());
                 
                 whitelistService.importPlayerFromVanillaWhitelist(profile);
@@ -58,12 +59,12 @@ public class LoginCheckMixin {
                 
                 // Create a formatted message with the token for the player
                 Text message = Text.literal("")
-                    .append(Text.literal("§c§lYour account needs to be linked with Discord to play\n\n"))
-                    .append(Text.literal("§eJoin our Discord server and run the following command:\n"))
+                    .append(Text.literal("§c§lYour whitelisted account needs to be linked with Discord to play\n\n"))
+                    .append(Text.literal("§eJoin " + ArgusConfig.Companion.get().getDiscord().getServerName() + " and run the following command:\n"))
                     .append(Text.literal("§b/whitelist link " + token + "\n\n"))
                     .append(Text.literal("§7This token will expire in a few minutes"));
                 
-                LOGGER.info("Player {} attempted to join but needs to link Discord account. Token: {}", 
+                LOGGER.info("Whitelisted player {} attempted to join but needs to link Discord account. Token: {}", 
                     profile.getName(), token);
                 
                 // Return the message to disconnect them with instructions

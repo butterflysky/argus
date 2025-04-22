@@ -599,7 +599,7 @@ object WhitelistDatabase {
                 entityType = EntityType.MINECRAFT_USER,
                 entityId = account.id.value.toString(),
                 performedBy = performedBy,
-                details = "Imported legacy Minecraft account $username from whitelist.json"
+                details = "Imported legacy Minecraft account $username from whitelist.json - Discord link pending"
             )
             
             Pair(account, application)

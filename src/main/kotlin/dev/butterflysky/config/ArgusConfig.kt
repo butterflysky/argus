@@ -176,6 +176,7 @@ class ArgusConfig {
         val enabled: Boolean = false,
         val token: String = "YOUR_DISCORD_BOT_TOKEN",
         val guildId: String = "YOUR_DISCORD_GUILD_ID",
+        val serverName: String = "Abfielder's Community Discord server",
         val adminRoles: List<String> = listOf("Admins", "Moderator"),
         val patronRole: String = "Patron",
         val adultRole: String = "Adults",

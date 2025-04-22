@@ -339,7 +339,7 @@ class WhitelistService private constructor() {
                         performedBy = systemUser
                     )
                     
-                    logger.info("Imported whitelist entry for ${profile.name} (${profile.id})")
+                    logger.info("Imported whitelist entry for ${profile.name} (${profile.id}) - pending Discord link")
                 } else {
                     // Update username if necessary
                     if (existingPlayer.currentUsername != profile.name) {
@@ -367,10 +367,10 @@ class WhitelistService private constructor() {
                         WhitelistApplication.createLegacyWhitelist(
                             minecraftUser = existingPlayer,
                             moderator = systemUser,
-                            notes = "Imported from vanilla whitelist during login"
+                            notes = "Imported from vanilla whitelist during login - pending Discord account link"
                         )
                         
-                        logger.info("Created legacy whitelist application for ${profile.name} (${profile.id})")
+                        logger.info("Created legacy whitelist application for ${profile.name} (${profile.id}) - pending Discord link")
                     }
                 }
             }

@@ -39,8 +39,8 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
-.kotlin/**
+.kotlin/
 
 # project scratch directory
 scratch/
-log/
+logs/

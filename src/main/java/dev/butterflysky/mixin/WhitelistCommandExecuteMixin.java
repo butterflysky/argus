@@ -7,7 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import dev.butterflysky.db.WhitelistDatabase;
 import dev.butterflysky.service.DiscordUserInfo;
 import dev.butterflysky.service.WhitelistService;
-import dev.butterflysky.util.WhitelistMixinHelper;
+import dev.butterflysky.util.MixinHelpers;
 import dev.butterflysky.whitelist.LinkManager;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -50,7 +50,7 @@ public class WhitelistCommandExecuteMixin {
                 // For commands that mutate whitelist state, check for Discord mapping
                 if (isMutatingCommand(subCommand)) {
                     // Use our helper to check for Discord link
-                    if (!WhitelistMixinHelper.checkDiscordLinkOrShowMessage(source, "whitelist")) {
+                    if (!MixinHelpers.checkDiscordLinkOrShowMessage(source, "whitelist")) {
                         // Cancel the command execution if not linked
                         ci.cancel();
                         return;
@@ -69,7 +69,7 @@ public class WhitelistCommandExecuteMixin {
                                 targetProfile.getName(), targetProfile.getId());
                             
                             // Get the Discord ID of the command executor
-                            String executorDiscordId = WhitelistMixinHelper.getDiscordIdForPlayer(playerProfile);
+                            String executorDiscordId = MixinHelpers.getDiscordIdForPlayer(playerProfile);
                             
                             boolean successful = false;
                             try {

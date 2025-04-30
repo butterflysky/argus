@@ -4,7 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.butterflysky.service.DiscordUserInfo;
 import dev.butterflysky.service.WhitelistService;
-import dev.butterflysky.util.WhitelistMixinHelper;
+import dev.butterflysky.util.MixinHelpers;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.dedicated.command.BanCommand;
 import net.minecraft.text.Text;
@@ -42,7 +42,7 @@ public class BanCommandMixin {
         ARGUS_LOGGER.info("[ARGUS BAN] Minecraft ban command executed");
         
         // Check if command executor has a linked Discord account
-        if (!WhitelistMixinHelper.checkDiscordLinkOrShowMessage(source, "ban")) {
+        if (!MixinHelpers.checkDiscordLinkOrShowMessage(source, "ban")) {
             // Cancel the command if no Discord link
             cir.setReturnValue(0);
             cir.cancel();
@@ -75,7 +75,7 @@ public class BanCommandMixin {
         try {
             if (source.getEntity() != null && source.isExecutedByPlayer()) {
                 playerProfile = source.getPlayer().getGameProfile();
-                discordId = WhitelistMixinHelper.getDiscordIdForPlayer(playerProfile);
+                discordId = MixinHelpers.getDiscordIdForPlayer(playerProfile);
             }
         } catch (Exception e) {
             ARGUS_LOGGER.warn("[ARGUS BAN] Error getting player information: {}", e.getMessage());

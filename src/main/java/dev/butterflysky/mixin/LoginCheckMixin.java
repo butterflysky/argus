@@ -1,10 +1,10 @@
 package dev.butterflysky.mixin;
 
 import com.mojang.authlib.GameProfile;
-import dev.butterflysky.config.ArgusConfig;
-import dev.butterflysky.discord.DiscordService;
 import dev.butterflysky.service.WhitelistService;
+import dev.butterflysky.util.MixinHelpers;
 import dev.butterflysky.whitelist.LinkManager;
+import dev.butterflysky.config.ArgusConfig;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.text.Text;
@@ -39,14 +39,9 @@ public class LoginCheckMixin {
             // Get references to our services
             WhitelistService whitelistService = WhitelistService.Companion.getInstance();
             LinkManager linkManager = LinkManager.Companion.getInstance();
-            DiscordService discordService = DiscordService.Companion.getInstance();
-            
-            // Check if Discord integration is enabled and connected
-            boolean discordEnabled = ArgusConfig.Companion.get().getDiscord().getEnabled();
-            boolean discordConnected = discordService.isConnected();
             
             // If Discord is not enabled or not connected, fall back to vanilla behavior
-            if (!discordEnabled || !discordConnected) {
+            if (!MixinHelpers.isDiscordAvailable()) {
                 LOGGER.info("Discord integration is disabled or not connected. Allowing player {} to join with vanilla whitelist.", 
                     profile.getName());
                 return;

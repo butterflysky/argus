@@ -1,6 +1,8 @@
 package dev.butterflysky.util;
 
 import com.mojang.authlib.GameProfile;
+import dev.butterflysky.config.ArgusConfig;
+import dev.butterflysky.discord.DiscordService;
 import dev.butterflysky.service.DiscordUserInfo;
 import dev.butterflysky.service.WhitelistService;
 import dev.butterflysky.whitelist.LinkManager;
@@ -16,14 +18,16 @@ public class WhitelistMixinHelper {
     private static final Logger LOGGER = LoggerFactory.getLogger("argus-mixins");
     private static final WhitelistService WHITELIST_SERVICE = WhitelistService.Companion.getInstance();
     private static final LinkManager LINK_MANAGER = LinkManager.Companion.getInstance();
+    private static final DiscordService DISCORD_SERVICE = DiscordService.Companion.getInstance();
     
     /**
      * Check if a player has their Minecraft account linked to Discord
      * If not, send them a message with a token for linking.
+     * If Discord is not enabled or connected, allow the action.
      * 
      * @param source The command source
      * @param commandName Name of the command being executed, for logging
-     * @return true if account is linked or source is not a player (e.g., console), false otherwise
+     * @return true if account is linked or source is not a player (e.g., console), or Discord is disabled/disconnected
      */
     public static boolean checkDiscordLinkOrShowMessage(ServerCommandSource source, String commandName) {
         GameProfile playerProfile = source.getPlayer() != null ? source.getPlayer().getGameProfile() : null;
@@ -31,6 +35,17 @@ public class WhitelistMixinHelper {
         // Allow console/RCON to execute regardless
         if (playerProfile == null) {
             LOGGER.info("[ARGUS] {} command executed from console or RCON", commandName);
+            return true;
+        }
+        
+        // Check if Discord integration is enabled and connected
+        boolean discordEnabled = ArgusConfig.Companion.get().getDiscord().getEnabled();
+        boolean discordConnected = DISCORD_SERVICE.isConnected();
+        
+        // If Discord is not enabled or not connected, allow the command (fall back to vanilla behavior)
+        if (!discordEnabled || !discordConnected) {
+            LOGGER.info("[ARGUS] Discord integration is disabled or not connected. Allowing {} command from player {}", 
+                commandName, playerProfile.getName());
             return true;
         }
         

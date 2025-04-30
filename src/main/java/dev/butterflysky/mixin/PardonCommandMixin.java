@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.butterflysky.db.WhitelistDatabase;
 import dev.butterflysky.service.WhitelistService;
+import dev.butterflysky.util.WhitelistMixinHelper;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.dedicated.command.PardonCommand;
 import net.minecraft.text.Text;
@@ -41,7 +42,7 @@ public class PardonCommandMixin {
         ARGUS_LOGGER.info("[ARGUS PARDON] Minecraft pardon command executed");
         
         // Check if command executor has a linked Discord account
-        if (!MixinHelper.checkDiscordLinkOrShowMessage(source, "pardon")) {
+        if (!WhitelistMixinHelper.checkDiscordLinkOrShowMessage(source, "pardon")) {
             // Cancel the command if no Discord link
             cir.setReturnValue(0);
             cir.cancel();
@@ -72,7 +73,7 @@ public class PardonCommandMixin {
         if (source.getEntity() != null && source.isExecutedByPlayer()) {
             try {
                 playerProfile = source.getPlayer().getGameProfile();
-                discordId = MixinHelper.getDiscordIdForPlayer(playerProfile);
+                discordId = WhitelistMixinHelper.getDiscordIdForPlayer(playerProfile);
             } catch (Exception e) {
                 ARGUS_LOGGER.warn("[ARGUS PARDON] Error getting player information: {}", e.getMessage());
             }

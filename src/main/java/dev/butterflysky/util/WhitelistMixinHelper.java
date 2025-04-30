@@ -1,4 +1,4 @@
-package dev.butterflysky.mixin;
+package dev.butterflysky.util;
 
 import com.mojang.authlib.GameProfile;
 import dev.butterflysky.service.DiscordUserInfo;
@@ -10,9 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Helper class for common mixin functionality
+ * Helper class for common whitelist and command functionality
  */
-public class MixinHelper {
+public class WhitelistMixinHelper {
     private static final Logger LOGGER = LoggerFactory.getLogger("argus-mixins");
     private static final WhitelistService WHITELIST_SERVICE = WhitelistService.Companion.getInstance();
     private static final LinkManager LINK_MANAGER = LinkManager.Companion.getInstance();

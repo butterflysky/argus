@@ -74,12 +74,11 @@ dependencies {
 
 shadowJar {
     configurations = [project.configurations.shadow]
-    enableRelocation = true
-    relocationPrefix = 'dev.butterflysky.argus.shadow'
 
-    relocate('kotlin', 'kotlin')
-    relocate('kotlinx', 'kotlinx')
-    relocate('org.jetbrains.kotlin', 'org.jetbrains.kotlin')
+    relocate 'net.dv8tion.jda', 'dev.butterflysky.argus.shadow.net.dv8tion.jda'
+    relocate 'com.zaxxer', 'dev.butterflysky.argus.shadow.com.zaxxer'
+    relocate 'org.jetbrains.exposed', 'dev.butterflysky.argus.shadow.org.jetbrains.exposed'
+    relocate 'org.xerial', 'dev.butterflysky.argus.shadow.org.xerial'
 
     // Exclude unnecessary files that might cause conflicts
     exclude 'META-INF/*.SF'

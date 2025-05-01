@@ -21,6 +21,7 @@ repositories {
 	
 	// Maven Central for JDA and other dependencies
 	mavenCentral()
+	mavenLocal()
 }
 
 loom {
@@ -77,8 +78,10 @@ shadowJar {
 
     relocate 'net.dv8tion.jda', 'dev.butterflysky.argus.shadow.net.dv8tion.jda'
     relocate 'com.zaxxer', 'dev.butterflysky.argus.shadow.com.zaxxer'
-    relocate 'org.jetbrains.exposed', 'dev.butterflysky.argus.shadow.org.jetbrains.exposed'
     relocate 'org.xerial', 'dev.butterflysky.argus.shadow.org.xerial'
+    
+    // Disable shadowing of Exposed - it causes reflection issues with Kotlin
+    // relocate 'org.jetbrains.exposed', 'dev.butterflysky.argus.shadow.org.jetbrains.exposed'
 
     // Exclude unnecessary files that might cause conflicts
     exclude 'META-INF/*.SF'

@@ -124,35 +124,39 @@ class DiscordService : ListenerAdapter() {
                         // Get the guild from config
                         val guildId = config.discord.guildId
                         
-                        // Wait for guilds to be available and try to find our target guild
-                        try {
-                            // Force JDA to be fully ready before proceeding
-                            jda?.awaitReady()
-                            
-                            logger.info("JDA is fully ready. Connected to ${jda?.guilds?.size ?: 0} guilds")
-                            val availableGuilds = jda?.guilds?.map { "${it.name} (${it.id})" } ?: emptyList()
-                            logger.info("Available guilds: $availableGuilds")
-                            
-                            if (guildId in jda?.guilds?.map { it.id } ?: emptyList()) {
-                                guild = jda?.getGuildById(guildId)
-                                logger.info("Found configured guild: ${guild?.name} (${guild?.id})")
-                            }
-                            
-                            if (guild == null) {
-                                logger.error("Could not find guild with ID $guildId in available guilds")
-                                scheduleReconnect()
-                                return
-                            }
+                        // Check available guilds and find our target guild
+                        logger.info("JDA ready event received - checking available guilds")
+                        
+                        // Don't use awaitReady() as it can block indefinitely
+                        val availableGuilds = jda?.guilds ?: emptyList()
+                        
+                        logger.info("Connected to ${availableGuilds.size} guilds")
+                        val guildNames = availableGuilds.map { "${it.name} (${it.id})" }
+                        logger.info("Available guilds: $guildNames")
+                        
+                        // Try to find our guild by ID
+                        val targetGuild = availableGuilds.find { it.id == guildId }
+                        
+                        if (targetGuild != null) {
+                            guild = targetGuild
+                            logger.info("Found configured guild: ${guild?.name} (${guild?.id})")
                             
                             logger.info("Connected to Discord guild: ${guild?.name}")
                             
-                            // Register slash commands after we're fully connected
+                            // Register slash commands after we've found our guild
                             registerCommands()
                             
                             // Reset reconnect delay on successful connection
                             currentReconnectDelay = 0
-                        } catch (e: Exception) {
-                            logger.error("Error during Discord connection setup", e)
+                        } else {
+                            if (availableGuilds.isEmpty()) {
+                                logger.error("No guilds available at all")
+                            } else {
+                                logger.error("Guild ID $guildId not found. Available: $guildNames")
+                            }
+                            
+                            // Schedule a reconnect if we couldn't find our guild
+                            logger.info("Scheduling reconnect to retry finding guild $guildId")
                             scheduleReconnect()
                         }
                         

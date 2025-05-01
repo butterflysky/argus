@@ -109,7 +109,7 @@ class DiscordService : ListenerAdapter() {
             
             // Create the JDA builder but don't await ready yet
             val jdaBuilder = JDABuilder.createDefault(config.discord.token)
-                .enableIntents(GatewayIntent.GUILD_MEMBERS)
+                .enableIntents(GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT)
                 .addEventListeners(this)
             
             // Build the JDA instance and add a ready listener to handle guild setup
@@ -121,7 +121,9 @@ class DiscordService : ListenerAdapter() {
                     if (event is net.dv8tion.jda.api.events.session.ReadyEvent) {
                         // Get the guild from config
                         val guildId = config.discord.guildId
-                        guild = jda?.getGuildById(guildId)
+                        if (guildId in jda?.getGuilds()?.map { it.id } ?: emptyList()) {
+                            guild = jda?.getGuildById(guildId)
+                        }
                         
                         if (guild == null) {
                             logger.error("Could not find guild with ID $guildId")
@@ -132,7 +134,7 @@ class DiscordService : ListenerAdapter() {
                         logger.info("Connected to Discord guild: ${guild?.name}")
                         
                         // Register slash commands after we're fully connected
-                        registerCommands()
+                        guild?.let { registerCommands(it) }
                         
                         // Reset reconnect delay on successful connection
                         currentReconnectDelay = 0
@@ -193,46 +195,7 @@ class DiscordService : ListenerAdapter() {
     /**
      * Register slash commands with Discord
      */
-    private fun registerCommands() {
-        val jda = this.jda ?: return
-        val config = ArgusConfig.get()
-        val guildId = config.discord.guildId
-        
-        // Verify we're connected to the right guild with retries
-        var guild = this.guild
-        var retryCount = 0
-        
-        // If guild is null or doesn't match our configured guild, try to find it
-        while ((guild == null || guild.id != guildId) && retryCount < GUILD_RETRY_ATTEMPTS) {
-            // Try to get the guild from JDA
-            val foundGuild = jda.getGuildById(guildId)
-            
-            if (foundGuild != null) {
-                guild = foundGuild
-                this.guild = foundGuild
-                break
-            }
-            
-            // If we couldn't find it, wait before retrying
-            retryCount++
-            logger.info("Guild with ID $guildId not yet available, waiting before retry ${retryCount}/${GUILD_RETRY_ATTEMPTS}")
-            
-            try {
-                Thread.sleep(GUILD_RETRY_DELAY_MS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                logger.warn("Interrupted while waiting for guild to be available")
-                break
-            }
-        }
-        
-        // If we still don't have a guild, schedule a reconnect
-        if (guild == null) {
-            logger.error("Could not find guild with ID $guildId after $GUILD_RETRY_ATTEMPTS attempts, scheduling reconnect")
-            scheduleReconnect()
-            return
-        }
-        
+    private fun registerCommands(guild: Guild) {
         // Log that we're starting command registration
         logger.info("Registering Discord slash commands for guild ${guild.name} (${guild.id})")
         

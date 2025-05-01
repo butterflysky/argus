@@ -186,24 +186,55 @@ class DiscordService : ListenerAdapter() {
         }, currentReconnectDelay, TimeUnit.MILLISECONDS)
     }
     
+    // Constants for guild verification and retry
+    private val GUILD_RETRY_ATTEMPTS = 3
+    private val GUILD_RETRY_DELAY_MS = 5000L
+    
     /**
      * Register slash commands with Discord
      */
     private fun registerCommands() {
-        val guild = this.guild ?: return
+        val jda = this.jda ?: return
+        val config = ArgusConfig.get()
+        val guildId = config.discord.guildId
+        
+        // Verify we're connected to the right guild with retries
+        var guild = this.guild
+        var retryCount = 0
+        
+        // If guild is null or doesn't match our configured guild, try to find it
+        while ((guild == null || guild.id != guildId) && retryCount < GUILD_RETRY_ATTEMPTS) {
+            // Try to get the guild from JDA
+            val foundGuild = jda.getGuildById(guildId)
+            
+            if (foundGuild != null) {
+                guild = foundGuild
+                this.guild = foundGuild
+                break
+            }
+            
+            // If we couldn't find it, wait before retrying
+            retryCount++
+            logger.info("Guild with ID $guildId not yet available, waiting before retry ${retryCount}/${GUILD_RETRY_ATTEMPTS}")
+            
+            try {
+                Thread.sleep(GUILD_RETRY_DELAY_MS)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                logger.warn("Interrupted while waiting for guild to be available")
+                break
+            }
+        }
+        
+        // If we still don't have a guild, schedule a reconnect
+        if (guild == null) {
+            logger.error("Could not find guild with ID $guildId after $GUILD_RETRY_ATTEMPTS attempts, scheduling reconnect")
+            scheduleReconnect()
+            return
+        }
         
         // Log that we're starting command registration
         logger.info("Registering Discord slash commands for guild ${guild.name} (${guild.id})")
-        
-        // Clear existing commands with complete callback
-        try {
-            guild.updateCommands().queue(
-                { logger.info("Successfully cleared existing commands, now registering new commands") },
-                { error -> logger.error("Failed to clear existing commands", error) }
-            )
-        } catch (e: Exception) {
-            logger.error("Exception while clearing existing commands", e)
-        }
         
         // Create the whitelist command with subcommands
         val whitelistCommand = Commands.slash("whitelist", "Manage the Minecraft server whitelist")
@@ -297,11 +328,11 @@ class DiscordService : ListenerAdapter() {
             unwhitelistUnlinkedSubcommand
         )
         
-        // Register the commands with Discord
+        // Register the commands with Discord - use updateCommands to make sure they appear immediately
         try {
-            guild.upsertCommand(whitelistCommand).queue(
-                { cmd -> 
-                    logger.info("Successfully registered whitelist command with ID: ${cmd.id}")
+            guild.updateCommands().addCommands(whitelistCommand).queue(
+                { commands -> 
+                    logger.info("Successfully registered ${commands.size} commands to guild ${guild.name}")
                     logger.info("All ${whitelistCommand.subcommands.size} subcommands registered")
                     
                     // List all registered subcommands for debugging

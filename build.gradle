@@ -47,6 +47,10 @@ dependencies {
 	include "net.dv8tion:JDA:${project.jda_version}"
 	implementation "net.dv8tion:JDA:${project.jda_version}"
 	
+	// Apache Commons Collections - required by JDA
+	include "org.apache.commons:commons-collections4:4.5.0"
+	implementation "org.apache.commons:commons-collections4:4.5.0"
+	
 	// SQLite for database
 	include "org.xerial:sqlite-jdbc:${project.sqlite_version}"
 	implementation "org.xerial:sqlite-jdbc:${project.sqlite_version}"

@@ -2,6 +2,7 @@ plugins {
 	id 'fabric-loom' version '1.10-SNAPSHOT'
 	id 'maven-publish'
 	id "org.jetbrains.kotlin.jvm" version "2.1.20"
+  id 'com.gradleup.shadow' version '8.3.6'
 }
 
 version = project.mod_version
@@ -33,41 +34,33 @@ loom {
 	}
 }
 
+configurations {
+    shadow
+    implementation.extendsFrom(shadow)
+}
+
 dependencies {
-	// To change the versions see the gradle.properties file
+  // Minecraft and Fabric dependencies
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
 	
-	// Discord integration - will be included in the jar
-	include "net.dv8tion:JDA:${project.jda_version}"
-	implementation "net.dv8tion:JDA:${project.jda_version}"
+  // External dependencies
+  //
+	// Discord integration
+  shadow("net.dv8tion:JDA:${project.jda_version}")  {
+      exclude group: 'net.java.dev.jna', module: 'jna'
+  }
 	
-	// Apache Commons Collections - required by JDA
-	include "org.apache.commons:commons-collections4:4.5.0"
-	implementation "org.apache.commons:commons-collections4:4.5.0"
-	
-	// SQLite for database
-	include "org.xerial:sqlite-jdbc:${project.sqlite_version}"
-	implementation "org.xerial:sqlite-jdbc:${project.sqlite_version}"
-	
-	// HikariCP for connection pooling
-	include "com.zaxxer:HikariCP:${project.hikaricp_version}"
-	implementation "com.zaxxer:HikariCP:${project.hikaricp_version}"
-	
-	// Exposed - Kotlin SQL framework
-	include "org.jetbrains.exposed:exposed-core:${project.exposed_version}"
-	implementation "org.jetbrains.exposed:exposed-core:${project.exposed_version}"
-	include "org.jetbrains.exposed:exposed-dao:${project.exposed_version}"  
-	implementation "org.jetbrains.exposed:exposed-dao:${project.exposed_version}"
-	include "org.jetbrains.exposed:exposed-jdbc:${project.exposed_version}"
-	implementation "org.jetbrains.exposed:exposed-jdbc:${project.exposed_version}"
-	include "org.jetbrains.exposed:exposed-java-time:${project.exposed_version}"
-	implementation "org.jetbrains.exposed:exposed-java-time:${project.exposed_version}"
+	// Database dependencies
+	shadow "org.xerial:sqlite-jdbc:${project.sqlite_version}"
+	shadow "com.zaxxer:HikariCP:${project.hikaricp_version}"
+	shadow "org.jetbrains.exposed:exposed-core:${project.exposed_version}"
+	shadow "org.jetbrains.exposed:exposed-dao:${project.exposed_version}"  
+	shadow "org.jetbrains.exposed:exposed-jdbc:${project.exposed_version}"
+	shadow "org.jetbrains.exposed:exposed-java-time:${project.exposed_version}"
 	
 	// Testing dependencies
 	testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.0"
@@ -77,6 +70,28 @@ dependencies {
 	testImplementation "org.mockito.kotlin:mockito-kotlin:5.2.1"
 	testImplementation "org.assertj:assertj-core:3.24.2"
 	testImplementation "com.h2database:h2:2.2.224"  // In-memory database for testing
+}
+
+shadowJar {
+    configurations = [project.configurations.shadow]
+    enableRelocation = true
+    relocationPrefix = 'dev.butterflysky.argus.shadow'
+
+    relocate 'org.jetbrains.kotlin', 'org.jetbrains.kotlin'
+
+    // Exclude unnecessary files that might cause conflicts
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+
+    mergeServiceFiles()
+}
+
+// Make our remapped jar depend on shadow
+remapJar {
+  dependsOn shadowJar
+  // Use the shadow jar as the input for remapping
+  input = shadowJar.archiveFile
 }
 
 processResources {
@@ -98,11 +113,7 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
 }
 
 java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
 	withSourcesJar()
-
 	sourceCompatibility = JavaVersion.VERSION_21
 	targetCompatibility = JavaVersion.VERSION_21
 }
@@ -138,4 +149,45 @@ publishing {
 		// The repositories here will be used for publishing your artifact, not for
 		// retrieving dependencies.
 	}
+}
+
+task analyzeDependencies {
+  doLast {
+    println "\n=== Analyzing shadow configuration ==="
+    
+    configurations.shadow.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+      def id = artifact.moduleVersion.id
+      println "${id.group}:${id.name}:${id.version}"
+      
+      // If it's a jar, we can list its contents
+      if (artifact.file.name.endsWith('.jar')) {
+        try {
+          def jar = new java.util.jar.JarFile(artifact.file)
+          def entries = jar.entries()
+          
+          // Find all property files that might conflict
+          def propertyFiles = []
+          while (entries.hasMoreElements()) {
+            def entry = entries.nextElement()
+            if (entry.name.endsWith('.properties') || 
+                entry.name.startsWith('META-INF/')) {
+              propertyFiles.add(entry.name)
+            }
+          }
+          
+          if (propertyFiles.size() > 0) {
+            println "  - Contains ${propertyFiles.size()} property/service files:"
+            propertyFiles.take(10).each { println "    - ${it}" }
+            if (propertyFiles.size() > 10) {
+              println "    - ... (${propertyFiles.size() - 10} more)"
+            }
+          }
+          
+          jar.close()
+        } catch (Exception e) {
+          println "  - Error analyzing jar: ${e.message}"
+        }
+      }
+    }
+  }
 }

@@ -119,25 +119,42 @@ class DiscordService : ListenerAdapter() {
             jda?.addEventListener(object : net.dv8tion.jda.api.hooks.EventListener {
                 override fun onEvent(event: net.dv8tion.jda.api.events.GenericEvent) {
                     if (event is net.dv8tion.jda.api.events.session.ReadyEvent) {
+                        logger.info("JDA ready event received - bot is connected to Discord")
+                        
                         // Get the guild from config
                         val guildId = config.discord.guildId
-                        if (guildId in jda?.getGuilds()?.map { it.id } ?: emptyList()) {
-                            guild = jda?.getGuildById(guildId)
-                        }
                         
-                        if (guild == null) {
-                            logger.error("Could not find guild with ID $guildId")
+                        // Wait for guilds to be available and try to find our target guild
+                        try {
+                            // Force JDA to be fully ready before proceeding
+                            jda?.awaitReady()
+                            
+                            logger.info("JDA is fully ready. Connected to ${jda?.guilds?.size ?: 0} guilds")
+                            val availableGuilds = jda?.guilds?.map { "${it.name} (${it.id})" } ?: emptyList()
+                            logger.info("Available guilds: $availableGuilds")
+                            
+                            if (guildId in jda?.guilds?.map { it.id } ?: emptyList()) {
+                                guild = jda?.getGuildById(guildId)
+                                logger.info("Found configured guild: ${guild?.name} (${guild?.id})")
+                            }
+                            
+                            if (guild == null) {
+                                logger.error("Could not find guild with ID $guildId in available guilds")
+                                scheduleReconnect()
+                                return
+                            }
+                            
+                            logger.info("Connected to Discord guild: ${guild?.name}")
+                            
+                            // Register slash commands after we're fully connected
+                            registerCommands()
+                            
+                            // Reset reconnect delay on successful connection
+                            currentReconnectDelay = 0
+                        } catch (e: Exception) {
+                            logger.error("Error during Discord connection setup", e)
                             scheduleReconnect()
-                            return
                         }
-                        
-                        logger.info("Connected to Discord guild: ${guild?.name}")
-                        
-                        // Register slash commands after we're fully connected
-                        guild?.let { registerCommands(it) }
-                        
-                        // Reset reconnect delay on successful connection
-                        currentReconnectDelay = 0
                         
                         // Remove this listener as we don't need it anymore
                         jda?.removeEventListener(this)
@@ -195,7 +212,10 @@ class DiscordService : ListenerAdapter() {
     /**
      * Register slash commands with Discord
      */
-    private fun registerCommands(guild: Guild) {
+    private fun registerCommands() {
+        val guild = this.guild ?: return
+        val jda = this.jda ?: return
+        
         // Log that we're starting command registration
         logger.info("Registering Discord slash commands for guild ${guild.name} (${guild.id})")
         
@@ -291,24 +311,28 @@ class DiscordService : ListenerAdapter() {
             unwhitelistUnlinkedSubcommand
         )
         
-        // Register the commands with Discord - use updateCommands to make sure they appear immediately
         try {
-            guild.updateCommands().addCommands(whitelistCommand).queue(
+            // Following the JDA example approach
+            // Create a command list update action for this guild specifically
+            val commandsAction = guild.updateCommands()
+            
+            // Add our whitelist command to the list
+            commandsAction.addCommands(whitelistCommand)
+            
+            // Queue the command registration with Discord
+            commandsAction.queue(
                 { commands -> 
                     logger.info("Successfully registered ${commands.size} commands to guild ${guild.name}")
-                    logger.info("All ${whitelistCommand.subcommands.size} subcommands registered")
-                    
-                    // List all registered subcommands for debugging
-                    whitelistCommand.subcommands.forEach { subcommand ->
-                        logger.info("  - Registered subcommand: ${subcommand.name}")
+                    commands.forEach { cmd ->
+                        logger.info("Registered command: ${cmd.name} (ID: ${cmd.id})")
                     }
                 },
                 { error ->
-                    logger.error("Failed to register commands", error)
+                    logger.error("Failed to register commands: ${error.message}", error)
                 }
             )
         } catch (e: Exception) {
-            logger.error("Exception during command registration", e)
+            logger.error("Exception during command registration: ${e.message}", e)
         }
     }
     

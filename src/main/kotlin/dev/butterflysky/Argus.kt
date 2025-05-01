@@ -15,12 +15,28 @@ import net.minecraft.server.command.CommandManager.literal
 import net.minecraft.text.Text
 import org.slf4j.LoggerFactory
 
-object Argus : ModInitializer {
-    private val logger = LoggerFactory.getLogger("argus")
-    private val discordService = DiscordService.getInstance()
-    private val whitelistService = WhitelistService.getInstance()
+class Argus : ModInitializer {
+    companion object {
+        private var _instance: Argus? = null
+
+        @JvmStatic
+        val logger = LoggerFactory.getLogger("argus")
+        @JvmStatic
+        val discordService = DiscordService.getInstance()
+        @JvmStatic
+        val whitelistService = WhitelistService.getInstance()
+
+        @JvmStatic
+        fun getInstance(): Argus {
+            if (_instance == null) {
+                _instance = Argus()
+            }
+            return _instance!!
+        }
+    }
 
 	override fun onInitialize() {
+    _instance = this
 		// This code runs as soon as Minecraft is in a mod-load-ready state.
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.

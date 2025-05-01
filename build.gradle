@@ -77,7 +77,9 @@ shadowJar {
     enableRelocation = true
     relocationPrefix = 'dev.butterflysky.argus.shadow'
 
-    relocate 'org.jetbrains.kotlin', 'org.jetbrains.kotlin'
+    relocate('kotlin', 'kotlin')
+    relocate('kotlinx', 'kotlinx')
+    relocate('org.jetbrains.kotlin', 'org.jetbrains.kotlin')
 
     // Exclude unnecessary files that might cause conflicts
     exclude 'META-INF/*.SF'

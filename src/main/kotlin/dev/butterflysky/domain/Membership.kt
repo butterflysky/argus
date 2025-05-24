@@ -1,6 +1,11 @@
-package dev.butterflysky
+package dev.butterflysky.domain // Updated package
 
 import java.time.Instant
+
+// Types are now in the same package, explicit imports not strictly needed
+// import dev.butterflysky.domain.MembershipId
+// import dev.butterflysky.domain.PlayerId
+// import dev.butterflysky.domain.MembershipStatus
 
 /**
  * Represents a player's overall membership status within the community/server.

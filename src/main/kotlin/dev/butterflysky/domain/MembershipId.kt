@@ -1,6 +1,7 @@
-package dev.butterflysky // Adjusted package
+package dev.butterflysky.domain // Updated package
 
-// Removed import dev.butterflysky.domain.player.PlayerId as PlayerId is now in the same package
+// PlayerId is now in the same package, no explicit import needed if not fully qualified previously.
+// If it was, it would be: import dev.butterflysky.domain.PlayerId
 
 /**
  * Unique identifier for a Membership record.

@@ -1,7 +1,10 @@
-package dev.butterflysky
+package dev.butterflysky.domain // Updated package
 
 import java.util.UUID
 import java.time.Instant
+
+// PlayerId is now in the same package, explicit import not strictly needed
+// import dev.butterflysky.domain.PlayerId
 
 /**
  * Represents a player in the system, uniquely identified by their PlayerId (e.g., Discord ID).

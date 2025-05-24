@@ -1,7 +1,12 @@
-package dev.butterflysky
+package dev.butterflysky.domain // Updated package
 
 import java.time.Instant
 import java.util.UUID // For GameAccountId if it's a UUID
+
+// Types are now in the same package, explicit imports not strictly needed
+// import dev.butterflysky.domain.ApplicationId
+// import dev.butterflysky.domain.PlayerId
+// import dev.butterflysky.domain.ApplicationStatus
 
 /**
  * Represents a player's application for whitelisting.

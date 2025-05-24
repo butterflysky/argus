@@ -1,4 +1,4 @@
-package dev.butterflysky // Adjusted package
+package dev.butterflysky.domain // Updated package
 
 /**
  * Represents the status of a whitelist application.

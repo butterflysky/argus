@@ -1,4 +1,4 @@
-package dev.butterflysky // Adjusted package
+package dev.butterflysky.domain // Updated package
 
 import java.util.UUID
 

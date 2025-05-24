@@ -19,7 +19,9 @@ import net.minecraft.server.WhitelistEntry
 import com.mojang.authlib.GameProfile
 import java.util.concurrent.TimeUnit
 import java.time.ZoneId
-import java.time.Instant
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import kotlinx.datetime.toJavaInstant // Added import
 import java.util.stream.Collectors
 import dev.butterflysky.config.ArgusConfig
 import dev.butterflysky.config.Constants
@@ -348,7 +350,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         val discordMention = discordService.formatDiscordMention(player.discordUserId)
                         
                         // Format date
-                        val addedDate = dateFormatter.format(player.addedAt)
+                        val addedDate = dateFormatter.format(player.addedAt.toJavaInstant())
                         
                         // Display who added the player using the helper method
                         val addedByMention = discordService.formatDiscordMention(player.addedBy)
@@ -372,6 +374,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 embed.setFooter("Total: ${whitelistedPlayers.size} players")
             }
             
+            embed.setTimestamp(Clock.System.now().toJavaInstant())
+            
             event.hook.editOriginalEmbeds(embed.build()).queue()
         }
     }
@@ -394,7 +398,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
             // Force save the whitelist
             server.playerManager.whitelist.save()
             
-            event.hook.editOriginal("Whitelist has been enabled.").queue()
+            val embed = EmbedBuilder()
+                .setColor(Color.GREEN)
+                .setTitle("Whitelist On")
+                .setDescription("The server whitelist has been **enabled** by ${event.user.asMention}.")
+                .setTimestamp(Clock.System.now().toJavaInstant())
+            
+            event.hook.editOriginalEmbeds(embed.build()).queue()
         }
     }
     
@@ -416,7 +426,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
             // Force save the whitelist
             server.playerManager.whitelist.save()
             
-            event.hook.editOriginal("Whitelist has been disabled.").queue()
+            val embed = EmbedBuilder()
+                .setColor(Color.RED)
+                .setTitle("Whitelist Off")
+                .setDescription("The server whitelist has been **disabled** by ${event.user.asMention}.")
+                .setTimestamp(Clock.System.now().toJavaInstant())
+            
+            event.hook.editOriginalEmbeds(embed.build()).queue()
         }
     }
     
@@ -438,7 +454,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
             // Also reload our service's data
             whitelistService.importExistingWhitelist()
             
-            event.hook.editOriginal("Whitelist reloaded.").queue()
+            val embed = EmbedBuilder()
+                .setColor(Color.CYAN)
+                .setTitle("Whitelist Reloaded")
+                .setDescription("The server whitelist has been reloaded by ${event.user.asMention}.")
+                .setTimestamp(Clock.System.now().toJavaInstant())
+            
+            event.hook.editOriginalEmbeds(embed.build()).queue()
         }
     }
     
@@ -471,7 +493,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 .addField("Online Players", onlinePlayers.toString(), true)
                 .addField("Database", "Connected: ${WhitelistService.isDatabaseConnected()}", true)
                 .setFooter("Test performed by ${event.user.name}")
-                .setTimestamp(java.time.Instant.now())
+                .setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
         }
@@ -559,6 +581,8 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 }
             }
             
+            embed.setTimestamp(Clock.System.now().toJavaInstant())
+            
             event.hook.editOriginalEmbeds(embed.build()).queue()
         }
     }
@@ -631,7 +655,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                             ""
                         }
                         
-                        "${dateFormatter.format(event.timestamp)} - ${event.eventType}$discordInfo by $actor$commentInfo"
+                        "${dateFormatter.format(event.timestamp.toJavaInstant())} - ${event.eventType}$discordInfo by $actor$commentInfo"
                     }
                     else -> { event ->
                         // Format the actor as a Discord mention with helper method
@@ -652,7 +676,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                             ""
                         }
                         
-                        "${dateFormatter.format(event.timestamp)} - ${event.minecraftUsername}: ${event.eventType}$discordInfo by $actor$commentInfo"
+                        "${dateFormatter.format(event.timestamp.toJavaInstant())} - ${event.minecraftUsername}: ${event.eventType}$discordInfo by $actor$commentInfo"
                     }
                 }
                 
@@ -661,6 +685,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
             }
             
             embed.setFooter("Showing up to $limit events")
+            embed.setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
         }
@@ -692,11 +717,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
             when (result) {
                 is ApplicationResult.Success -> {
                     // Format the eligibility date
-                    val eligibleDate = dateFormatter.format(result.eligibleAt)
-                    
+                    val eligibleDate = dateFormatter.format(result.eligibleAt.toJavaInstant())
+
                     // Create a fancy embed for the success message
                     val embed = EmbedBuilder()
-                        .setTitle("Whitelist Application Submitted")
+                        .setTitle("Application Submitted: $minecraftName")
                         .setColor(Constants.SUCCESS_COLOR)
                         .setDescription(
                             "Your application for **$minecraftName** has been submitted successfully. " +
@@ -707,7 +732,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         .addField("Discord User", event.user.asMention, true)
                         .addField("Eligible For Review", "After $eligibleDate", false)
                         .setFooter("Waiting for moderator approval")
-                        .setTimestamp(Instant.now())
+                        .setTimestamp(result.appliedAt.toJavaInstant())
                         .build()
                     
                     event.hook.editOriginalEmbeds(embed).queue()
@@ -743,36 +768,37 @@ class WhitelistCommands(private val server: MinecraftServer) {
             } else {
                 // Sort applications by date (oldest first)
                 val sortedApplications = applications.sortedBy { it.appliedAt }
-                
+
                 // Create individual cards for each application
                 val applicationsText = StringBuilder()
                 
                 sortedApplications.forEach { app ->
                     // Format dates
-                    val appliedDate = dateFormatter.format(app.appliedAt)
-                    val eligibleDate = dateFormatter.format(app.eligibleAt)
-                    
+                    val appliedDate = dateFormatter.format(app.appliedAt.toJavaInstant())
+                    val eligibleDate = dateFormatter.format(app.eligibleAt.toJavaInstant())
+
                     // Build a card-like entry for each application
                     applicationsText.append("**Application #${app.id}**\n")
                     applicationsText.append("• Minecraft: **${app.minecraftUsername}**\n")
                     applicationsText.append("• Discord: ${DiscordService.getInstance().formatDiscordMention(app.discordId)}\n")
                     applicationsText.append("• Applied: $appliedDate\n")
                     applicationsText.append("• Eligible: $eligibleDate")
-                    
-                    // Add eligibility status
+
                     if (app.isEligibleNow) {
                         applicationsText.append(" (Eligible Now 🟢)")
                     } else {
                         applicationsText.append(" (Waiting ⏳)")
                     }
-                    
+                    applicationsText.append("\n")
+
                     // Usage hint
-                    applicationsText.append("\n• `/whitelist approve ${app.id}` or `/whitelist reject ${app.id}`\n\n")
+                    applicationsText.append("• `/whitelist approve ${app.id}` or `/whitelist reject ${app.id}`\n\n")
                 }
-                
+
                 embed.setDescription(applicationsText.toString())
-                embed.setFooter("Total: ${applications.size} pending applications")
             }
+            
+            embed.setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
         }
@@ -900,7 +926,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     .addField("Minecraft UUID", linkRequest.minecraftUuid.toString(), true)
                     .addField("Discord User", event.user.asMention, true)
                     .setFooter("You can now use whitelist commands in-game")
-                    .setTimestamp(Instant.now())
+                    .setTimestamp(Clock.System.now().toJavaInstant())
                     .build()
                 
                 event.hook.editOriginalEmbeds(embed).queue()
@@ -954,7 +980,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 .setColor(Constants.INFO_COLOR)
                 .setDescription("Found ${results.size} users matching your criteria.")
                 .setFooter("Search performed by ${event.user.name}")
-                .setTimestamp(Instant.now())
+                .setTimestamp(Clock.System.now().toJavaInstant())
             
             // Display search filters that were used
             val filterDescription = StringBuilder()
@@ -998,9 +1024,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         
                         // Added info
                         if (result.addedAt != null) {
-                            val addedDate = dateFormatter.format(result.addedAt)
+                            val addedDate = dateFormatter.format(result.addedAt.toJavaInstant())
                             val addedByText = if (result.addedBy != null) {
-                                DiscordService.getInstance().formatDiscordMention(result.addedBy, result.addedBy)
+                                DiscordService.getInstance().formatDiscordMention(result.addedBy)
                             } else {
                                 "unknown"
                             }
@@ -1076,7 +1102,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                         .addField("Successfully Removed", result.successCount.toString(), true)
                         .addField("Skipped Operators", result.skippedOperators.toString(), true)
                         .setFooter("Operation performed by ${event.user.name}")
-                        .setTimestamp(Instant.now())
+                        .setTimestamp(Clock.System.now().toJavaInstant())
                     
                     // Add errors if any
                     if (result.errors.isNotEmpty()) {
@@ -1113,147 +1139,152 @@ class WhitelistCommands(private val server: MinecraftServer) {
         override fun executeWithPermission(
             event: SlashCommandInteractionEvent, 
             options: List<OptionMapping>,
-            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser
+            discordUser: dev.butterflysky.db.WhitelistDatabase.DiscordUser // This is the moderator
         ) {
-            val minecraftUser = options.find { it.name == "minecraft_user" }?.asString
-            val targetDiscordUser = options.find { it.name == "discord_user" }?.asUser
+            val minecraftUsernameOption = options.find { it.name == "minecraft_user" }?.asString
+            val targetDiscordUserOption = options.find { it.name == "discord_user" }?.asUser
             val reason = options.find { it.name == "reason" }?.asString
-            
-            // Reason is mandatory in the Discord command
-            if (reason == null || reason.isBlank()) {
+
+            if (reason.isNullOrBlank()) {
                 event.hook.editOriginal("Please provide a reason for the ban.").queue()
                 return
             }
-            
-            // Check if we have either a Minecraft user or Discord user
-            if (minecraftUser == null && targetDiscordUser == null) {
+
+            if (minecraftUsernameOption == null && targetDiscordUserOption == null) {
                 event.hook.editOriginal("Please provide either a Minecraft username or Discord user to ban.").queue()
                 return
             }
-            
-            // Step 1: Determine the list of Minecraft accounts to ban
-            val accountsToBan = mutableListOf<MinecraftUserInfo>()
-            
+
+            val accountsToBan = getAccountsToBan(minecraftUsernameOption, targetDiscordUserOption, event)
+            if (accountsToBan == null || accountsToBan.isEmpty()) {
+                // getAccountsToBan already sent a response or found no accounts
+                return
+            }
+
+            val (bannedAccounts, failedBans) = performBans(accountsToBan, reason, event.user.id)
+
+            if (bannedAccounts.isEmpty()) {
+                event.hook.editOriginal("Failed to ban any accounts. This might be an internal error or the accounts were already processed.").queue()
+                return
+            }
+
+            val embed = buildBanResultEmbed(bannedAccounts, failedBans, targetDiscordUserOption, reason, event.user)
+            event.hook.editOriginalEmbeds(embed.build()).queue()
+        }
+
+        private fun getAccountsToBan(
+            minecraftUsername: String?,
+            targetDiscordUser: User?,
+            event: SlashCommandInteractionEvent
+        ): List<MinecraftUserInfo>? {
+            val accounts = mutableListOf<MinecraftUserInfo>()
             if (targetDiscordUser != null) {
-                // Banning by Discord user - get all associated Minecraft accounts
                 logger.info("Identifying Minecraft accounts linked to Discord user: ${targetDiscordUser.name} (${targetDiscordUser.id})")
                 val linkedAccounts = whitelistService.getMinecraftAccountsForDiscordUser(targetDiscordUser.id)
-                
                 if (linkedAccounts.isEmpty()) {
                     event.hook.editOriginal("No Minecraft accounts found linked to Discord user ${targetDiscordUser.asMention}.").queue()
-                    return
+                    return null
                 }
-                
-                accountsToBan.addAll(linkedAccounts)
-                logger.info("Found ${accountsToBan.size} Minecraft accounts linked to ${targetDiscordUser.name}")
-            } else {
-                // Banning by Minecraft username - get single account
-                logger.info("Looking up Minecraft user: $minecraftUser")
-                val profile = getGameProfileByName(minecraftUser!!)
-                
+                accounts.addAll(linkedAccounts)
+                logger.info("Found ${accounts.size} Minecraft accounts linked to ${targetDiscordUser.name}")
+            } else if (minecraftUsername != null) {
+                logger.info("Looking up Minecraft user: $minecraftUsername")
+                val profile = getGameProfileByName(minecraftUsername)
                 if (profile == null) {
-                    event.hook.editOriginal("Could not find Minecraft player: $minecraftUser").queue()
-                    return
+                    event.hook.editOriginal("Could not find Minecraft player: $minecraftUsername").queue()
+                    return null
                 }
-                
-                // Check if this account exists in our database
                 val minecraftUserInfo = whitelistService.findMinecraftUserByName(profile.name)
-                
                 if (minecraftUserInfo != null) {
-                    accountsToBan.add(minecraftUserInfo)
+                    accounts.add(minecraftUserInfo)
                 } else {
-                    // Create a minimal info object for display purposes only - the actual user
-                    // will be properly created in the service layer
-                    accountsToBan.add(
+                    accounts.add(
                         MinecraftUserInfo(
                             uuid = profile.id,
                             username = profile.name,
-                            addedAt = Instant.now(),
-                            addedBy = "unknown"
+                            addedAt = Clock.System.now(), // Placeholder
+                            addedBy = "unknown" // Placeholder
                         )
                     )
                 }
             }
-            
-            // Step 2: Process bans for all identified accounts
-            val bannedAccounts = mutableListOf<MinecraftUserInfo>()
-            val failedBans = mutableListOf<MinecraftUserInfo>()
-            
+            return accounts
+        }
+
+        private fun performBans(
+            accountsToBan: List<MinecraftUserInfo>,
+            reason: String,
+            moderatorDiscordId: String
+        ): Pair<List<MinecraftUserInfo>, List<MinecraftUserInfo>> {
+            val successfullyBanned = mutableListOf<MinecraftUserInfo>()
+            val failedToBan = mutableListOf<MinecraftUserInfo>()
+
             accountsToBan.forEach { account ->
                 logger.info("Banning Minecraft account: ${account.username} (${account.uuid})")
-                
-                // Use our service method to ban the player properly
                 val success = whitelistService.banPlayer(
                     uuid = account.uuid,
                     username = account.username,
-                    discordId = event.user.id,
+                    discordId = moderatorDiscordId,
                     reason = reason
                 )
-                
                 if (success) {
-                    bannedAccounts.add(account)
+                    successfullyBanned.add(account)
                 } else {
-                    failedBans.add(account)
+                    failedToBan.add(account)
                     logger.warn("Failed to ban ${account.username}")
                 }
             }
-            
-            // Step 3: Create response with results
-            if (bannedAccounts.isEmpty()) {
-                event.hook.editOriginal("Failed to ban any accounts.").queue()
-                return
-            }
-            
-            // Create an embed with ban details
+            return Pair(successfullyBanned, failedToBan)
+        }
+
+        private fun buildBanResultEmbed(
+            bannedAccounts: List<MinecraftUserInfo>,
+            failedBans: List<MinecraftUserInfo>,
+            targetDiscordUser: User?, // The Discord user who was targeted for the ban (if any)
+            reason: String,
+            moderator: User // The moderator who performed the ban
+        ): EmbedBuilder {
             val embed = EmbedBuilder()
                 .setColor(Color.RED)
-                .setTimestamp(Instant.now())
-            
+                .setTimestamp(Clock.System.now().toJavaInstant())
+
             if (targetDiscordUser != null) {
-                // Discord user ban summary
                 embed.setTitle("Discord User Banned")
                     .setDescription("Discord user ${targetDiscordUser.asMention} and their linked Minecraft accounts have been banned.")
                     .addField("Discord User", targetDiscordUser.name, true)
                     .addField("Discord ID", targetDiscordUser.id, true)
             } else {
-                // Single Minecraft user ban
-                val account = bannedAccounts.first()
+                val account = bannedAccounts.first() // If not banning a discord user, there must be at least one mc account
                 embed.setTitle("Minecraft Player Banned")
                     .setDescription("Player **${account.username}** has been banned from the server.")
                     .addField("Minecraft User", account.username, true)
                     .addField("UUID", account.uuid.toString(), true)
-                
-                // Add Discord info if available
                 if (account.discordUserId != null) {
                     val discordMention = DiscordService.getInstance().formatDiscordMention(account.discordUserId)
                     embed.addField("Linked Discord", discordMention, true)
                 }
             }
-            
-            // Add common fields
-            embed.addField("Banned by", event.user.asMention, true)
+
+            embed.addField("Banned by", moderator.asMention, true)
                 .addField("Reason", reason, false)
-            
-            // Add banned accounts details for Discord user bans
+
             if (targetDiscordUser != null && bannedAccounts.size > 1) {
                 val accountList = bannedAccounts.joinToString("\n") { "• ${it.username} (${it.uuid})" }
                 embed.addField("Banned Minecraft Accounts (${bannedAccounts.size})", accountList, false)
             }
-            
-            // Add failed bans if any
+
             if (failedBans.isNotEmpty()) {
                 val failedList = failedBans.joinToString("\n") { "• ${it.username}" }
                 embed.addField("Failed to Ban (${failedBans.size})", failedList, false)
             }
-            
-            // Add footer with whitelist information
-            if (bannedAccounts.size == 1) {
-                embed.setFooter("This player has been removed from the whitelist")
+
+            val footerText = if (bannedAccounts.size == 1 && targetDiscordUser == null) {
+                "This player has been removed from the whitelist"
             } else {
-                embed.setFooter("These ${bannedAccounts.size} linked Minecraft accounts have been removed from the whitelist")
+                "These ${bannedAccounts.size} Minecraft accounts have been removed from the whitelist"
             }
-            
-            event.hook.editOriginalEmbeds(embed.build()).queue()
+            embed.setFooter(footerText)
+            return embed
         }
     }
 }

@@ -3,8 +3,9 @@ package dev.butterflysky.db
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Tests for the DiscordUser entity
@@ -62,11 +63,11 @@ class DiscordUserTest : DatabaseTestBase() {
             assertThat(user.isInServer).isFalse()
             assertThat(user.leftServerAt).isNotNull()
             // Check that leftServerAt is roughly now
-            val now = Instant.now()
-            assertThat(user.leftServerAt).isBetween(
-                now.minus(5, ChronoUnit.SECONDS),
-                now.plus(5, ChronoUnit.SECONDS)
-            )
+            val now = Clock.System.now()
+            val fiveSecondsAgo = now.minus(5.seconds)
+            val fiveSecondsHence = now.plus(5.seconds)
+            assertThat(user.leftServerAt!! >= fiveSecondsAgo).isTrue()
+            assertThat(user.leftServerAt!! <= fiveSecondsHence).isTrue()
         }
     }
     

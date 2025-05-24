@@ -3,9 +3,10 @@ package dev.butterflysky.db
 import dev.butterflysky.domain.* // Imports PlayerId, ApplicationId, ApplicationStatus, MembershipId, MembershipStatus
 import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.dao.id.CompositeIdTable
-import org.jetbrains.exposed.sql.javatime.timestamp
+import org.jetbrains.exposed.sql.kotlin.datetime.timestamp 
 import org.jetbrains.exposed.sql.ReferenceOption
-import java.time.Instant
+import kotlinx.datetime.Clock 
+import kotlinx.datetime.Instant 
 
 /**
  * Contains table definitions for the Player-centric domain model.
@@ -20,8 +21,8 @@ object PlayerDomainTables {
         val id = varchar("id", 64) // PlayerId.value (e.g., Discord ID)
         val primaryMinecraftUuid = uuid("primary_minecraft_uuid").nullable()
         val primaryMinecraftUsername = varchar("primary_minecraft_username", 128).nullable()
-        val createdAt = timestamp("created_at").default(Instant.now())
-        val updatedAt = timestamp("updated_at").default(Instant.now())
+        val createdAt = timestamp("created_at").default(Clock.System.now()) 
+        val updatedAt = timestamp("updated_at").default(Clock.System.now()) 
 
         override val primaryKey = PrimaryKey(id)
     }
@@ -48,7 +49,7 @@ object PlayerDomainTables {
         val minecraftUsername = varchar("minecraft_username", 128) // Username at time of application
         val status = enumerationByName("status", 20, ApplicationStatus::class).default(ApplicationStatus.PENDING)
         val details = text("details")
-        val submittedAt = timestamp("submitted_at").default(Instant.now())
+        val submittedAt = timestamp("submitted_at").default(Clock.System.now()) 
         val processedAt = timestamp("processed_at").nullable()
         val processedBy = varchar("processed_by_player_id", 64).references(Players.id, onDelete = ReferenceOption.SET_NULL).nullable()
         val processingNotes = text("processing_notes").nullable()
@@ -64,8 +65,8 @@ object PlayerDomainTables {
         // val playerId = varchar("player_id", 64).references(Players.id, onDelete = ReferenceOption.CASCADE)
         val status = enumerationByName("status", 20, MembershipStatus::class)
         val statusReason = text("status_reason").nullable()
-        val createdAt = timestamp("created_at").default(Instant.now())
-        val lastStatusChangeAt = timestamp("last_status_change_at").default(Instant.now())
+        val createdAt = timestamp("created_at").default(Clock.System.now()) 
+        val lastStatusChangeAt = timestamp("last_status_change_at").default(Clock.System.now()) 
         val lastStatusChangedBy = varchar("last_status_changed_by_player_id", 64).references(Players.id, onDelete = ReferenceOption.SET_NULL).nullable()
 
         override val primaryKey = PrimaryKey(id)

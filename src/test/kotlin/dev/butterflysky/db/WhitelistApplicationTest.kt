@@ -4,8 +4,10 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.and
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.hours
 import java.util.UUID
 
 /**
@@ -25,8 +27,8 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 status = WhitelistDatabase.ApplicationStatus.PENDING
-                appliedAt = Instant.now()
-                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Instant.now())
+                appliedAt = Clock.System.now()
+                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Clock.System.now())
                 isModeratorCreated = false
             }
         }
@@ -38,7 +40,7 @@ class WhitelistApplicationTest : DatabaseTestBase() {
             assertThat(application.minecraftUser.id.value).isEqualTo(minecraftUser.id.value)
             assertThat(application.status).isEqualTo(WhitelistDatabase.ApplicationStatus.PENDING)
             assertThat(application.appliedAt).isNotNull()
-            assertThat(application.eligibleAt).isAfter(application.appliedAt)
+            assertThat(application.eligibleAt > application.appliedAt).isTrue()
             assertThat(application.isModeratorCreated).isFalse()
             assertThat(application.processedAt).isNull()
             assertThat(application.processedBy).isNull()
@@ -57,8 +59,8 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 status = WhitelistDatabase.ApplicationStatus.PENDING
-                appliedAt = Instant.now()
-                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Instant.now())
+                appliedAt = Clock.System.now()
+                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Clock.System.now())
                 isModeratorCreated = false
             }.id.value
         }
@@ -80,22 +82,20 @@ class WhitelistApplicationTest : DatabaseTestBase() {
     @Test
     fun `should calculate eligible timestamp correctly`() {
         // Given
-        val now = Instant.now()
+        val now = Clock.System.now()
         val testConfig = TestArgusConfig.get()
-        val cooldownHours = testConfig.whitelist.cooldownHours
+        val cooldownHours = testConfig.whitelist.cooldownHours.toLong()
         
         // When - use TestArgusConfig calculation
         val eligibleAt = TestArgusConfig.calculateEligibleTimestamp(now)
         
         // Then
-        val expectedEligibleTime = now.plus(cooldownHours, ChronoUnit.HOURS)
+        val expectedEligibleTime = now + cooldownHours.hours
         
         // Allow a small tolerance for calculation differences
-        val tolerance = 2L // seconds
-        assertThat(eligibleAt).isBetween(
-            expectedEligibleTime.minus(tolerance, ChronoUnit.SECONDS),
-            expectedEligibleTime.plus(tolerance, ChronoUnit.SECONDS)
-        )
+        val tolerance = 2.seconds
+        assertThat(eligibleAt).isGreaterThanOrEqualTo(expectedEligibleTime - tolerance)
+        assertThat(eligibleAt).isLessThanOrEqualTo(expectedEligibleTime + tolerance)
     }
     
     @Test
@@ -131,7 +131,7 @@ class WhitelistApplicationTest : DatabaseTestBase() {
             assertThat(application.notes).isEqualTo(notes)
             
             // Verify the application is immediately eligible
-            assertThat(application.eligibleAt).isBeforeOrEqualTo(Instant.now())
+            assertThat(application.eligibleAt <= application.appliedAt).isTrue()
         }
     }
     
@@ -162,20 +162,16 @@ class WhitelistApplicationTest : DatabaseTestBase() {
             assertThat(application.minecraftUser.id.value).isEqualTo(minecraftUser.id.value)
             assertThat(application.status).isEqualTo(WhitelistDatabase.ApplicationStatus.APPROVED)
             assertThat(application.isModeratorCreated).isTrue()
-            assertThat(application.appliedAt).isNotEqualTo(Instant.EPOCH)
-            assertThat(application.eligibleAt).isNotEqualTo(Instant.EPOCH)
+            assertThat(application.appliedAt).isNotEqualTo(Instant.fromEpochSeconds(0))
+            assertThat(application.eligibleAt).isNotEqualTo(Instant.fromEpochSeconds(0))
             
             // Both timestamps should be very close to now
-            val now = Instant.now()
-            val tolerance = 5L // seconds
-            assertThat(application.appliedAt).isBetween(
-                now.minusSeconds(tolerance),
-                now.plusSeconds(tolerance)
-            )
-            assertThat(application.eligibleAt).isBetween(
-                now.minusSeconds(tolerance),
-                now.plusSeconds(tolerance)
-            )
+            val now = Clock.System.now()
+            val tolerance = 5.seconds
+            assertThat(application.appliedAt).isGreaterThanOrEqualTo(now - tolerance)
+            assertThat(application.appliedAt).isLessThanOrEqualTo(now + tolerance)
+            assertThat(application.eligibleAt).isGreaterThanOrEqualTo(now - tolerance)
+            assertThat(application.eligibleAt).isLessThanOrEqualTo(now + tolerance)
             assertThat(application.processedAt).isNotNull()
             assertThat(application.processedBy?.id?.value).isEqualTo(moderator.id.value)
             assertThat(application.overrideReason).isEqualTo("Legacy whitelist import")
@@ -205,8 +201,8 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 discordUser = discordUser1
                 minecraftUser = minecraftUser1
                 status = WhitelistDatabase.ApplicationStatus.PENDING
-                appliedAt = Instant.now()
-                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Instant.now())
+                appliedAt = Clock.System.now()
+                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Clock.System.now())
                 isModeratorCreated = false
             }
             
@@ -214,10 +210,10 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 discordUser = discordUser2
                 minecraftUser = minecraftUser2
                 status = WhitelistDatabase.ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
-                isModeratorCreated = true
-                processedAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
+                isModeratorCreated = false
+                processedAt = Clock.System.now()
                 processedBy = discordUser2
             }
         }
@@ -255,10 +251,10 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 status = WhitelistDatabase.ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
-                processedAt = Instant.now()
+                processedAt = Clock.System.now()
                 processedBy = discordUser
             }
         }
@@ -290,8 +286,8 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser1
                 status = WhitelistDatabase.ApplicationStatus.PENDING
-                appliedAt = Instant.now()
-                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Instant.now())
+                appliedAt = Clock.System.now()
+                eligibleAt = TestArgusConfig.calculateEligibleTimestamp(Clock.System.now())
                 isModeratorCreated = false
             }
             
@@ -299,10 +295,10 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser2
                 status = WhitelistDatabase.ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
-                processedAt = Instant.now()
+                processedAt = Clock.System.now()
                 processedBy = discordUser
             }
             
@@ -310,10 +306,10 @@ class WhitelistApplicationTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser3
                 status = WhitelistDatabase.ApplicationStatus.REJECTED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
-                processedAt = Instant.now()
+                processedAt = Clock.System.now()
                 processedBy = discordUser
             }
         }

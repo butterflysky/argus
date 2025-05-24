@@ -1,7 +1,8 @@
 package dev.butterflysky.db
 
 import dev.butterflysky.config.ArgusConfig
-import java.time.Instant
+import kotlinx.datetime.Instant
+import kotlin.time.Duration.Companion.hours
 
 /**
  * Test implementation of ArgusConfig that returns fixed values without requiring the FabricLoader
@@ -31,7 +32,7 @@ class TestArgusConfig {
          */
         fun calculateEligibleTimestamp(appliedAt: Instant): Instant {
             val cooldownHours = 48L // Fixed test value
-            return appliedAt.plusSeconds(cooldownHours * 60 * 60) // Convert hours to seconds
+            return appliedAt.plus(cooldownHours.hours)
         }
     }
 }

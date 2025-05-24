@@ -4,8 +4,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.and
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
 import java.util.UUID
 
 /**
@@ -26,10 +26,10 @@ class BanTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 status = WhitelistDatabase.ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
-                processedAt = Instant.now()
+                processedAt = Clock.System.now()
                 processedBy = moderator
             }
         }
@@ -39,7 +39,7 @@ class BanTest : DatabaseTestBase() {
         transaction {
             // Simulate the ban process
             application.status = WhitelistDatabase.ApplicationStatus.BANNED
-            application.processedAt = Instant.now()
+            application.processedAt = Clock.System.now()
             application.processedBy = moderator
             application.notes = "Banned: $banReason"
             
@@ -88,10 +88,10 @@ class BanTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser1
                 status = WhitelistDatabase.ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
-                processedAt = Instant.now()
+                processedAt = Clock.System.now()
                 processedBy = moderator
             }
             
@@ -100,10 +100,10 @@ class BanTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser2
                 status = WhitelistDatabase.ApplicationStatus.BANNED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now() // Player might have applied before ban
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
-                processedAt = Instant.now()
+                processedAt = Clock.System.now() // Ban processing time
                 processedBy = moderator
                 notes = "Banned: Test ban reason"
             }

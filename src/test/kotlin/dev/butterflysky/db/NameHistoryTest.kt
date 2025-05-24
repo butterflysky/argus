@@ -3,8 +3,9 @@ package dev.butterflysky.db
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.seconds
 import java.util.UUID
 
 /**
@@ -38,11 +39,10 @@ class NameHistoryTest : DatabaseTestBase() {
             assertThat(nameHistoryEntry.recordedBy?.id?.value).isEqualTo(recorder.id.value)
             
             // Verify timestamp is recent
-            val now = Instant.now()
-            assertThat(nameHistoryEntry.recordedAt).isBetween(
-                now.minus(5, ChronoUnit.SECONDS),
-                now.plus(5, ChronoUnit.SECONDS)
-            )
+            val now = Clock.System.now()
+            val fiveSeconds = 5.seconds
+            assertThat(nameHistoryEntry.recordedAt).isGreaterThanOrEqualTo(now - fiveSeconds)
+            assertThat(nameHistoryEntry.recordedAt).isLessThanOrEqualTo(now + fiveSeconds)
             
             // Verify we can retrieve the history from the user
             val nameHistory = discordUser.nameHistory.toList()
@@ -154,11 +154,10 @@ class NameHistoryTest : DatabaseTestBase() {
             assertThat(nameHistoryEntry.recordedBy?.id?.value).isEqualTo(recorder.id.value)
             
             // Verify timestamp is recent
-            val now = Instant.now()
-            assertThat(nameHistoryEntry.recordedAt).isBetween(
-                now.minus(5, ChronoUnit.SECONDS),
-                now.plus(5, ChronoUnit.SECONDS)
-            )
+            val now = Clock.System.now()
+            val fiveSeconds = 5.seconds
+            assertThat(nameHistoryEntry.recordedAt).isGreaterThanOrEqualTo(now - fiveSeconds)
+            assertThat(nameHistoryEntry.recordedAt).isLessThanOrEqualTo(now + fiveSeconds)
             
             // Verify we can retrieve the history from the user
             val nameHistory = minecraftUser.usernameHistory.toList()

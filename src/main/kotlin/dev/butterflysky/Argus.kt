@@ -165,7 +165,6 @@ class Argus : ModInitializer {
                     .then(
                         literal("import")
                             .executes { context ->
-                                val server = context.source.server
                                 whitelistService.importExistingWhitelist()
                                 context.source.sendFeedback({ Text.literal("[Argus] Imported vanilla whitelist entries") }, true)
                                 logger.info("Vanilla whitelist imported by ${context.source.name}")
@@ -299,7 +298,7 @@ class Argus : ModInitializer {
         }
         
         // Register the server stopping event
-        ServerLifecycleEvents.SERVER_STOPPING.register { server ->
+        ServerLifecycleEvents.SERVER_STOPPING.register { _ ->
             logger.info("Minecraft server stopping, shutting down services")
             
             try {

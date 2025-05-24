@@ -3,8 +3,9 @@ package dev.butterflysky.db
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.seconds
 import java.util.UUID
 
 /**
@@ -42,10 +43,10 @@ class AuditLogTest : DatabaseTestBase() {
             assertThat(auditLog.details).isEqualTo(details)
             
             // Verify timestamp is recent
-            val now = Instant.now()
+            val now = Clock.System.now()
             assertThat(auditLog.performedAt).isBetween(
-                now.minus(5, ChronoUnit.SECONDS),
-                now.plus(5, ChronoUnit.SECONDS)
+                now.minus(5.seconds),
+                now.plus(5.seconds)
             )
         }
     }

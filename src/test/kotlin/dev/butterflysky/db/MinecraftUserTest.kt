@@ -3,8 +3,9 @@ package dev.butterflysky.db
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
+import kotlin.time.Duration.Companion.seconds
 import java.util.UUID
 
 /**
@@ -75,7 +76,7 @@ class MinecraftUserTest : DatabaseTestBase() {
         val originalOwner = createTestDiscordUser("OriginalOwner")
         val newOwner = createTestDiscordUser("NewOwner")
         val uuid = UUID.randomUUID()
-        val minecraftUser = createTestMinecraftUser(uuid, "TestMinecraftUser", originalOwner)
+        val _ignoredUser = createTestMinecraftUser(uuid, "TestMinecraftUser", originalOwner)
         
         // When
         val transferredUser = transaction {
@@ -94,11 +95,11 @@ class MinecraftUserTest : DatabaseTestBase() {
             assertThat(transferredUser.transferredAt).isNotNull
             
             // Verify transfer time is recent
-            val now = Instant.now()
-            assertThat(transferredUser.transferredAt).isBetween(
-                now.minus(5, ChronoUnit.SECONDS),
-                now.plus(5, ChronoUnit.SECONDS)
-            )
+            val now = Clock.System.now()
+            val fiveSecondsAgo = now.minus(5.seconds)
+            val fiveSecondsHence = now.plus(5.seconds)
+            assertThat(transferredUser.transferredAt!! >= fiveSecondsAgo).isTrue()
+            assertThat(transferredUser.transferredAt!! <= fiveSecondsHence).isTrue()
         }
     }
     
@@ -116,10 +117,10 @@ class MinecraftUserTest : DatabaseTestBase() {
                 discordUser = originalOwner
                 this.minecraftUser = minecraftUser
                 status = WhitelistDatabase.ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
-                processedAt = Instant.now()
+                processedAt = Clock.System.now()
                 processedBy = WhitelistDatabase.DiscordUser.getSystemUser()
             }
         }
@@ -154,7 +155,7 @@ class MinecraftUserTest : DatabaseTestBase() {
         val originalOwner = createTestDiscordUser("OriginalOwner")
         val nonExistentOwnerId = 999999L
         val uuid = UUID.randomUUID()
-        val minecraftUser = createTestMinecraftUser(uuid, "TestMinecraftUser", originalOwner)
+        val _ignoredUser = createTestMinecraftUser(uuid, "TestMinecraftUser", originalOwner)
         
         // When
         val result = transaction {
@@ -184,7 +185,7 @@ class MinecraftUserTest : DatabaseTestBase() {
         val newOwner = createTestDiscordUser("NewOwner")
         val systemUser = transaction { WhitelistDatabase.DiscordUser.getSystemUser() }
         val uuid = UUID.randomUUID()
-        val minecraftUser = createTestMinecraftUser(uuid, "TestMinecraftUser", originalOwner)
+        val _ignoredUser = createTestMinecraftUser(uuid, "TestMinecraftUser", originalOwner)
         val transferReason = "Test transfer reason"
         
         // When

@@ -1,72 +1,124 @@
-package dev.butterflysky.domain // Updated package
+package dev.butterflysky.domain
 
+import dev.butterflysky.domain.events.MembershipCreatedEvent
+import dev.butterflysky.domain.events.MembershipEvent
+import dev.butterflysky.domain.events.MembershipStatusChangedEvent
+import dev.butterflysky.eventsourcing.AbstractAggregateRoot
 import java.time.Instant
 
-// Types are now in the same package, explicit imports not strictly needed
-// import dev.butterflysky.domain.MembershipId
-// import dev.butterflysky.domain.PlayerId
-// import dev.butterflysky.domain.MembershipStatus
+class Membership private constructor(
+    id: MembershipId, // This is the aggregate ID, derived from PlayerId
+    val playerId: PlayerId // Store PlayerId explicitly for clarity and direct access
+) : AbstractAggregateRoot<MembershipId, MembershipEvent>(id) {
 
-/**
- * Represents a player's overall membership status within the community/server.
- */
-data class Membership(
-    val id: MembershipId, // Derived from PlayerId, ensuring one Membership per Player
-    val playerId: PlayerId, // Explicitly store PlayerId for clarity and direct access
-    var status: MembershipStatus,
-    var statusReason: String? = null, // e.g., ban reason, reason for unwhitelisting
-    val createdAt: Instant = Instant.now(), // When the membership record was first created
-    var lastStatusChangeAt: Instant = Instant.now(), // When the status last changed
-    var lastStatusChangedBy: PlayerId? = null // Who (PlayerId of mod/system) triggered the last status change
-) {
-    init {
-        require(id.value == playerId) { "MembershipId must correspond to the PlayerId." }
-    }
+    lateinit var status: MembershipStatus
+        private set
+    var statusReason: String? = null
+        private set
+    lateinit var createdAt: Instant
+        private set
+    lateinit var updatedAt: Instant
+        private set
+    var updatedBy: PlayerId? = null
+        private set
 
-    // Private helper to update common fields on status change
-    private fun updateStatus(newStatus: MembershipStatus, actor: PlayerId?, reason: String?) {
-        this.status = newStatus
-        this.lastStatusChangeAt = Instant.now()
-        this.lastStatusChangedBy = actor
-        this.statusReason = reason
-    }
-
-    // Example transition methods - these would be called by a service layer
-    // that also handles auditing and side effects (like actual whitelist/ban commands).
-
-    fun moveToWhitelisted(actor: PlayerId) {
-        if (status !in listOf(MembershipStatus.PENDING, MembershipStatus.UNWHITELISTED)) {
-            throw IllegalStateException("Cannot move to WHITELISTED from $status")
+    companion object {
+        fun create(
+            playerId: PlayerId,
+            initialStatus: MembershipStatus = MembershipStatus.PENDING,
+            reason: String? = "New membership created",
+            actor: PlayerId? = null // Actor initiating creation, currently unused in MembershipCreatedEvent
+        ): Membership {
+            val membershipId = MembershipId(playerId) // Derive MembershipId from PlayerId
+            val membership = Membership(membershipId, playerId)
+            membership.recordEvent(
+                MembershipCreatedEvent(
+                    memId = membershipId,
+                    forPlayerId = playerId,
+                    initialStatus = initialStatus,
+                    reason = reason,
+                    createdAt = Instant.now()
+                )
+            )
+            return membership
         }
-        updateStatus(MembershipStatus.WHITELISTED, actor, "Whitelisted by ${actor.value}")
     }
 
-    fun moveToRejected(actor: PlayerId, reason: String) {
-        if (status != MembershipStatus.PENDING) {
-            throw IllegalStateException("Cannot move to REJECTED from $status")
+    private fun changeStatus(newStatus: MembershipStatus, actor: PlayerId?, reason: String?) {
+        if (!this::status.isInitialized) {
+            throw IllegalStateException("Membership state not initialized. Cannot change status.")
         }
-        updateStatus(MembershipStatus.REJECTED, actor, reason)
+        recordEvent(
+            MembershipStatusChangedEvent(
+                memId = this.id,
+                newStatus = newStatus,
+                oldStatus = this.status,
+                reason = reason,
+                changedBy = actor,
+                changeTime = Instant.now()
+            )
+        )
     }
 
-    fun moveToBanned(actor: PlayerId, reason: String) {
-        // Can be banned from PENDING, WHITELISTED, REJECTED, UNWHITELISTED
-        if (status == MembershipStatus.BANNED) return // Already banned
-        updateStatus(MembershipStatus.BANNED, actor, reason)
-    }
-
-    fun moveToUnwhitelisted(actor: PlayerId?, reason: String) {
-        // actor can be null for system events like leaving Discord
-        if (status !in listOf(MembershipStatus.WHITELISTED, MembershipStatus.BANNED)) {
-            throw IllegalStateException("Cannot move to UNWHITELISTED from $status. Current: $status, Reason: $reason")
+    fun whitelist(actor: PlayerId, reason: String? = null) {
+        if (!this::status.isInitialized || (status != MembershipStatus.PENDING && status != MembershipStatus.UNWHITELISTED && status != MembershipStatus.REJECTED)) {
+            throw IllegalStateException("Membership must be PENDING, UNWHITELISTED, or REJECTED to be whitelisted. Current status: $status")
         }
-        updateStatus(MembershipStatus.UNWHITELISTED, actor, reason)
+        changeStatus(MembershipStatus.WHITELISTED, actor, reason ?: "Whitelisted by admin/moderator")
     }
 
-    fun moveToPending(actor: PlayerId?, reason: String) {
-        // actor can be null for system events like account transfer auto-reapply
-        if (status !in listOf(MembershipStatus.REJECTED, MembershipStatus.UNWHITELISTED)) {
-            throw IllegalStateException("Cannot move to PENDING from $status")
+    fun ban(actor: PlayerId, reason: String) {
+        if (!this::status.isInitialized) {
+            throw IllegalStateException("Membership state not initialized. Cannot ban.")
         }
-        updateStatus(MembershipStatus.PENDING, actor, reason)
+        if (status == MembershipStatus.BANNED) {
+            throw IllegalStateException("Membership is already BANNED.")
+        }
+        changeStatus(MembershipStatus.BANNED, actor, reason)
+    }
+
+    fun unwhitelist(actor: PlayerId, reason: String? = null) {
+        if (!this::status.isInitialized || status != MembershipStatus.WHITELISTED) {
+            throw IllegalStateException("Membership must be WHITELISTED to be unwhitelisted. Current status: $status")
+        }
+        changeStatus(MembershipStatus.UNWHITELISTED, actor, reason ?: "Unwhitelisted by admin/moderator")
+    }
+
+    fun reject(actor: PlayerId, reason: String? = null) {
+        if (!this::status.isInitialized || status != MembershipStatus.PENDING) {
+            throw IllegalStateException("Membership must be PENDING to be rejected. Current status: $status")
+        }
+        changeStatus(MembershipStatus.REJECTED, actor, reason ?: "Membership application rejected")
+    }
+
+    fun setPending(actor: PlayerId?, reason: String? = null) {
+        if (!this::status.isInitialized) {
+            throw IllegalStateException("Membership state not initialized. Cannot set to pending.")
+        }
+        if (status == MembershipStatus.PENDING) {
+            return // No-op if already pending
+        }
+        if (status != MembershipStatus.REJECTED && status != MembershipStatus.UNWHITELISTED) {
+             throw IllegalStateException("Membership can only be set to PENDING from REJECTED or UNWHITELISTED. Current status: $status")
+        }
+        changeStatus(MembershipStatus.PENDING, actor, reason ?: "Membership set to pending")
+    }
+
+    override fun applyEvent(event: MembershipEvent) {
+        when (event) {
+            is MembershipCreatedEvent -> {
+                this.status = event.initialStatus
+                this.statusReason = event.reason
+                this.createdAt = event.createdAt
+                this.updatedAt = event.createdAt
+                // Note: updatedBy for creation is not set from this event currently
+            }
+            is MembershipStatusChangedEvent -> {
+                this.status = event.newStatus
+                this.statusReason = event.reason
+                this.updatedAt = event.changeTime
+                this.updatedBy = event.changedBy
+            }
+        }
     }
 }

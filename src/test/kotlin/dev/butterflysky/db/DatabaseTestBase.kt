@@ -3,6 +3,8 @@ package dev.butterflysky.db
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.slf4j.LoggerFactory
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
 
@@ -67,7 +69,7 @@ abstract class DatabaseTestBase {
             WhitelistDatabase.DiscordUser.new(userId) {
                 currentUsername = username
                 currentServername = null
-                joinedServerAt = java.time.Instant.now()
+                joinedServerAt = Clock.System.now()
                 isInServer = true
             }
         }

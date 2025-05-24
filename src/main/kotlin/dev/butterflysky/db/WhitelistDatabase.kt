@@ -1,29 +1,25 @@
 package dev.butterflysky.db
 
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.dao.LongEntity
-import org.jetbrains.exposed.dao.LongEntityClass
-import org.jetbrains.exposed.dao.id.LongIdTable
-import org.jetbrains.exposed.dao.UUIDEntity
-import org.jetbrains.exposed.dao.UUIDEntityClass
-import org.jetbrains.exposed.dao.id.UUIDTable
-import org.jetbrains.exposed.dao.IntEntity
-import org.jetbrains.exposed.dao.IntEntityClass
-import org.jetbrains.exposed.dao.id.IntIdTable
-import org.jetbrains.exposed.sql.javatime.timestamp
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.slf4j.LoggerFactory
-import dev.butterflysky.config.ArgusConfig
-import java.time.Instant
-import java.util.UUID
-import java.io.File
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import dev.butterflysky.config.ArgusConfig
+import org.jetbrains.exposed.dao.*
+import org.jetbrains.exposed.dao.id.*
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.kotlin.datetime.CurrentTimestamp
+import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.slf4j.LoggerFactory
+import java.io.File
+import java.sql.Connection
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import java.util.UUID
 import java.util.Properties
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import dev.butterflysky.db.PlayerDomainTables
 
 /**
  * WhitelistDatabase contains the schema definition for the Abcraft whitelist management system.
@@ -79,7 +75,7 @@ object WhitelistDatabase {
         val joinedServerAt = timestamp("joined_server_at")
         val isInServer = bool("is_in_server").default(true)
         val leftServerAt = timestamp("left_server_at").nullable()
-        val createdAt = timestamp("created_at").default(Instant.now())
+        val createdAt = timestamp("created_at").default(Clock.System.now())
     }
 
     /**
@@ -89,7 +85,7 @@ object WhitelistDatabase {
         val discordUser = reference("discord_id", DiscordUsers, onDelete = ReferenceOption.CASCADE)
         val username = varchar("username", 128)
         val type = enumeration("type", NameType::class)
-        val recordedAt = timestamp("recorded_at").default(Instant.now())
+        val recordedAt = timestamp("recorded_at").default(Clock.System.now())
         val recordedBy = reference("recorded_by", DiscordUsers, onDelete = ReferenceOption.SET_NULL).nullable()
     }
 
@@ -98,7 +94,7 @@ object WhitelistDatabase {
      */
     object MinecraftUsers : UUIDTable("minecraft_users") {
         val currentUsername = varchar("current_username", 128)
-        val createdAt = timestamp("created_at").default(Instant.now())
+        val createdAt = timestamp("created_at").default(Clock.System.now())
         val currentOwner = reference("current_owner_id", DiscordUsers, onDelete = ReferenceOption.SET_NULL).nullable()
         val transferredAt = timestamp("transferred_at").nullable()
     }
@@ -109,7 +105,7 @@ object WhitelistDatabase {
     object MinecraftUsernameHistory : IntIdTable("minecraft_username_history") {
         val minecraftUser = reference("minecraft_uuid", MinecraftUsers, onDelete = ReferenceOption.CASCADE)
         val username = varchar("username", 128)
-        val recordedAt = timestamp("recorded_at").default(Instant.now())
+        val recordedAt = timestamp("recorded_at").default(Clock.System.now())
         val recordedBy = reference("recorded_by", DiscordUsers, onDelete = ReferenceOption.SET_NULL).nullable()
     }
 
@@ -125,7 +121,7 @@ object WhitelistDatabase {
         val discordUser = reference("discord_id", DiscordUsers, onDelete = ReferenceOption.CASCADE)
         val minecraftUser = reference("minecraft_uuid", MinecraftUsers, onDelete = ReferenceOption.CASCADE)
         val status = enumeration("status", ApplicationStatus::class)
-        val appliedAt = timestamp("applied_at").default(Instant.now())
+        val appliedAt = timestamp("applied_at").default(Clock.System.now())
         val eligibleAt = timestamp("eligible_at")
         // Track if this was a direct moderator whitelist (no application required)
         val isModeratorCreated = bool("is_moderator_created").default(false)
@@ -143,8 +139,27 @@ object WhitelistDatabase {
         val entityType = varchar("entity_type", 32)
         val entityId = varchar("entity_id", 64)
         val performedBy = reference("performed_by", DiscordUsers, onDelete = ReferenceOption.SET_NULL).nullable()
-        val performedAt = timestamp("performed_at").default(Instant.now())
+        val performedAt = timestamp("performed_at").default(Clock.System.now())
         val details = text("details")
+    }
+
+    /**
+     * Table for storing domain events for event sourcing
+     */
+    object EventStoreTable : Table("event_store") {
+        val globalEventId: Column<UUID> = uuid("global_event_id").autoGenerate()
+        val eventId: Column<UUID> = uuid("event_id")
+        val aggregateId: Column<String> = varchar("aggregate_id", 255).index()
+        val aggregateType: Column<String> = varchar("aggregate_type", 255)
+        val eventType: Column<String> = varchar("event_type", 255)
+        val eventVersion: Column<Long> = long("event_version")
+        val eventData: Column<String> = text("event_data") // For JSON serialized event
+        val occurredAt: Column<kotlinx.datetime.Instant> = timestamp("occurred_at")
+        val storedAt: Column<kotlinx.datetime.Instant> = timestamp("stored_at").defaultExpression(CurrentTimestamp)
+
+        override val primaryKey = PrimaryKey(globalEventId)
+        // Index for efficient retrieval of events for an aggregate, ordered by version
+        init { index(false, aggregateId, eventVersion) }// b-tree index for sorting/range queries
     }
 
     // Entities
@@ -161,7 +176,7 @@ object WhitelistDatabase {
                 findById(UNMAPPED_DISCORD_ID) ?: new(UNMAPPED_DISCORD_ID) {
                     currentUsername = "Unmapped Minecraft User"
                     currentServername = "Unmapped"
-                    joinedServerAt = Instant.EPOCH
+                    joinedServerAt = Clock.System.now()
                     isInServer = false
                 }
             }
@@ -174,7 +189,7 @@ object WhitelistDatabase {
                 findById(SYSTEM_USER_ID) ?: new(SYSTEM_USER_ID) {
                     currentUsername = "System"
                     currentServername = "System"
-                    joinedServerAt = Instant.EPOCH
+                    joinedServerAt = Clock.System.now()
                     isInServer = true
                 }
             }
@@ -197,7 +212,7 @@ object WhitelistDatabase {
          */
         fun markAsLeft() = apply {
             isInServer = false
-            leftServerAt = Instant.now()
+            leftServerAt = Clock.System.now()
         }
         
         /**
@@ -268,10 +283,11 @@ object WhitelistDatabase {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 this.status = ApplicationStatus.APPROVED
-                this.appliedAt = Instant.now()
-                this.eligibleAt = Instant.now() // Immediately eligible
+                val currentTime = Clock.System.now()
+                this.appliedAt = currentTime
+                this.eligibleAt = currentTime // Immediately eligible
                 this.isModeratorCreated = true
-                this.processedAt = Instant.now()
+                this.processedAt = currentTime
                 this.processedBy = moderator
                 this.overrideReason = overrideReason
                 this.notes = notes
@@ -289,7 +305,7 @@ object WhitelistDatabase {
                 this.discordUser = DiscordUser.getUnmappedUser()
                 this.minecraftUser = minecraftUser
                 this.status = ApplicationStatus.APPROVED
-                val now = Instant.now()
+                val now = Clock.System.now()
                 this.appliedAt = now  // Use current time instead of Epoch
                 this.eligibleAt = now
                 this.isModeratorCreated = true
@@ -469,9 +485,9 @@ object WhitelistDatabase {
      * @param appliedAt The timestamp when the application was submitted
      * @return The timestamp when the application becomes eligible for approval
      */
-    fun calculateEligibleTimestamp(appliedAt: Instant): Instant {
+    fun calculateEligibleTimestamp(appliedAt: kotlinx.datetime.Instant): kotlinx.datetime.Instant {
         val cooldownHours = ArgusConfig.get().whitelist.cooldownHours
-        return appliedAt.plusSeconds(cooldownHours * 60 * 60) // Convert hours to seconds
+        return appliedAt.plus(((cooldownHours * 60 * 60).toLong()).seconds) // Convert hours to seconds
     }
     
     /**
@@ -518,7 +534,7 @@ object WhitelistDatabase {
             
             // Update the account ownership
             account.currentOwner = newOwner
-            account.transferredAt = Instant.now()
+            account.transferredAt = Clock.System.now()
             
             // Find any active whitelist applications and mark them as removed
             WhitelistApplication.find {
@@ -617,7 +633,12 @@ object WhitelistDatabase {
                 MinecraftUsers,
                 MinecraftUsernameHistory,
                 WhitelistApplications,
-                AuditLogs
+                AuditLogs,
+                EventStoreTable, // Add the new event store table here
+                PlayerDomainTables.Players,
+                PlayerDomainTables.PlayerMinecraftLinks,
+                PlayerDomainTables.Applications,
+                PlayerDomainTables.Memberships
             )
         }
     }

@@ -14,7 +14,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.LoggerFactory
 import dev.butterflysky.config.ArgusConfig
 import java.io.File
-import java.time.Instant
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
 import java.util.*
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -129,7 +130,7 @@ class WhitelistService private constructor() {
                 DiscordUser.findById(id) ?: DiscordUser.new(id) {
                     currentUsername = discordUsername ?: "Unknown"
                     currentServername = null
-                    joinedServerAt = Instant.now()
+                    joinedServerAt = Clock.System.now()
                     isInServer = true
                 }
             }
@@ -153,6 +154,7 @@ class WhitelistService private constructor() {
                 MinecraftUser.findById(uuid) ?: MinecraftUser.new(uuid) {
                     currentUsername = username
                     currentOwner = owner
+                    createdAt = Clock.System.now()
                 }
             }
         } catch (e: Exception) {
@@ -189,11 +191,11 @@ class WhitelistService private constructor() {
      * Find an approved whitelist application for a Minecraft user
      */
     private fun findApprovedApplication(minecraftUser: MinecraftUser): WhitelistApplication? {
-        return dbTransaction("Failed to find approved application", null) {
+        return dbTransaction("Failed to find approved application for ${minecraftUser.id.value}", null) {
             WhitelistApplication.find {
-                (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
-                (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
-            }.sortedByDescending { it.appliedAt }.firstOrNull()
+                (WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                (WhitelistApplications.status eq ApplicationStatus.APPROVED)
+            }.orderBy(WhitelistApplications.appliedAt to SortOrder.DESC).firstOrNull()
         }
     }
     
@@ -284,8 +286,8 @@ class WhitelistService private constructor() {
                     } else {
                         // Player exists, check if there's a whitelist application
                         val hasApplication = WhitelistApplication.find {
-                            (WhitelistDatabase.WhitelistApplications.minecraftUser eq existingPlayer.id) and
-                            (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                            (WhitelistApplications.minecraftUser eq existingPlayer.id) and
+                            (WhitelistApplications.status eq ApplicationStatus.APPROVED)
                         }.count() > 0
                         
                         if (!hasApplication) {
@@ -358,8 +360,8 @@ class WhitelistService private constructor() {
                     
                     // Check if there's a whitelist application
                     val hasApplication = WhitelistApplication.find {
-                        (WhitelistDatabase.WhitelistApplications.minecraftUser eq existingPlayer.id) and
-                        (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                        (WhitelistApplications.minecraftUser eq existingPlayer.id) and
+                        (WhitelistApplications.status eq ApplicationStatus.APPROVED)
                     }.count() > 0
                     
                     if (!hasApplication) {
@@ -389,7 +391,7 @@ class WhitelistService private constructor() {
         return transaction {
             // Find all approved whitelist applications
             WhitelistApplication.find {
-                WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED
+                WhitelistApplications.status eq ApplicationStatus.APPROVED
             }.map { application ->
                 val minecraftUser = application.minecraftUser
                 val discordUser = application.discordUser
@@ -467,9 +469,9 @@ class WhitelistService private constructor() {
             // Get the Discord user or create a new one
             val discordUser = transaction {
                 DiscordUser.findById(discordId.toLong()) ?: DiscordUser.new(discordId.toLong()) {
-                    currentUsername = "Unknown"
+                    currentUsername = "Unknown" // Will be updated by Discord events
                     currentServername = null
-                    joinedServerAt = Instant.now()
+                    joinedServerAt = Clock.System.now()
                     isInServer = true
                 }
             }
@@ -479,6 +481,7 @@ class WhitelistService private constructor() {
                 MinecraftUser.findById(uuid) ?: MinecraftUser.new(uuid) {
                     currentUsername = username
                     currentOwner = null  // Don't link to a Discord account until explicitly requested
+                    createdAt = Clock.System.now()
                 }
             }
             
@@ -506,8 +509,8 @@ class WhitelistService private constructor() {
             // First, check if player is already whitelisted
             val alreadyWhitelisted = transaction {
                 WhitelistApplication.find {
-                    (WhitelistDatabase.WhitelistApplications.minecraftUser eq EntityID(uuid, WhitelistDatabase.MinecraftUsers)) and
-                    (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                    (WhitelistApplications.minecraftUser eq EntityID(uuid, WhitelistDatabase.MinecraftUsers)) and
+                    (WhitelistApplications.status eq ApplicationStatus.APPROVED)
                 }.firstOrNull() != null
             }
             
@@ -602,8 +605,8 @@ class WhitelistService private constructor() {
             // Check if the player is actually whitelisted
             val applications = transaction {
                 WhitelistApplication.find {
-                    (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
-                    (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                    (WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                    (WhitelistApplications.status eq ApplicationStatus.APPROVED)
                 }.toList()
             }
             
@@ -634,7 +637,7 @@ class WhitelistService private constructor() {
                     // Mark all approved applications as removed
                     applications.forEach { application ->
                         application.status = ApplicationStatus.REMOVED
-                        application.processedAt = Instant.now()
+                        application.processedAt = Clock.System.now()
                         application.processedBy = discordUser
                     }
                     
@@ -712,7 +715,7 @@ class WhitelistService private constructor() {
                 DiscordUser.findById(discordUserId.toLong()) ?: DiscordUser.new(discordUserId.toLong()) {
                     currentUsername = discordUsername
                     currentServername = null
-                    joinedServerAt = Instant.now()
+                    joinedServerAt = Clock.System.now()
                     isInServer = true
                 }
             }
@@ -728,7 +731,7 @@ class WhitelistService private constructor() {
                         this.discordUser = discordUser
                         this.username = discordUsername
                         this.type = NameType.USERNAME
-                        this.recordedAt = Instant.now()
+                        this.recordedAt = Clock.System.now()
                         this.recordedBy = discordUser
                     }
                     
@@ -741,6 +744,7 @@ class WhitelistService private constructor() {
                 MinecraftUser.findById(minecraftUuid) ?: MinecraftUser.new(minecraftUuid) {
                     currentUsername = minecraftUsername
                     currentOwner = discordUser
+                    createdAt = Clock.System.now()
                 }
             }
             
@@ -769,7 +773,7 @@ class WhitelistService private constructor() {
                 // Update owner if different
                 if (currentOwner?.id?.value != discordUserId.toLong()) {
                     minecraftUser.currentOwner = discordUser
-                    minecraftUser.transferredAt = Instant.now()
+                    minecraftUser.transferredAt = Clock.System.now()
                     
                     // Create audit log for ownership change
                     WhitelistDatabase.createAuditLog(
@@ -808,7 +812,7 @@ class WhitelistService private constructor() {
                 DiscordUser.findById(discordId.toLong()) ?: DiscordUser.new(discordId.toLong()) {
                     currentUsername = "Unknown" // Will be updated by Discord events
                     currentServername = null
-                    joinedServerAt = Instant.now()
+                    joinedServerAt = Clock.System.now()
                     isInServer = true
                 }
             }
@@ -816,8 +820,8 @@ class WhitelistService private constructor() {
             // Check if user already has a pending application
             val hasPendingApplication = transaction {
                 WhitelistApplication.find {
-                    (WhitelistDatabase.WhitelistApplications.discordUser eq discordUser.id) and
-                    (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.PENDING)
+                    (WhitelistApplications.discordUser eq discordUser.id) and
+                    (WhitelistApplications.status eq ApplicationStatus.PENDING)
                 }.count() > 0
             }
             
@@ -830,8 +834,8 @@ class WhitelistService private constructor() {
                 val existingUser = MinecraftUser.findById(profile.id)
                 if (existingUser != null) {
                     WhitelistApplication.find {
-                        (WhitelistDatabase.WhitelistApplications.minecraftUser eq existingUser.id) and
-                        (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                        (WhitelistApplications.minecraftUser eq existingUser.id) and
+                        (WhitelistApplications.status eq ApplicationStatus.APPROVED)
                     }.count() > 0
                 } else {
                     false
@@ -866,6 +870,7 @@ class WhitelistService private constructor() {
                     val newUser = MinecraftUser.new(profile.id) {
                         currentUsername = profile.name
                         currentOwner = discordUser
+                        createdAt = Clock.System.now()
                     }
                     
                     // Add first username entry
@@ -885,8 +890,8 @@ class WhitelistService private constructor() {
                     this.discordUser = discordUser
                     this.minecraftUser = minecraftUser
                     this.status = ApplicationStatus.PENDING
-                    this.appliedAt = Instant.now()
-                    this.eligibleAt = WhitelistDatabase.calculateEligibleTimestamp(Instant.now())
+                    this.appliedAt = Clock.System.now()
+                    this.eligibleAt = WhitelistDatabase.calculateEligibleTimestamp(Clock.System.now())
                     this.isModeratorCreated = false
                     this.processedAt = null
                     this.processedBy = null
@@ -910,7 +915,8 @@ class WhitelistService private constructor() {
             
             return ApplicationResult.Success(
                 applicationId = application.id.value,
-                eligibleAt = application.eligibleAt
+                eligibleAt = application.eligibleAt,
+                appliedAt = application.appliedAt
             )
         } catch (e: Exception) {
             logger.error("Error creating whitelist application", e)
@@ -924,7 +930,7 @@ class WhitelistService private constructor() {
     fun getPendingApplications(): List<ApplicationInfo> {
         return transaction {
             WhitelistApplication.find {
-                WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.PENDING
+                WhitelistApplications.status eq ApplicationStatus.PENDING
             }.map { application ->
                 val minecraftUser = application.minecraftUser
                 val discordUser = application.discordUser
@@ -938,7 +944,7 @@ class WhitelistService private constructor() {
                     appliedAt = application.appliedAt,
                     eligibleAt = application.eligibleAt,
                     status = application.status.name,
-                    isEligibleNow = application.eligibleAt.isBefore(Instant.now())
+                    isEligibleNow = application.eligibleAt < Clock.System.now()
                 )
             }
         }
@@ -967,7 +973,7 @@ class WhitelistService private constructor() {
                 
                 // Update application
                 application.status = ApplicationStatus.APPROVED
-                application.processedAt = Instant.now()
+                application.processedAt = Clock.System.now()
                 application.processedBy = moderator
                 if (notes != null) {
                     application.notes = notes
@@ -1028,7 +1034,7 @@ class WhitelistService private constructor() {
                 
                 // Update application
                 application.status = ApplicationStatus.REJECTED
-                application.processedAt = Instant.now()
+                application.processedAt = Clock.System.now()
                 application.processedBy = moderator
                 if (notes != null) {
                     application.notes = notes
@@ -1061,8 +1067,8 @@ class WhitelistService private constructor() {
     fun isWhitelisted(uuid: UUID): Boolean {
         return transaction {
             WhitelistApplication.find {
-                (WhitelistDatabase.WhitelistApplications.minecraftUser eq EntityID(uuid, WhitelistDatabase.MinecraftUsers)) and
-                (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                (WhitelistApplications.minecraftUser eq EntityID(uuid, WhitelistDatabase.MinecraftUsers)) and
+                (WhitelistApplications.status eq ApplicationStatus.APPROVED)
             }.count() > 0
         }
     }
@@ -1081,8 +1087,8 @@ class WhitelistService private constructor() {
             
             // Find the most recent approved application for timing info
             val application = WhitelistApplication.find {
-                (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
-                (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                (WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                (WhitelistApplications.status eq ApplicationStatus.APPROVED)
             }.sortedByDescending { it.appliedAt }.firstOrNull()
             
             // Build the user info with Discord links if available
@@ -1139,8 +1145,8 @@ class WhitelistService private constructor() {
             minecraftUsers.map { minecraftUser ->
                 // Find the most recent approved application for this user
                 val application = WhitelistApplication.find {
-                    (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
-                    (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                    (WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                    (WhitelistApplications.status eq ApplicationStatus.APPROVED)
                 }.sortedByDescending { it.appliedAt }.firstOrNull()
                 
                 MinecraftUserInfo(
@@ -1160,7 +1166,7 @@ class WhitelistService private constructor() {
         return transaction {
             // Find all whitelist applications for this user
             WhitelistApplication.find {
-                WhitelistDatabase.WhitelistApplications.minecraftUser eq EntityID(minecraftUuid, WhitelistDatabase.MinecraftUsers)
+                WhitelistApplications.minecraftUser eq EntityID(minecraftUuid, WhitelistDatabase.MinecraftUsers)
             }.sortedByDescending { it.appliedAt }.take(limit).map { application ->
                 val minecraftUser = application.minecraftUser
                 val discordUser = application.discordUser
@@ -1269,8 +1275,8 @@ class WhitelistService private constructor() {
             
             // Get the Discord moderator
             val moderatorDiscordUser = transaction {
-                DiscordUser.findById(discordId.toLong()) ?: DiscordUser.getSystemUser()
-            }
+                DiscordUser.findById(discordId.toLong())
+            } ?: DiscordUser.getSystemUser() // Fallback to system user if moderator not found
             
             // Get or create the Minecraft user
             val minecraftUser = getOrCreateMinecraftUser(uuid, username)
@@ -1353,7 +1359,7 @@ class WhitelistService private constructor() {
                 // Mark all approved applications as banned
                 applications.forEach { application ->
                     application.status = ApplicationStatus.BANNED
-                    application.processedAt = Instant.now()
+                    application.processedAt = Clock.System.now()
                     application.processedBy = moderatorDiscordUser
                     application.notes = "Banned: $reason"
                 }
@@ -1464,9 +1470,7 @@ class WhitelistService private constructor() {
             // Get the moderator Discord user
             val discordUser = transaction {
                 DiscordUser.findById(discordId.toLong())
-            } ?: return BulkUnwhitelistResult(0, 0, 0, listOf("Could not find Discord user with ID $discordId")).also {
-                markBulkOperationComplete()
-            }
+            } ?: DiscordUser.getSystemUser() // Fallback to system user
             
             // Get all whitelisted accounts that need processing
             // This query is done up front to avoid long database transactions
@@ -1640,7 +1644,7 @@ class WhitelistService private constructor() {
             
             // Get all applications for this Discord user
             WhitelistApplication.find {
-                WhitelistDatabase.WhitelistApplications.discordUser eq discordUser.id
+                WhitelistApplications.discordUser eq discordUser.id
             }.sortedByDescending { it.appliedAt }.take(limit).map { application ->
                 val minecraftUser = application.minecraftUser
                 val processedBy = application.processedBy
@@ -1681,8 +1685,8 @@ class WhitelistService private constructor() {
             }.firstOrNull() ?: return@transaction false
             
             WhitelistApplication.find {
-                (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
-                (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
+                (WhitelistApplications.minecraftUser eq minecraftUser.id) and
+                (WhitelistApplications.status eq ApplicationStatus.APPROVED)
             }.count() > 0
         }
     }
@@ -1701,7 +1705,9 @@ class WhitelistService private constructor() {
             // Get the Discord user that performed the action, or use system user
             val performer = if (discordId != null) {
                 try {
-                    DiscordUser.findById(discordId.toLong())
+                    transaction {
+                        DiscordUser.findById(discordId.toLong())
+                    }
                 } catch (e: Exception) {
                     logger.warn("Could not find Discord user with ID $discordId, using system user")
                     DiscordUser.getSystemUser()
@@ -1771,10 +1777,7 @@ class WhitelistService private constructor() {
             // Get approval status for each user
             val results = afterDiscordLinkFilter.map { minecraftUser ->
                 // Find the most recent approved application for timing info
-                val application = WhitelistApplication.find {
-                    (WhitelistDatabase.WhitelistApplications.minecraftUser eq minecraftUser.id) and
-                    (WhitelistDatabase.WhitelistApplications.status eq ApplicationStatus.APPROVED)
-                }.sortedByDescending { it.appliedAt }.firstOrNull()
+                val application = findApprovedApplication(minecraftUser)
                 
                 val isWhitelisted = application != null
                 
@@ -1793,10 +1796,10 @@ class WhitelistService private constructor() {
                 
                 // Apply time range filters
                 if (application != null) {
-                    if (filters.addedBefore != null && application.appliedAt.isAfter(filters.addedBefore)) {
+                    if (filters.addedBefore != null && application.appliedAt > filters.addedBefore) {
                         return@map null
                     }
-                    if (filters.addedAfter != null && application.appliedAt.isBefore(filters.addedAfter)) {
+                    if (filters.addedAfter != null && application.appliedAt < filters.addedAfter) {
                         return@map null
                     }
                 }
@@ -1871,7 +1874,7 @@ class WhitelistService private constructor() {
  * Result of a whitelist application submission
  */
 sealed class ApplicationResult {
-    data class Success(val applicationId: Int, val eligibleAt: Instant) : ApplicationResult()
+    data class Success(val applicationId: Int, val eligibleAt: Instant, val appliedAt: Instant) : ApplicationResult()
     data class Error(val message: String) : ApplicationResult()
 }
 

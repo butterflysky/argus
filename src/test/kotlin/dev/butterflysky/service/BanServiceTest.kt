@@ -11,7 +11,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.mockito.Mockito
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
-import java.time.Instant
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
 import java.util.UUID
 
 /**
@@ -55,8 +56,8 @@ class BanServiceTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 status = ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
             }
         }
@@ -111,8 +112,8 @@ class BanServiceTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 status = ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
             }
         }
@@ -156,8 +157,8 @@ class BanServiceTest : DatabaseTestBase() {
                 this.discordUser = discordUser
                 this.minecraftUser = minecraftUser
                 status = ApplicationStatus.APPROVED
-                appliedAt = Instant.now()
-                eligibleAt = Instant.now()
+                appliedAt = Clock.System.now()
+                eligibleAt = Clock.System.now()
                 isModeratorCreated = false
             }
         }

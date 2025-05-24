@@ -5,6 +5,7 @@ import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.dao.id.CompositeIdTable
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp 
 import org.jetbrains.exposed.sql.ReferenceOption
+import org.jetbrains.exposed.sql.Table
 import kotlinx.datetime.Clock 
 import kotlinx.datetime.Instant 
 
@@ -17,7 +18,7 @@ object PlayerDomainTables {
      * Table for storing Player entities.
      * The primary key is PlayerId.value (String), which is typically a Discord ID.
      */
-    object Players : org.jetbrains.exposed.sql.Table("players") {
+    object Players : Table("players") {
         val id = varchar("id", 64) // PlayerId.value (e.g., Discord ID)
         val primaryMinecraftUuid = uuid("primary_minecraft_uuid").nullable()
         val primaryMinecraftUsername = varchar("primary_minecraft_username", 128).nullable()
@@ -31,7 +32,7 @@ object PlayerDomainTables {
      * Table for linking multiple Minecraft accounts to a single Player.
      * This represents the Player.linkedMinecraftAccounts map.
      */
-    object PlayerMinecraftLinks : org.jetbrains.exposed.sql.Table("player_minecraft_links") {
+    object PlayerMinecraftLinks : Table("player_minecraft_links") {
         val playerId = varchar("player_id", 64).references(Players.id, onDelete = ReferenceOption.CASCADE)
         val minecraftUuid = uuid("minecraft_uuid")
         val minecraftUsername = varchar("minecraft_username", 128)
@@ -59,7 +60,7 @@ object PlayerDomainTables {
      * Table for storing Membership entities.
      * The primary key is MembershipId.value which is PlayerId.value (String).
      */
-    object Memberships : org.jetbrains.exposed.sql.Table("memberships") {
+    object Memberships : Table("memberships") {
         val id = varchar("id", 64) // MembershipId.value (which is PlayerId.value)
         // playerId column is redundant if id is PlayerId, but kept for explicit FK if desired, or remove if id is directly PlayerId
         // val playerId = varchar("player_id", 64).references(Players.id, onDelete = ReferenceOption.CASCADE)

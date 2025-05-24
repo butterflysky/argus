@@ -327,9 +327,10 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val isWhitelistEnabled = server.playerManager.isWhitelistEnabled()
             
             val embed = EmbedBuilder()
-                .setTitle("Minecraft Whitelist")
+                .setTitle("📋 Minecraft Whitelist")
                 .setColor(if (isWhitelistEnabled) Constants.SUCCESS_COLOR else Constants.ERROR_COLOR)
-                .setDescription("Whitelist is ${if (isWhitelistEnabled) "enabled" else "disabled"}")
+                .setDescription("The whitelist is currently **${if (isWhitelistEnabled) "ENABLED" else "DISABLED"}**. Showing ${whitelistedPlayers.size} whitelisted players.")
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                 
             if (whitelistedPlayers.isEmpty()) {
                 embed.addField("Players", "No players in whitelist", false)
@@ -370,8 +371,6 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     
                     embed.addField(fieldTitle, playerCards.toString(), false)
                 }
-                
-                embed.setFooter("Total: ${whitelistedPlayers.size} players")
             }
             
             embed.setTimestamp(Clock.System.now().toJavaInstant())
@@ -400,8 +399,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             val embed = EmbedBuilder()
                 .setColor(Color.GREEN)
-                .setTitle("Whitelist On")
-                .setDescription("The server whitelist has been **enabled** by ${event.user.asMention}.")
+                .setTitle("✅ Whitelist On")
+                .setDescription("The server whitelist has been **ENABLED**.")
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                 .setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
@@ -428,8 +428,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             val embed = EmbedBuilder()
                 .setColor(Color.RED)
-                .setTitle("Whitelist Off")
-                .setDescription("The server whitelist has been **disabled** by ${event.user.asMention}.")
+                .setTitle("❌ Whitelist Off")
+                .setDescription("The server whitelist has been **DISABLED**.")
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                 .setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
@@ -456,8 +457,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             val embed = EmbedBuilder()
                 .setColor(Color.CYAN)
-                .setTitle("Whitelist Reloaded")
-                .setDescription("The server whitelist has been reloaded by ${event.user.asMention}.")
+                .setTitle("🔄 Whitelist Reloaded")
+                .setDescription("The server whitelist has been **RELOADED**.")
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                 .setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
@@ -485,14 +487,14 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val onlinePlayers = server.playerManager.playerList.size
             
             val embed = EmbedBuilder()
-                .setTitle("Whitelist Test Results")
+                .setTitle("🧪 Whitelist Test Results")
                 .setColor(Constants.INFO_COLOR)
                 .setDescription("Whitelist system is functioning correctly")
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                 .addField("Status", if (isWhitelistEnabled) "Enabled" else "Disabled", true)
                 .addField("Whitelisted Players", whitelistedPlayers.size.toString(), true)
                 .addField("Online Players", onlinePlayers.toString(), true)
                 .addField("Database", "Connected: ${WhitelistService.isDatabaseConnected()}", true)
-                .setFooter("Test performed by ${event.user.name}")
                 .setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
@@ -519,8 +521,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
             logger.info("Looking up account info (requested by ${event.user.name})")
             
             val embed = EmbedBuilder()
-                .setTitle("Account Lookup")
+                .setTitle("🔎 Account Lookup")
                 .setColor(Constants.INFO_COLOR)
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
             
             if (discordUserOption != null) {
                 // Look up Minecraft accounts for this Discord user
@@ -604,8 +607,9 @@ class WhitelistCommands(private val server: MinecraftServer) {
             logger.info("Fetching whitelist history (requested by ${event.user.name})")
             
             val embed = EmbedBuilder()
-                .setTitle("Whitelist History")
+                .setTitle("📜 Whitelist History")
                 .setColor(Constants.INFO_COLOR)
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
             
             // Determine which history to fetch and the description to display
             val (history, description) = when {
@@ -721,15 +725,15 @@ class WhitelistCommands(private val server: MinecraftServer) {
 
                     // Create a fancy embed for the success message
                     val embed = EmbedBuilder()
-                        .setTitle("Application Submitted: $minecraftName")
+                        .setTitle("📝 Application Submitted: $minecraftName")
                         .setColor(Constants.SUCCESS_COLOR)
+                        .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                         .setDescription(
                             "Your application for **$minecraftName** has been submitted successfully. " +
                             "A moderator will review your application soon."
                         )
                         .addField("Application ID", "#${result.applicationId}", true)
                         .addField("Minecraft Username", minecraftName, true)
-                        .addField("Discord User", event.user.asMention, true)
                         .addField("Eligible For Review", "After $eligibleDate", false)
                         .setFooter("Waiting for moderator approval")
                         .setTimestamp(result.appliedAt.toJavaInstant())
@@ -758,10 +762,11 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             // Get all pending applications
             val applications = whitelistService.getPendingApplications()
-            
+    
             val embed = EmbedBuilder()
-                .setTitle("Pending Whitelist Applications")
+                .setTitle("📋 Pending Whitelist Applications")
                 .setColor(Constants.INFO_COLOR)
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
             
             if (applications.isEmpty()) {
                 embed.setDescription("There are no pending whitelist applications.")
@@ -798,6 +803,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 embed.setDescription(applicationsText.toString())
             }
             
+            embed.setFooter("Total pending applications: ${applications.size}")
             embed.setTimestamp(Clock.System.now().toJavaInstant())
             
             event.hook.editOriginalEmbeds(embed.build()).queue()
@@ -919,12 +925,12 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 
                 // Create a fancy embed response
                 val embed = EmbedBuilder()
-                    .setTitle("Account Linked Successfully")
+                    .setTitle("🔗 Account Linked Successfully")
                     .setColor(Constants.SUCCESS_COLOR)
+                    .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                     .setDescription("Your Discord account has been linked to Minecraft account **${linkRequest.minecraftUsername}**")
                     .addField("Minecraft Username", linkRequest.minecraftUsername, true)
                     .addField("Minecraft UUID", linkRequest.minecraftUuid.toString(), true)
-                    .addField("Discord User", event.user.asMention, true)
                     .setFooter("You can now use whitelist commands in-game")
                     .setTimestamp(Clock.System.now().toJavaInstant())
                     .build()
@@ -976,10 +982,10 @@ class WhitelistCommands(private val server: MinecraftServer) {
             
             // Create response embed
             val embed = EmbedBuilder()
-                .setTitle("User Search Results")
+                .setTitle("🔍 User Search Results")
                 .setColor(Constants.INFO_COLOR)
+                .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                 .setDescription("Found ${results.size} users matching your criteria.")
-                .setFooter("Search performed by ${event.user.name}")
                 .setTimestamp(Clock.System.now().toJavaInstant())
             
             // Display search filters that were used
@@ -1095,13 +1101,13 @@ class WhitelistCommands(private val server: MinecraftServer) {
                     // Create a fancy embed with the results
                     val embedColor = if (result.errors.isEmpty()) Constants.SUCCESS_COLOR else Constants.WARNING_COLOR
                     val embed = EmbedBuilder()
-                        .setTitle("Bulk Unwhitelist Operation Complete")
+                        .setTitle("🧹 Bulk Unwhitelist Operation Complete")
                         .setColor(embedColor)
+                        .setAuthor(event.user.name, null, event.user.effectiveAvatarUrl)
                         .setDescription("Removed unlinked accounts from the whitelist")
                         .addField("Processed Accounts", result.processedCount.toString(), true)
                         .addField("Successfully Removed", result.successCount.toString(), true)
                         .addField("Skipped Operators", result.skippedOperators.toString(), true)
-                        .setFooter("Operation performed by ${event.user.name}")
                         .setTimestamp(Clock.System.now().toJavaInstant())
                     
                     // Add errors if any
@@ -1247,15 +1253,16 @@ class WhitelistCommands(private val server: MinecraftServer) {
             val embed = EmbedBuilder()
                 .setColor(Color.RED)
                 .setTimestamp(Clock.System.now().toJavaInstant())
+                .setAuthor(moderator.name, null, moderator.effectiveAvatarUrl)
 
             if (targetDiscordUser != null) {
-                embed.setTitle("Discord User Banned")
+                embed.setTitle("🚫 Discord User Banned")
                     .setDescription("Discord user ${targetDiscordUser.asMention} and their linked Minecraft accounts have been banned.")
                     .addField("Discord User", targetDiscordUser.name, true)
                     .addField("Discord ID", targetDiscordUser.id, true)
             } else {
                 val account = bannedAccounts.first() // If not banning a discord user, there must be at least one mc account
-                embed.setTitle("Minecraft Player Banned")
+                embed.setTitle("🚫 Minecraft Player Banned")
                     .setDescription("Player **${account.username}** has been banned from the server.")
                     .addField("Minecraft User", account.username, true)
                     .addField("UUID", account.uuid.toString(), true)
@@ -1265,8 +1272,7 @@ class WhitelistCommands(private val server: MinecraftServer) {
                 }
             }
 
-            embed.addField("Banned by", moderator.asMention, true)
-                .addField("Reason", reason, false)
+            embed.addField("Reason", reason, false)
 
             if (targetDiscordUser != null && bannedAccounts.size > 1) {
                 val accountList = bannedAccounts.joinToString("\n") { "• ${it.username} (${it.uuid})" }
@@ -1287,4 +1293,93 @@ class WhitelistCommands(private val server: MinecraftServer) {
             return embed
         }
     }
+    
+    companion object {
+        private val staticLogger = LoggerFactory.getLogger(WhitelistCommands::class.java.name + ".Companion") // Separate logger for static part if needed
+
+        fun register(config: ArgusConfig.DiscordConfig): CommandData {
+            // Basic whitelist management
+            val addSubcommand = SubcommandData("add", "Adds a player to the Minecraft whitelist.")
+                .addOption(OptionType.STRING, "minecraft_username", "The Minecraft username to add.", true)
+                .addOption(OptionType.USER, "discord_user", "The Discord user to link (optional).", false)
+                .addOption(OptionType.STRING, "reason", "Reason for adding (optional).", false)
+
+            val removeSubcommand = SubcommandData("remove", "Removes a player from the Minecraft whitelist.")
+                .addOption(OptionType.STRING, "minecraft_username", "The Minecraft username to remove.", true)
+                .addOption(OptionType.STRING, "reason", "Reason for removing (optional).", false)
+
+            val listSubcommand = SubcommandData("list", "Lists all players currently on the Minecraft whitelist.")
+                .addOption(OptionType.INTEGER, "page", "The page number to display (optional).", false)
+
+            val onSubcommand = SubcommandData("on", "Turns the Minecraft server whitelist on.")
+
+            val offSubcommand = SubcommandData("off", "Turns the Minecraft server whitelist off.")
+
+            val reloadSubcommand = SubcommandData("reload", "Reloads the whitelist from the server's whitelist.json file.")
+
+            val testSubcommand = SubcommandData("test", "A test command for whitelist functionality.") // Add specific options if needed
+
+            // Lookup and history
+            val lookupSubcommand = SubcommandData("lookup", "Looks up a player's whitelist status and linked accounts.")
+                .addOption(OptionType.STRING, "minecraft_username", "Minecraft username to lookup.", false)
+                .addOption(OptionType.USER, "discord_user", "Discord user to lookup.", false)
+                // TODO: Add logic to ensure at least one option is provided in the handler
+
+            val historySubcommand = SubcommandData("history", "Shows the whitelist/application history for a player or Discord user.")
+                .addOption(OptionType.STRING, "minecraft_username", "Minecraft username for history.", false)
+                .addOption(OptionType.USER, "discord_user", "Discord user for history.", false)
+                // TODO: Add logic to ensure at least one option is provided in the handler
+
+            // Application workflow
+            val applySubcommand = SubcommandData("apply", "Applies for whitelist on the Minecraft server.")
+                .addOption(OptionType.STRING, "minecraft_username", "Your Minecraft username.", true)
+                .addOption(OptionType.STRING, "reason", "Why you want to join (optional but recommended).", false)
+
+            val applicationsSubcommand = SubcommandData("applications", "Lists whitelist applications.")
+                .addOption(OptionType.STRING, "status", "Filter by status (pending, approved, rejected).", false) {
+                    it.addChoice("Pending", "pending")
+                    it.addChoice("Approved", "approved")
+                    it.addChoice("Rejected", "rejected")
+                }
+                .addOption(OptionType.INTEGER, "page", "The page number to display (optional).", false)
+
+            val approveSubcommand = SubcommandData("approve", "Approves a whitelist application.")
+                .addOption(OptionType.STRING, "minecraft_username", "Minecraft username of the applicant.", true)
+                .addOption(OptionType.STRING, "reason", "Reason for approval (optional).", false)
+
+            val rejectSubcommand = SubcommandData("reject", "Rejects a whitelist application.")
+                .addOption(OptionType.STRING, "minecraft_username", "Minecraft username of the applicant.", true)
+                .addOption(OptionType.STRING, "reason", "Reason for rejection (optional but recommended).", false)
+
+            // Account management
+            val linkSubcommand = SubcommandData("link", "Links your Minecraft account to your Discord account.")
+                .addOption(OptionType.STRING, "minecraft_username", "Your Minecraft username.", true)
+
+            val searchSubcommand = SubcommandData("search", "Searches for users by Minecraft name or Discord ID.")
+                .addOption(OptionType.STRING, "query", "Minecraft username, UUID, or Discord ID/mention.", true)
+
+            // Ban management (subcommand of /whitelist, distinct from global /ban)
+            val banSubcommand = SubcommandData("ban", "Bans a player from the server (whitelist context). Note: For global bans, use /ban.")
+                .addOption(OptionType.STRING, "minecraft_username", "Minecraft username to ban.", false)
+                .addOption(OptionType.USER, "discord_user", "Discord user whose linked accounts to ban.", false)
+                .addOption(OptionType.STRING, "reason", "Reason for the ban.", true)
+                // TODO: Add logic to ensure at least minecraft_username or discord_user is provided
+
+            // Advanced management
+            val unwhitelistUnlinkedSubcommand = SubcommandData("unwhitelist_unlinked", "Removes players from whitelist if not linked to any Discord account.")
+                // This command might need a confirmation step in its handler
+
+            return Commands.slash("whitelist", "Manage the server whitelist and applications.")
+                .addSubcommands(
+                    addSubcommand, removeSubcommand, listSubcommand, onSubcommand, offSubcommand, reloadSubcommand, testSubcommand,
+                    lookupSubcommand, historySubcommand,
+                    applySubcommand, applicationsSubcommand, approveSubcommand, rejectSubcommand,
+                    linkSubcommand, searchSubcommand, banSubcommand,
+                    unwhitelistUnlinkedSubcommand
+                )
+                .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER)) // Default permission for /whitelist command group
+                .setGuildOnly(true)
+        }
+    }
 }
+} 

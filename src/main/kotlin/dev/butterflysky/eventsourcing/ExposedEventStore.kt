@@ -15,7 +15,7 @@ private fun serializeEvent(event: DomainEvent): String {
     return "{ \"type\": \"${event.eventType}\", \"details\": \"${event.toString().replace("\"", "\\\"")}\" }"
 }
 
-private fun deserializeEvent(eventData: String, eventType: String, aggregateId: String, eventId: java.util.UUID, occurredAt: Instant, version: Long): DomainEvent {
+private fun deserializeEvent(eventData: String, eventType: String, aggregateId: String, eventId: java.util.UUID, occurredAt: Instant): DomainEvent {
     // Placeholder: In a real implementation, this would deserialize JSON to the specific DomainEvent subclass.
     // This is a very basic mock and won't work for actual event replay without a proper implementation.
     // It also doesn't correctly pass all necessary fields to a real event constructor.
@@ -23,8 +23,6 @@ private fun deserializeEvent(eventData: String, eventType: String, aggregateId: 
     return object : AbstractDomainEvent<String>(aggregateId, "UnknownAggregate", eventType) {
         override val eventId: java.util.UUID = eventId
         override val occurredAt: Instant = occurredAt
-        // Note: This mock event doesn't have a concept of its own version property directly,
-        // as AbstractDomainEvent doesn't define one. The 'version' parameter here is the aggregate's version after this event.
     }
 }
 
@@ -84,8 +82,7 @@ class ExposedEventStore : EventStore {
                         eventType = row[WhitelistDatabase.EventStoreTable.eventType],
                         aggregateId = row[WhitelistDatabase.EventStoreTable.aggregateId],
                         eventId = row[WhitelistDatabase.EventStoreTable.eventId],
-                        occurredAt = row[WhitelistDatabase.EventStoreTable.occurredAt],
-                        version = row[WhitelistDatabase.EventStoreTable.eventVersion]
+                        occurredAt = row[WhitelistDatabase.EventStoreTable.occurredAt]
                     )
                 }
         }

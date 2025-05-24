@@ -16,6 +16,7 @@ import net.dv8tion.jda.api.interactions.commands.OptionType
 import net.dv8tion.jda.api.interactions.commands.build.Commands
 import net.dv8tion.jda.api.interactions.commands.build.OptionData
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData
+import net.dv8tion.jda.api.interactions.commands.build.CommandData
 import net.dv8tion.jda.api.requests.GatewayIntent
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
@@ -27,6 +28,8 @@ import dev.butterflysky.util.RateLimiter
 import java.util.function.Consumer
 import net.minecraft.server.MinecraftServer
 import java.util.UUID
+import dev.butterflysky.discord.GlobalBanCommand
+import dev.butterflysky.discord.WhitelistCommands
 
 /**
  * Service for managing Discord bot interactions
@@ -59,6 +62,8 @@ class DiscordService : ListenerAdapter() {
     
     private var minecraftServer: MinecraftServer? = null
     private val whitelistService = WhitelistService.getInstance()
+    private val globalBanCommand = GlobalBanCommand(whitelistService)
+    private var whitelistCommandsInstance: WhitelistCommands? = null
     
     private val commandHandlers = mutableMapOf<String, CommandHandler>()
     
@@ -88,13 +93,21 @@ class DiscordService : ListenerAdapter() {
      * Set the Minecraft server instance
      */
     fun setMinecraftServer(server: MinecraftServer) {
-        minecraftServer = server
+        this.minecraftServer = server
         
         // Initialize whitelist service with server
         try {
             whitelistService.initialize(server)
+            // Instantiate WhitelistCommands and register its handlers now that server is available
+            if (this.minecraftServer != null) {
+                this.whitelistCommandsInstance = WhitelistCommands(this.minecraftServer!!)
+                this.whitelistCommandsInstance?.registerHandlers()
+                logger.info("Whitelist command handlers registered after Minecraft server set.")
+            } else {
+                logger.error("MinecraftServer instance is null in setMinecraftServer, cannot register WhitelistCommands handlers.")
+            }
         } catch (e: Exception) {
-            logger.error("Failed to initialize whitelist service", e)
+            logger.error("Failed to initialize whitelist service or register handlers", e)
         }
     }
     
@@ -217,124 +230,25 @@ class DiscordService : ListenerAdapter() {
      * Register slash commands with Discord
      */
     private fun registerCommands() {
-        val guild = this.guild ?: return
-        val jda = this.jda ?: return
-        
-        // Log that we're starting command registration
-        logger.info("Registering Discord slash commands for guild ${guild.name} (${guild.id})")
-        
-        // Create the whitelist command with subcommands
-        val whitelistCommand = Commands.slash("whitelist", "Manage the Minecraft server whitelist")
-            .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER))
-            
-        // Add subcommand
-        val addSubcommand = SubcommandData("add", "Add a player to the whitelist")
-            .addOption(OptionType.STRING, "player", "The Minecraft username to add", true)
-        
-        // Remove subcommand
-        val removeSubcommand = SubcommandData("remove", "Remove a player from the whitelist")
-            .addOption(OptionType.STRING, "player", "The Minecraft username to remove", true)
-        
-        // List subcommand
-        val listSubcommand = SubcommandData("list", "List all players on the whitelist")
-        
-        // On subcommand
-        val onSubcommand = SubcommandData("on", "Enable the whitelist")
-        
-        // Off subcommand
-        val offSubcommand = SubcommandData("off", "Disable the whitelist")
-        
-        // Reload subcommand
-        val reloadSubcommand = SubcommandData("reload", "Reload the whitelist")
-        
-        // Test subcommand
-        val testSubcommand = SubcommandData("test", "Test the whitelist functionality")
-        
-        // Lookup subcommand - find linked accounts
-        val lookupSubcommand = SubcommandData("lookup", "Look up linked accounts")
-            .addOption(OptionType.USER, "discord_user", "The Discord user to look up", false)
-            .addOption(OptionType.STRING, "minecraft_name", "The Minecraft username to look up", false)
-        
-        // History subcommand - show whitelist history
-        val historySubcommand = SubcommandData("history", "Show whitelist history")
-            .addOption(OptionType.STRING, "minecraft_name", "The Minecraft username to show history for", false)
-            .addOption(OptionType.USER, "discord_user", "The Discord user to show history for", false)
-            .addOption(OptionType.INTEGER, "limit", "Maximum number of entries to show", false)
-            
-        // Apply subcommand - for players to apply for whitelist
-        val applySubcommand = SubcommandData("apply", "Apply for whitelist with your Minecraft account")
-            .addOption(OptionType.STRING, "minecraft_name", "Your Minecraft username", true)
-            
-        // Applications subcommand - for admins to view pending applications
-        val applicationsSubcommand = SubcommandData("applications", "View pending whitelist applications")
-            
-        // Approve subcommand - for approving applications
-        val approveSubcommand = SubcommandData("approve", "Approve a whitelist application")
-            .addOption(OptionType.INTEGER, "application_id", "The ID of the application to approve", true)
-            .addOption(OptionType.STRING, "notes", "Optional notes about the approval", false)
-            
-        // Reject subcommand - for rejecting applications
-        val rejectSubcommand = SubcommandData("reject", "Reject a whitelist application")
-            .addOption(OptionType.INTEGER, "application_id", "The ID of the application to reject", true)
-            .addOption(OptionType.STRING, "notes", "Optional notes about the rejection", false)
-            
-        // Link subcommand - for linking Discord to Minecraft accounts
-        val linkSubcommand = SubcommandData("link", "Link your Discord account to your Minecraft account")
-            .addOption(OptionType.STRING, "token", "The token generated in Minecraft with /whitelist link", true)
-            
-        // Search subcommand - for searching users with various filters
-        val searchSubcommand = SubcommandData("search", "Search for users with filters")
-            .addOption(OptionType.STRING, "minecraft_name", "Search by Minecraft username (partial match)", false)
-            .addOption(OptionType.STRING, "discord_name", "Search by Discord username (partial match)", false)
-            .addOption(OptionType.USER, "discord_user", "Search by Discord user", false)
-            .addOption(OptionType.BOOLEAN, "has_discord", "Filter by whether account has Discord link", false)
-            .addOption(OptionType.BOOLEAN, "is_whitelisted", "Filter by whitelist status", false)
-            .addOption(OptionType.USER, "added_by", "Filter by who added the user", false)
-            .addOption(OptionType.INTEGER, "limit", "Maximum number of results (max 50)", false)
-            
-        // Unwhitelist unlinked subcommand - for bulk removing unlinked accounts from whitelist
-        val unwhitelistUnlinkedSubcommand = SubcommandData("unwhitelist_unlinked", "Remove all unlinked Minecraft accounts from whitelist")
-            .addOption(OptionType.INTEGER, "batch_size", "Number of accounts to process in each batch (default: 50)", false)
-        
-        whitelistCommand.addSubcommands(
-            addSubcommand,
-            applicationsSubcommand,
-            applySubcommand,
-            approveSubcommand,
-            historySubcommand,
-            linkSubcommand,
-            listSubcommand,
-            lookupSubcommand,
-            offSubcommand,
-            onSubcommand,
-            rejectSubcommand,
-            reloadSubcommand,
-            removeSubcommand,
-            searchSubcommand,
-            testSubcommand,
-            unwhitelistUnlinkedSubcommand
-        )
+        val config = ArgusConfig.get()
+        if (guild == null) {
+            logger.error("Guild is null, cannot register commands")
+            return
+        }
         
         try {
-            // Following the JDA example approach
-            // Create a command list update action for this guild specifically
-            val commandsAction = guild.updateCommands()
-            
-            // Add our whitelist command to the list
-            commandsAction.addCommands(whitelistCommand)
-            
-            // Queue the command registration with Discord
-            commandsAction.queue(
-                { commands -> 
-                    logger.info("Successfully registered ${commands.size} commands to guild ${guild.name}")
-                    commands.forEach { cmd ->
-                        logger.info("Registered command: ${cmd.name} (ID: ${cmd.id})")
-                    }
-                },
-                { error ->
-                    logger.error("Failed to register commands: ${error.message}", error)
-                }
+            logger.info("Registering slash commands for guild: ${guild!!.name} (${guild!!.id})")
+
+            val commandsToRegister = mutableListOf<CommandData>()
+            commandsToRegister.add(WhitelistCommands.register(config.discord)) // Corrected: Call static register method
+            commandsToRegister.add(GlobalBanCommand.register()) 
+
+            // Register all commands
+            guild!!.updateCommands().addCommands(commandsToRegister).queue(
+                { logger.info("Successfully registered ${commandsToRegister.size} global commands.") },
+                { error -> logger.error("Failed to register global commands", error) }
             )
+
         } catch (e: Exception) {
             logger.error("Exception during command registration: ${e.message}", e)
         }
@@ -352,62 +266,71 @@ class DiscordService : ListenerAdapter() {
      * Handle slash command interactions
      */
     override fun onSlashCommandInteraction(event: SlashCommandInteractionEvent) {
-        val commandName = event.name
-        
-        if (commandName != "whitelist") {
+        if (!event.isFromGuild) return
+
+        // Basic rate limiting
+        if (!commandRateLimiter.tryAcquire()) { 
+            logger.warn("Rate limit exceeded for user ${event.user.id} (${event.user.name}) on command ${event.fullCommandName}")
+            event.reply("You're sending commands too quickly. Please wait a moment and try again.")
             return
         }
-        
-        // Check if user has the required role
-        if (!hasRequiredRole(event.member)) {
-            event.reply("You don't have the required permissions to use this command.")
-                .setEphemeral(true)
-                .queue()
-            logger.warn("User ${event.user.name} attempted to use whitelist command without permission")
-            return
-        }
-        
-        val subcommandName = event.subcommandName
-        if (subcommandName == null) {
-            event.reply("Invalid command format.")
-                .setEphemeral(true)
-                .queue()
-            return
-        }
-        
-        // Find the handler for this subcommand
-        val handler = commandHandlers[subcommandName]
-        if (handler == null) {
-            event.reply("No handler registered for subcommand: $subcommandName")
-                .setEphemeral(true)
-                .queue()
-            return
-        }
-        
-        logger.info("Handling whitelist/$subcommandName command from ${event.user.name}")
-        
-        // Acknowledge the command immediately with ephemeral response (only visible to command invoker)
-        event.deferReply(true).queue()
-        
-        // Check rate limiting before executing command
-        if (!commandRateLimiter.tryAcquire()) {
-            event.hook.editOriginal("The server is experiencing high load. Please try again in a few seconds.").queue()
-            logger.warn("Rate limit exceeded for command ${subcommandName} by user ${event.user.name}")
-            return
-        }
-        
-        // Execute the command in a dedicated thread pool to not block Discord
-        ThreadPools.discordCommandExecutor.execute {
-            try {
-                logger.info("Executing command ${subcommandName} on thread ${Thread.currentThread().name}")
-                handler.execute(event, event.options)
-            } catch (e: Exception) {
-                logger.error("Error executing command", e)
-                event.hook.editOriginal("An error occurred while executing the command. Check the server logs.").queue()
+
+        // Log the command attempt
+        val optionsString = event.options.joinToString(" ") { "${it.name}:${it.asString}" }
+        logger.info("User ${event.user.name} (${event.user.id}) used command: /${event.name} ${event.subcommandName ?: ""} $optionsString in guild ${event.guild?.name}")
+
+        // Defer reply for all commands to avoid timeouts if processing takes time
+        // event.deferReply().queue() // Deferring is now handled within individual command handlers if needed
+
+        when (event.name) {
+            "whitelist" -> {
+                val subcommandName = event.subcommandName
+                if (subcommandName != null) {
+                    val handler = commandHandlers[subcommandName]
+                    if (handler != null) {
+                        // Permission check before executing
+                        if (!hasRequiredRole(event.member)) {
+                            logger.warn("User ${event.user.name} (${event.user.id}) attempted to use restricted command '/whitelist $subcommandName' without permission.")
+                            event.reply("You do not have permission to use this command.").setEphemeral(true).queue()
+                            return
+                        }
+                        ThreadPools.discordCommandExecutor.execute {
+                            try {
+                                handler.execute(event, event.options)    
+                            } catch (e: Exception) {
+                                logger.error("Error executing whitelist command $subcommandName for user ${event.user.name}", e)
+                                if (event.isAcknowledged) {
+                                    event.hook.editOriginal("An unexpected error occurred. Please check the logs.").queue()
+                                } else {
+                                    event.reply("An unexpected error occurred. Please check the logs.").setEphemeral(true).queue()
+                                }
+                            }
+                        }
+                    } else {
+                        logger.warn("No handler found for subcommand: $subcommandName")
+                        event.reply("Unknown subcommand for /whitelist.").setEphemeral(true).queue()
+                    }
+                } else {
+                    logger.warn("Received /whitelist command without a subcommand.")
+                    event.reply("Please specify a subcommand for /whitelist.").setEphemeral(true).queue()
+                }
+            }
+            "ban" -> {
+                // Permission check before executing (GlobalBanCommand's register() already sets default perms, but an extra check here is fine)
+                if (!hasRequiredRole(event.member) && !event.member!!.hasPermission(Permission.BAN_MEMBERS)) {
+                     logger.warn("User ${event.user.name} (${event.user.id}) attempted to use restricted command '/ban' without permission.")
+                     event.reply("You do not have permission to use this command.").setEphemeral(true).queue()
+                     return
+                }
+                globalBanCommand.handleCommand(event)
+            }
+            else -> {
+                logger.warn("Received unknown slash command: ${event.name}")
+                event.reply("Unknown command.").setEphemeral(true).queue()
             }
         }
     }
-    
+
     /**
      * Handle guild member leave events
      * This is triggered when a user leaves or is kicked from the server

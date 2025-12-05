@@ -1,8 +1,9 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository.
 
 ## Build Commands
+
 - Build: `./gradlew build`
 - Run client: `./gradlew runClient`
 - Run client in background: `nohup ./gradlew runClient > /dev/null 2>&1 &`
@@ -13,16 +14,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run single test: `./gradlew test --tests "dev.butterflysky.TestClassName.testMethodName"`
 
 ## Log Locations
+
 - Latest client logs: `run/logs/latest.log`
 - Client crash reports: `run/crash-reports/`
 - Java errors: `run/hs_err_pid*.log`
 
 ## Version Control
+
 - Use `jj` instead of `git` for all version control operations
 - Check status: `jj status`
 - Create commit: `jj commit -m "<type>(scope): short description"`
 
 ### Commit Message Format
+
 ```
 <type>(optional scope): <short description>
 
@@ -38,6 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Use present tense (e.g., "add feature" not "added feature")
 
 ## Code Style Guidelines
+
 - Kotlin uses object declarations for singletons
 - Java classes use PascalCase, functions use camelCase
 - Use Fabric's logger via LoggerFactory.getLogger()
@@ -49,8 +54,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Error handling: use Kotlin's Result type when appropriate
 
 ## Version Pinning (Cursor Rule)
+
 Do not change versions of existing libraries in build.gradle or gradle.properties. When adding dependencies, select the most recent compatible version.
 
 ## Allowed Documentation URLs
+
 The following documentation sites are approved for fetching:
+
 - jda.wiki - Discord JDA library documentation
+

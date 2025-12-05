@@ -1,7 +1,0 @@
----
-description: keeping certain library versions pinned
-globs: gradle.properties,build.gradle,src/main/resources/fabric.mod.json
----
-
-
-do not change the versions of existing libraries or dependencies in build.gradle or gradle.properties. leave them as they are already configured. when adding a new dependency, make sure to select the most recent version that is compatible with all of the existing library and dependency versions.

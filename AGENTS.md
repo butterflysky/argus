@@ -1,65 +1,68 @@
-# CLAUDE.md
+# AI Agent Instructions for Argus
 
-This file provides guidance to coding agents when working with code in this repository.
+Argus is being rebooted as a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21+. Keep changes aligned with `ARGUS_MASTER_SPEC.md`, even though the current codebase is legacy Fabric-only.
 
-## Build Commands
+**Quick Links**
+- [AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md) – detailed workflow and QA steps
+- [ARGUS_MASTER_SPEC.md](ARGUS_MASTER_SPEC.md) – current product specification to follow
+- [.github/copilot-instructions.md](.github/copilot-instructions.md)
+- [README.md](README.md)
 
-- Build: `./gradlew build`
-- Run client: `./gradlew runClient`
-- Run client in background: `nohup ./gradlew runClient > /dev/null 2>&1 &`
-- Check running client: `pgrep -f "java.*runClient"`
-- Stop client: `pkill -f "java.*runClient"`
-- Run server: `./gradlew runServer`
-- Run tests: `./gradlew test`
-- Run single test: `./gradlew test --tests "dev.butterflysky.TestClassName.testMethodName"`
+## Project Direction (cheat sheet)
+- Target Gradle multi-project: `:common` (shared logic, Discord/Javacord, cache), `:fabric` (Fabric hooks/commands), `:neoforge` (scaffold that reuses `:common`).
+- Discord library: **Javacord** (spec choice; keep consistent unless explicitly changed).
+- Java 21 / Kotlin 2.1.x; package namespace `dev.butterflysky.argus`. Prefer Kotlin for new work.
+- Auth/Permissions rules from the spec:
+  - Login checks read **only** from the local cache file `argus_db.json`; never block login on Discord I/O.
+  - Before saving, rename existing cache to `.bak`; on load, fall back to `.bak` if the main file fails.
+  - OPs bypass checks. Linked users require `hasAccess`; legacy whitelisted users get a temporary allow + kick with a link token; strangers are denied with the application message.
+  - Audit mutations: update cache → log to console → send to Discord log channel. Track Discord name/nick changes.
 
-## Log Locations
+## Issue Tracking with bd (beads)
+- Use **bd for all work**; no markdown TODOs or side trackers.
+- Typical flow:
+  - Check ready items: `bd ready --json`
+  - Create issues: `bd create "Title" -t bug|feature|task -p 0-4 --json`
+  - Claim/update: `bd update <id> --status in_progress --json`
+  - Link discoveries: `--deps discovered-from:<parent-id>`
+  - Close: `bd close <id> --reason "Completed" --json`
+- `.beads/issues.jsonl` must travel with code changes; `bd sync` flushes pending DB ↔ JSONL updates.
 
-- Latest client logs: `run/logs/latest.log`
-- Client crash reports: `run/crash-reports/`
-- Java errors: `run/hs_err_pid*.log`
+## Planning Docs
+- Store any AI-generated plans/designs in `history/`. Keep the repo root clean. Avoid markdown TODO lists.
+
+## Build & Run (current and target)
+- Current (Fabric-only): `./gradlew build`, `./gradlew runClient`, `./gradlew runServer`, `./gradlew test`.
+- Target after multi-loader split: `./gradlew :common:build`, `./gradlew :fabric:runServer`, `./gradlew :neoforge:runServer` (scaffold), `./gradlew test`.
+- Logs: `run/logs/latest.log`; crash reports: `run/crash-reports/`; JVM errors: `run/hs_err_pid*.log`.
 
 ## Version Control
+- Use `git` (beads hooks expect git, not jj).
+  - Status: `git status -sb`
+  - Stage: `git add -A`
+  - Commit: `git commit -m "<type>(scope): short description"`
+  - Push: `git push` (set upstream if needed)
+- Commit message format:
+  ```
+  <type>(optional scope): <short description>
 
-- Use `jj` instead of `git` for all version control operations
-- Check status: `jj status`
-- Create commit: `jj commit -m "<type>(scope): short description"`
+  - Optional detailed point 1
+  - Optional detailed point 2
 
-### Commit Message Format
-
-```
-<type>(optional scope): <short description>
-
-- Optional detailed point 1
-- Optional detailed point 2
-
-<optional footer>
-```
-
-- Type: must be one of feat, fix, chore, refactor, docs, style, test, perf, ci, build, revert
-- Scope: lowercase term indicating affected area (e.g., api, auth, ui)
-- Description: lowercase, no ending punctuation, 50 chars max
-- Use present tense (e.g., "add feature" not "added feature")
+  <optional footer>
+  ```
+  Types: feat, fix, chore, refactor, docs, style, test, perf, ci, build, revert. Use present tense; max 50 chars description; scope is lowercase.
 
 ## Code Style Guidelines
+- Kotlin objects for singletons; Java classes PascalCase, functions camelCase.
+- Use Fabric's logger via `LoggerFactory.getLogger()`.
+- Keep dependency versions pinned (see `gradle.properties`); when rebooting/adding deps, bump to latest supported versions first, then pin. Target JVM 21 for Java and Kotlin.
+- Organize imports: stdlib first, then third-party.
+- Prefer Kotlin `Result` for error flows where it improves clarity.
 
-- Kotlin uses object declarations for singletons
-- Java classes use PascalCase, functions use camelCase
-- Use Fabric's logger via LoggerFactory.getLogger()
-- Keep dependency versions pinned as configured in gradle.properties
-- Java target compatibility is Java 21
-- Kotlin target JVM version is 21
-- Mixin annotations require proper import from org.spongepowered.asm
-- Organized imports: stdlib first, then third-party libraries
-- Error handling: use Kotlin's Result type when appropriate
+## Allowed Documentation Sites
+- fabricmc.net/wiki and Fabric Loom docs
+- neoforged.net docs
+- javacord.org wiki/javadocs
 
-## Version Pinning (Cursor Rule)
-
-Do not change versions of existing libraries in build.gradle or gradle.properties. When adding dependencies, select the most recent compatible version.
-
-## Allowed Documentation URLs
-
-The following documentation sites are approved for fetching:
-
-- jda.wiki - Discord JDA library documentation
-
+For deeper process details, see `AGENT_INSTRUCTIONS.md`.

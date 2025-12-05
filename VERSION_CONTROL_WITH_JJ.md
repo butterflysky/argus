@@ -1,3 +1,5 @@
+> **Deprecated:** Project now uses git directly because beads hooks and sync expect git commands to run. Keep this document for historical reference only; follow AGENTS.md for current VCS instructions.
+
 Jujutsu (jj) Quick Start for LLM Agents
 
 You are to use the Jujutsu (jj) version control system for all code changes. Do NOT use git add, git commit, git rebase, or other direct Git modification commands. jj operates on top of Git but provides its own workflow.

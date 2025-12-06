@@ -202,7 +202,8 @@ object ArgusCore {
         CacheStore.upsert(uuid, updated)
         CacheStore.save(ArgusConfig.cachePath)
         CacheStore.appendEvent(EventEntry(type = "link", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Linked via token"))
-        AuditLogger.log("Linked ${uuid} to Discord $discordName")
+        val mcLabel = existing.mcName ?: "minecraft user"
+        AuditLogger.log("Linked minecraft user ${mcLabel} (${uuid}) to discord user $discordName")
         messenger?.invoke(uuid, prefix("Linked Discord user: $discordName"))
         return Result.success("Linked successfully.")
     }

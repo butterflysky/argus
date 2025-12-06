@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="AGPL-3.0"
+
+[[mods]]
+modId="argus"
+version="${mod_version}"
+displayName="Argus"
+authors="Lina Edwards (butterflysky)"
+description="Cache-first access control with Discord identity linking"
+
+[[dependencies.argus]]
+modId="neoforge"
+mandatory=true
+versionRange="[${neo_version},)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.argus]]
+modId="minecraft"
+mandatory=true
+versionRange="[${minecraft_version},)"
+ordering="NONE"
+side="BOTH"

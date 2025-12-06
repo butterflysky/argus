@@ -2,14 +2,24 @@ plugins {
     id 'java'
     id 'org.jetbrains.kotlin.jvm'
     id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'net.neoforged.gradle.userdev' version '7.1.6'
 }
 
 repositories {
     mavenCentral()
+    maven { url = 'https://maven.neoforged.net/releases' }
 }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 dependencies {
     implementation project(":common")
+    implementation "net.neoforged:neoforge:${neo_version}"
+}
+
+runs {
+    client { }
+    server { argument '--nogui' }
 }
 
 tasks.withType(JavaCompile).configureEach {

@@ -3,6 +3,7 @@ package dev.butterflysky.argus.common
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -13,7 +14,18 @@ class ArgusCoreLoginTest {
 
     @BeforeEach
     fun resetCache(@TempDir tempDir: Path) {
-        CacheStore.load(tempDir.resolve("argus_db.json"))
+        val cachePath = tempDir.resolve("argus_db.json")
+        val cfgPath = tempDir.resolve("argus.json")
+        val cfg = ArgusSettings(
+            botToken = "token",
+            guildId = 1L,
+            whitelistRoleId = 2L,
+            adminRoleId = 3L,
+            cacheFile = cachePath.toString()
+        )
+        Files.writeString(cfgPath, kotlinx.serialization.json.Json.encodeToString(ArgusSettings.serializer(), cfg))
+        ArgusConfig.load(cfgPath)
+        CacheStore.load(cachePath)
     }
 
     @Test

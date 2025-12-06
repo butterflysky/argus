@@ -29,6 +29,12 @@ object ArgusConfig {
     val cachePath: Path
         get() = Paths.get(settings.cacheFile)
 
+    fun isConfigured(): Boolean =
+        settings.botToken.isNotBlank() &&
+            settings.guildId != null &&
+            settings.whitelistRoleId != null &&
+            settings.adminRoleId != null
+
     fun current(): ArgusSettings = settings
 
     fun load(path: Path = defaultPath): Result<ArgusSettings> = runCatching {

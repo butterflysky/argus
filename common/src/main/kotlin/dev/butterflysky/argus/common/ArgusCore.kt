@@ -59,6 +59,10 @@ object ArgusCore {
         isOp: Boolean,
         isLegacyWhitelisted: Boolean
     ): LoginResult {
+        if (!ArgusConfig.isConfigured()) {
+            logger.info("Argus unconfigured; allowing login for $name")
+            return LoginResult.Allow
+        }
         val pdata = CacheStore.get(uuid)
 
         // Active ban check

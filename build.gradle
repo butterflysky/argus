@@ -12,6 +12,38 @@ ext {
     javacordVersion = project.findProperty("javacord_version") ?: "3.8.0"
     slf4jVersion = "2.0.13"
     junitVersion = project.findProperty("junit_version") ?: "5.11.0"
+
+    mcTargets = [
+            "1.21.10": [
+                    minecraft_version       : "1.21.10",
+                    yarn_mappings           : "1.21.10+build.2",
+                    loader_version          : "0.17.3",
+                    fabric_kotlin_version   : "1.13.7+kotlin.2.2.21",
+                    fabric_version          : "0.138.3+1.21.10",
+                    neo_version             : "21.10.64",
+                    parchment_minecraft     : "1.21.10",
+                    parchment_mappings      : "2025.10.12"
+            ]
+    ]
+
+    activeMcTarget = project.findProperty("mc_target") ?: "1.21.10"
+    activeVersions = mcTargets[activeMcTarget] ?: mcTargets.values().first()
+
+    // Expose selected versions as project/ext props for downstream build scripts.
+    def assignVersion = { key ->
+        def value = project.findProperty(key) ?: activeVersions[key]
+        ext[key] = value
+    }
+    [
+            'minecraft_version',
+            'yarn_mappings',
+            'loader_version',
+            'fabric_kotlin_version',
+            'fabric_version',
+            'neo_version',
+            'parchment_minecraft',
+            'parchment_mappings'
+    ].each { assignVersion(it) }
 }
 
 subprojects {
@@ -41,17 +73,25 @@ subprojects {
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
         kotlinOptions.jvmTarget = "21"
     }
+
+    // Place main jars under build/<project>/<mc_target> for clarity when switching targets
+    tasks.withType(Jar).configureEach {
+        if (name in ["jar", "remapJar"]) {
+            destinationDirectory = layout.buildDirectory.dir("${project.name}/${rootProject.ext.activeMcTarget}")
+            archiveClassifier = rootProject.ext.activeMcTarget
+        }
+    }
 }
 
 configure(subprojects.findAll { it.name == "fabric" }) {
     apply plugin: 'fabric-loom'
 
     dependencies {
-        minecraft "com.mojang:minecraft:${project.minecraft_version}"
-        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-        modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-        modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
+        minecraft "com.mojang:minecraft:${rootProject.ext.minecraft_version}"
+        mappings "net.fabricmc:yarn:${rootProject.ext.yarn_mappings}:v2"
+        modImplementation "net.fabricmc:fabric-loader:${rootProject.ext.loader_version}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.ext.fabric_version}"
+        modImplementation "net.fabricmc:fabric-language-kotlin:${rootProject.ext.fabric_kotlin_version}"
         implementation project(":common")
     }
 

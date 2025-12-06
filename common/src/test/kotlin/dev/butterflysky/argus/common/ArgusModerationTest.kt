@@ -18,7 +18,13 @@ class ArgusModerationTest {
 
     private fun loadConfig(): Path {
         val cache = tempDir.resolve("argus_db.json")
-        val cfg = ArgusSettings(cacheFile = cache.toString())
+        val cfg = ArgusSettings(
+            botToken = "token",
+            guildId = 1L,
+            whitelistRoleId = 2L,
+            adminRoleId = 3L,
+            cacheFile = cache.toString()
+        )
         val cfgPath = tempDir.resolve("argus.json")
         Files.writeString(cfgPath, Json.encodeToString(cfg))
         ArgusConfig.load(cfgPath)
@@ -91,5 +97,19 @@ class ArgusModerationTest {
         val decided = CacheStore.getApplication(app.id)
         assertEquals("denied", decided?.status)
         assertEquals("bad", decided?.reason)
+    }
+
+    @Test
+    fun `unconfigured Argus fails open`() {
+        // Leave config with default blank botToken/guildId
+        val cache = tempDir.resolve("argus_db.json")
+        val cfg = ArgusSettings(cacheFile = cache.toString(), botToken = "", guildId = null, whitelistRoleId = null, adminRoleId = null)
+        val cfgPath = tempDir.resolve("argus.json")
+        Files.writeString(cfgPath, Json.encodeToString(cfg))
+        ArgusConfig.load(cfgPath)
+        CacheStore.load(cache)
+
+        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "noop", isOp = false, isLegacyWhitelisted = false)
+        assertIs<LoginResult.Allow>(result)
     }
 }

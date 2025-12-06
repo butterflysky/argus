@@ -421,12 +421,11 @@ object DiscordBridge {
     }
 
     private fun sendApplicationsPage(interaction: SlashCommandInteraction, apps: List<WhitelistApplication>, page: Int) {
-        val pageSize = 5
-        val totalPages = (apps.size + pageSize - 1) / pageSize
-        val start = page * pageSize
-        val slice = apps.drop(start).take(pageSize)
+        val pageData = ApplicationsPaginator.paginate(apps, page, 5)
+        val slice = pageData.items
+        val totalPages = pageData.totalPages
         val embed = EmbedBuilder()
-            .setTitle("Pending applications (${page + 1}/$totalPages)")
+            .setTitle("Pending applications (${pageData.page + 1}/$totalPages)")
             .setColor(Color(0x3498db))
             .setDescription(
                 slice.joinToString("\\n") {
@@ -435,8 +434,8 @@ object DiscordBridge {
                 }
             )
         val controls = mutableListOf<Button>()
-        if (page > 0) controls += Button.secondary("apps_prev:$page", "Prev")
-        if (page < totalPages - 1) controls += Button.secondary("apps_next:$page", "Next")
+        if (pageData.page > 0) controls += Button.secondary("apps_prev:${pageData.page}", "Prev")
+        if (pageData.page < totalPages - 1) controls += Button.secondary("apps_next:${pageData.page}", "Next")
         controls += Button.success("apps_apr:${slice.firstOrNull()?.id ?: ""}", "Approve top")
         controls += Button.danger("apps_deny:${slice.firstOrNull()?.id ?: ""}", "Deny top")
 

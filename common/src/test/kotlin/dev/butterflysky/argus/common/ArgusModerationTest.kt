@@ -56,6 +56,8 @@ class ArgusModerationTest {
         val pd = CacheStore.get(uuid)
         assertEquals(true, pd?.hasAccess)
         assertEquals(999L, pd?.discordId)
+        val decided = CacheStore.getApplication(app.id)
+        assertEquals("approved", decided?.status)
     }
 
     @Test
@@ -70,5 +72,24 @@ class ArgusModerationTest {
         assertEquals(1, pd?.warnCount)
         val events = CacheStore.eventsSnapshot().filter { it.type == "warn" && it.targetUuid == uuid.toString() }
         assertEquals(1, events.size)
+    }
+
+    @Test
+    fun `deny application records decision`() {
+        loadConfig()
+        val uuid = UUID.randomUUID()
+        val app = WhitelistApplication(
+            id = "app-2",
+            discordId = 111L,
+            mcName = "Nope",
+            resolvedUuid = uuid.toString(),
+            status = "pending"
+        )
+        CacheStore.addApplication(app)
+        val result = ArgusCore.denyApplication(app.id, actorDiscordId = 222L, reason = "bad")
+        assertTrue(result.isSuccess)
+        val decided = CacheStore.getApplication(app.id)
+        assertEquals("denied", decided?.status)
+        assertEquals("bad", decided?.reason)
     }
 }

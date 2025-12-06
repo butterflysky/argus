@@ -6,7 +6,12 @@ import org.javacord.api.entity.channel.ServerTextChannel
 import org.javacord.api.entity.permission.Role
 import org.javacord.api.entity.server.Server
 import org.javacord.api.entity.user.User
-import org.javacord.api.event.message.MessageCreateEvent
+import org.javacord.api.entity.message.embed.EmbedBuilder
+import org.javacord.api.entity.message.component.ActionRow
+import org.javacord.api.entity.message.component.Button
+import org.javacord.api.interaction.SlashCommand
+import org.javacord.api.interaction.SlashCommandInteraction
+import org.javacord.api.interaction.SlashCommandOption
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -39,7 +44,7 @@ object DiscordBridge {
 
             registerRoleListeners(server, settings)
             registerIdentityListeners(server)
-            registerMessageCommands(server)
+            registerSlashCommands(server)
         }
     }
 
@@ -67,38 +72,66 @@ object DiscordBridge {
         }
     }
 
-    private fun registerMessageCommands(server: Server) {
-        api?.addMessageCreateListener { event ->
-            if (event.server.orElse(null) != server) return@addMessageCreateListener
-            handleLinkCommand(event)
+    private fun registerSlashCommands(server: Server) {
+        val discord = api ?: return
+
+        val linkCommand = SlashCommand.with(
+            "link",
+            "Link your Discord account with a token",
+            listOf(
+                SlashCommandOption.createStringOption(
+                    "token",
+                    "Link token from the Minecraft server",
+                    true
+                )
+            )
+        )
+
+        discord.bulkOverwriteServerApplicationCommands(server.id, setOf(linkCommand)).join()
+
+        discord.addSlashCommandCreateListener { event ->
+            val interaction = event.slashCommandInteraction
+            if (interaction.server.orElse(null) != server) return@addSlashCommandCreateListener
+            when (interaction.commandName.lowercase()) {
+                "link" -> handleLinkSlash(interaction)
+            }
         }
     }
 
-    private fun handleLinkCommand(event: MessageCreateEvent) {
-        val content = event.messageContent.trim()
-        val parts = content.split(" ")
-        if (parts.size < 2) return
-        val keyword = parts[0].lowercase()
-        if (keyword !in listOf("!link", "/link")) return
-
-        val token = parts[1]
-        val user = event.messageAuthor
-        if (!user.isUser) return
-
-        val displayNick = user.displayName
+    private fun handleLinkSlash(interaction: SlashCommandInteraction) {
+        val tokenOpt = interaction.getArgumentStringValueByName("token")
+        if (!tokenOpt.isPresent) {
+            interaction.createImmediateResponder()
+                .setContent("Missing token.")
+                .respond()
+            return
+        }
+        val token = tokenOpt.get()
+        val user = interaction.user
+        val server = interaction.server.orElse(null)
 
         val result = ArgusCore.linkDiscordUser(
             token = token,
             discordId = user.id,
             discordName = user.discriminatedName,
-            discordNick = displayNick
+            discordNick = server?.let { user.getDisplayName(it) } ?: user.discriminatedName
         )
 
-        result.onSuccess { msg ->
-            event.channel.sendMessage(msg)
-        }.onFailure { ex ->
-            event.channel.sendMessage("Link failed: ${ex.message}")
-        }
+        val embed = EmbedBuilder()
+            .setTitle("Argus Link")
+            .setDescription(
+                if (result.isSuccess) {
+                    result.getOrNull()
+                } else {
+                    "Link failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
+                }
+            )
+            .setColor(if (result.isSuccess) java.awt.Color(0x2ecc71) else java.awt.Color(0xe74c3c))
+
+        interaction.createImmediateResponder()
+            .addEmbed(embed)
+            .addComponents(ActionRow.of(Button.primary("ok", "OK")))
+            .respond()
     }
 
     private fun handleRoleChange(user: User, roles: List<Role>, server: Server, settings: ArgusSettings) {

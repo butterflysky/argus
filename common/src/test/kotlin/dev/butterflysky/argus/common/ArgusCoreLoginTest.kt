@@ -26,6 +26,7 @@ class ArgusCoreLoginTest {
         Files.writeString(cfgPath, kotlinx.serialization.json.Json.encodeToString(ArgusSettings.serializer(), cfg))
         ArgusConfig.load(cfgPath)
         CacheStore.load(cachePath)
+        ArgusCore.setDiscordStartedOverride(true)
     }
 
     @Test

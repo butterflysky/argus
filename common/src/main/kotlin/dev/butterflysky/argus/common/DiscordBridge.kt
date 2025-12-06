@@ -102,8 +102,8 @@ object DiscordBridge {
                     "Add a player to the Argus whitelist",
                     listOf(
                         SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
-                        SlashCommandOption.createStringOption("mcname", "Minecraft name (optional)", false)
+                        SlashCommandOption.createStringOption("mcname", "Minecraft name (optional)", false),
+                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
                     )
                 ),
                 SlashCommandOption.createWithOptions(
@@ -157,8 +157,8 @@ object DiscordBridge {
                     "Add an admin comment on a player",
                     listOf(
                         SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
-                        SlashCommandOption.createStringOption("note", "Comment text", true)
+                        SlashCommandOption.createStringOption("note", "Comment text", true),
+                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
                     )
                 ),
                 SlashCommandOption.createWithOptions(
@@ -176,8 +176,8 @@ object DiscordBridge {
                     "Warn a player",
                     listOf(
                         SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
-                        SlashCommandOption.createStringOption("reason", "Reason", true)
+                        SlashCommandOption.createStringOption("reason", "Reason", true),
+                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
                     )
                 ),
                 SlashCommandOption.createWithOptions(
@@ -186,8 +186,8 @@ object DiscordBridge {
                     "Ban a player",
                     listOf(
                         SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
                         SlashCommandOption.createStringOption("reason", "Reason", true),
+                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
                         SlashCommandOption.createLongOption("duration_minutes", "Duration in minutes (omit for permanent)", false)
                     )
                 ),

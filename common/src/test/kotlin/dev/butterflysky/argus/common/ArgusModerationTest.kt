@@ -29,6 +29,7 @@ class ArgusModerationTest {
         Files.writeString(cfgPath, Json.encodeToString(cfg))
         ArgusConfig.load(cfgPath)
         CacheStore.load(cache)
+        ArgusCore.setDiscordStartedOverride(true)
         return cache
     }
 

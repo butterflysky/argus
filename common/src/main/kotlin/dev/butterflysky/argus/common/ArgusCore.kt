@@ -21,6 +21,7 @@ import kotlin.time.toJavaDuration
 object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")
     @Volatile private var discordStarted = false
+    @Volatile private var discordStartedOverride: Boolean? = null
     private val httpClient = HttpClient.newBuilder()
         .connectTimeout(5.seconds.toJavaDuration())
         .build()
@@ -66,8 +67,12 @@ object ArgusCore {
         isOp: Boolean,
         isLegacyWhitelisted: Boolean
     ): LoginResult {
-        if (!ArgusConfig.isConfigured()) {
-            logger.info("Argus unconfigured; allowing login for $name")
+        if (isOp) return LoginResult.Allow
+
+        val discordUp = discordStartedOverride ?: discordStarted
+
+        if (!ArgusConfig.isConfigured() || !discordUp) {
+            logger.info("Argus unconfigured or Discord unavailable; allowing login for $name")
             return LoginResult.Allow
         }
         val pdata = CacheStore.get(uuid)
@@ -105,6 +110,11 @@ object ArgusCore {
 
     @JvmStatic
     fun onPlayerJoinJvm(uuid: UUID, isOp: Boolean): String? = onPlayerJoin(uuid, isOp)
+
+    /** Testing hook to emulate Discord availability without real gateway connection. */
+    fun setDiscordStartedOverride(value: Boolean?) {
+        discordStartedOverride = value
+    }
 
     fun linkDiscordUser(token: String, discordId: Long, discordName: String, discordNick: String?): Result<String> {
         val uuid = LinkTokenService.consume(token) ?: return Result.failure(IllegalArgumentException("Invalid or expired token"))

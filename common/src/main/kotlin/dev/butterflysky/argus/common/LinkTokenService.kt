@@ -10,14 +10,21 @@ import java.util.concurrent.ConcurrentHashMap
 object LinkTokenService {
     private val random = SecureRandom()
     private val tokens: MutableMap<String, UUID> = ConcurrentHashMap()
+    private val reverse: MutableMap<UUID, String> = ConcurrentHashMap()
 
     fun issueToken(uuid: UUID, mcName: String): String {
+        reverse[uuid]?.let { existing -> return existing }
         val token = generateToken()
         tokens[token] = uuid
+        reverse[uuid] = token
         return token
     }
 
-    fun consume(token: String): UUID? = tokens.remove(token)
+    fun consume(token: String): UUID? {
+        val uuid = tokens.remove(token)
+        if (uuid != null) reverse.remove(uuid)
+        return uuid
+    }
 
     private fun generateToken(): String {
         val bytes = ByteArray(6)

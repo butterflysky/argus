@@ -51,7 +51,7 @@ class ArgusCoreLoginTest {
 
         val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
-        assertEquals(ArgusConfig.current().applicationMessage, deny.message)
+        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
     }
 
     @Test
@@ -65,6 +65,6 @@ class ArgusCoreLoginTest {
     fun `stranger is denied with application message`() {
         val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
-        assertEquals(ArgusConfig.current().applicationMessage, deny.message)
+        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
     }
 }

@@ -22,6 +22,7 @@ import java.util.UUID
 
 class ArgusFabric : ModInitializer {
     private val logger = LoggerFactory.getLogger("argus-fabric")
+    private var currentServer: MinecraftServer? = null
 
     override fun onInitialize() {
         logger.info("Argus Fabric initializing (skeleton)")
@@ -29,6 +30,9 @@ class ArgusFabric : ModInitializer {
             .onFailure { logger.error("Failed to load Argus cache", it) }
 
         ArgusCore.startDiscord()
+        ArgusCore.registerMessenger { uuid, message ->
+            currentServer?.playerManager?.getPlayer(uuid)?.sendMessage(Text.literal(message), false)
+        }
 
         registerCommands()
         registerLoginGuard()
@@ -179,7 +183,7 @@ class ArgusFabric : ModInitializer {
 
             ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled)?.let { message ->
                 // If message is a kick, disconnect; otherwise send chat message.
-                if (message.startsWith("Access revoked")) {
+                if (message.contains("Access revoked")) {
                     player.networkHandler.disconnect(Text.literal(message))
                 } else {
                     player.sendMessage(Text.literal(message), false)
@@ -188,8 +192,10 @@ class ArgusFabric : ModInitializer {
         }
 
         ServerLifecycleEvents.SERVER_STARTED.register { server: MinecraftServer ->
+            currentServer = server
             logger.info("Argus login guards registered on server {}", server.name)
         }
+        ServerLifecycleEvents.SERVER_STOPPED.register { currentServer = null }
     }
 
     private fun extractProfile(handler: ServerLoginNetworkHandler): com.mojang.authlib.GameProfile? {

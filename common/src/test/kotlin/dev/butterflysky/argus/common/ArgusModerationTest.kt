@@ -112,6 +112,6 @@ class ArgusModerationTest {
 
         val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "noop", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
-        assertEquals(ArgusConfig.current().applicationMessage, deny.message)
+        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
     }
 }

@@ -22,6 +22,7 @@ object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")
     @Volatile private var discordStarted = false
     @Volatile private var discordStartedOverride: Boolean? = null
+    @Volatile private var messenger: ((UUID, String) -> Unit)? = null
     private val httpClient = HttpClient.newBuilder()
         .connectTimeout(5.seconds.toJavaDuration())
         .build()
@@ -79,7 +80,7 @@ object ArgusCore {
         // Fallback to vanilla whitelist if Argus/Discord not available
         if (!ArgusConfig.isConfigured() || !discordUp) {
             return if (isLegacyWhitelisted) LoginResult.Allow
-            else LoginResult.Deny(ArgusConfig.current().applicationMessage)
+            else LoginResult.Deny(prefix(ArgusConfig.current().applicationMessage))
         }
         val pdata = CacheStore.get(uuid)
 
@@ -100,7 +101,7 @@ object ArgusCore {
             val reason = pdata.banReason ?: "Banned"
             if (until == null || until > System.currentTimeMillis()) {
                 val remaining = if (until == null) "permanent" else "${(until - System.currentTimeMillis()) / 1000}s remaining"
-                return LoginResult.Deny("$reason ($remaining)")
+                return LoginResult.Deny(prefix("$reason ($remaining)"))
             }
         }
 
@@ -110,27 +111,28 @@ object ArgusCore {
 
         if (hasAccess == false) {
             val message = if (pdata?.hasAccess == true && liveAccess == false) {
-                "Access revoked: missing Discord whitelist role"
-            } else withInviteSuffix(ArgusConfig.current().applicationMessage)
-            return LoginResult.Deny(withInviteSuffix(message))
+                prefix("Access revoked: missing Discord whitelist role")
+            } else prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
+            return LoginResult.Deny(message)
         }
 
         if (isLegacyWhitelisted) {
             val token = LinkTokenService.issueToken(uuid, name)
-            return LoginResult.AllowWithKick(withInviteSuffix("Verification Required: /link $token in Discord"))
+            return LoginResult.AllowWithKick(prefix(withInviteSuffix("Verification Required: /link $token in Discord")))
         }
 
-        return LoginResult.Deny(withInviteSuffix(ArgusConfig.current().applicationMessage))
+        return LoginResult.Deny(prefix(withInviteSuffix(ArgusConfig.current().applicationMessage)))
     }
 
     fun onPlayerJoin(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? {
         if (isOp) {
-            if (whitelistEnabled && ArgusConfig.isConfigured()) {
+            if (ArgusConfig.isConfigured()) {
                 val pdata = CacheStore.get(uuid)
                 if (pdata?.discordId == null) {
                     val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
-                    return withInviteSuffix("Please link your account in Discord with /link $token")
+                    return prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
                 }
+                if (pdata.discordName != null) return prefix("Welcome ${pdata.discordName}")
             }
             return null
         }
@@ -141,7 +143,8 @@ object ArgusCore {
         }
 
         val data = CacheStore.get(uuid) ?: return null
-        return "Welcome back, ${data.mcName ?: "player"}!"
+        val name = data.discordName ?: data.mcName ?: "player"
+        return prefix("Welcome $name")
     }
 
     /** Live role check on join; returns Deny to kick if role missing. */
@@ -152,7 +155,7 @@ object ArgusCore {
         if (liveAccess == null) return null
         CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
         CacheStore.save(ArgusConfig.cachePath)
-        return if (liveAccess) null else LoginResult.Deny(withInviteSuffix("Access revoked: missing Discord whitelist role"))
+        return if (liveAccess) null else LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
     }
 
     private fun withInviteSuffix(message: String): String {
@@ -160,12 +163,18 @@ object ArgusCore {
         return if (invite.isNullOrBlank()) message else "$message (Join: $invite)"
     }
 
+    private fun prefix(message: String): String = "[argus] $message"
+
     @JvmStatic
     fun onPlayerJoinJvm(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? = onPlayerJoin(uuid, isOp, whitelistEnabled)
 
     /** Testing hook to emulate Discord availability without real gateway connection. */
     fun setDiscordStartedOverride(value: Boolean?) {
         discordStartedOverride = value
+    }
+
+    fun registerMessenger(handler: (UUID, String) -> Unit) {
+        messenger = handler
     }
 
     fun linkDiscordUser(token: String, discordId: Long, discordName: String, discordNick: String?): Result<String> {
@@ -181,6 +190,7 @@ object ArgusCore {
         CacheStore.save(ArgusConfig.cachePath)
         CacheStore.appendEvent(EventEntry(type = "link", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Linked via token"))
         AuditLogger.log("Linked ${uuid} to Discord $discordName (access granted)")
+        messenger?.invoke(uuid, prefix("Linked: access granted for $discordName"))
         return Result.success("Linked successfully; access granted.")
     }
 

@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 public class ArgusNeoForge {
     public static final String MOD_ID = "argus";
     private static final Logger LOGGER = LoggerFactory.getLogger("argus-neoforge");
+    private net.minecraft.server.MinecraftServer serverRef;
 
     public ArgusNeoForge(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
@@ -32,6 +33,13 @@ public class ArgusNeoForge {
     private void commonSetup(FMLCommonSetupEvent event) {
         ArgusCore.initializeJvm();
         ArgusCore.startDiscordJvm();
+        ArgusCore.INSTANCE.registerMessenger((uuid, message) -> {
+            if (serverRef != null) {
+                var player = serverRef.getPlayerList().getPlayer(uuid);
+                if (player != null) player.sendSystemMessage(Component.literal(message));
+            }
+            return kotlin.Unit.INSTANCE;
+        });
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event) {
@@ -63,7 +71,7 @@ public class ArgusNeoForge {
         boolean whitelistEnabled = server != null && server.isEnforceWhitelist();
         String message = ArgusCore.INSTANCE.onPlayerJoin(player.getUUID(), player.hasPermissions(4), whitelistEnabled);
         if (message != null) {
-            if (message.startsWith("Access revoked")) {
+            if (message.contains("Access revoked")) {
                 player.connection.disconnect(Component.literal(message));
             } else {
                 player.sendSystemMessage(Component.literal(message));
@@ -73,6 +81,7 @@ public class ArgusNeoForge {
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
+        serverRef = event.getServer();
         LOGGER.info("Argus NeoForge hooks registered on server start");
     }
 }

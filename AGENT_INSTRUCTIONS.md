@@ -10,6 +10,7 @@ These instructions match the current Argus direction in `ARGUS_MASTER_SPEC.md`: 
 
 ## Workflow Expectations
 - **BD-first:** run `bd ready --json`; create and claim issues with `--json`; link discoveries via `discovered-from:<parent-id>`; keep `.beads/issues.jsonl` in commits. Run `bd sync` before ending a session.
+- **Set status before work:** mark the bd issue `in_progress` *before* you start implementing changes, and close it when done.
 - **Planning docs:** if you need design/plan files, place them in `history/`.
 - **Small commits:** use `git status -sb` often and commit logically scoped changes with the agreed message format.
 - **Version control:** use git (not jj); beads hooks, auto-flush, and sync features rely on git commands running.

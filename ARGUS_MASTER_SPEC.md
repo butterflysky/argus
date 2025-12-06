@@ -15,7 +15,7 @@ Act as a Senior Minecraft Mod Developer. I need you to scaffold a comprehensive 
    * :fabric (Fabric Implementation).  
    * :neoforge (Scaffold only).  
 2. **Decompilation:** Configure Fabric Loom to use **Vineflower** explicitly. Ensure Gradle tasks are generated so VS Code's Java Language Server (Red Hat) can read the sources and javadocs natively.  
-3. **Dependencies:** Use the latest stable versions for Minecraft 1.21.1, Yarn Mappings, and Fabric Loader.
+3. **Dependencies:** Use the latest stable versions for Minecraft 1.21.10, Yarn Mappings, and Fabric Loader.
 
 ## **1\. Core Logic Rules (Implemented in :common)**
 

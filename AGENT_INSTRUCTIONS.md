@@ -1,6 +1,6 @@
 # Detailed Agent Instructions for Argus Development
 
-These instructions match the current Argus direction in `ARGUS_MASTER_SPEC.md`: a Kotlin-first, multi-loader (Fabric + NeoForge) mod targeting Minecraft 1.21+. The present code is legacy Fabric/JDA; prefer changes that move us toward the new architecture.
+These instructions match the current Argus direction in `ARGUS_MASTER_SPEC.md`: a Kotlin-first, multi-loader (Fabric + NeoForge) mod targeting Minecraft 1.21.10+. The codebase is already on Fabric + NeoForge with Javacord; keep all changes aligned to that architecture.
 
 ## Project Layout (target state)
 - `:common` – shared logic, cache/database (`argus_db.json` + `.bak`), Javacord bot, configuration.

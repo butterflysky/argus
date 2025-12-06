@@ -1,6 +1,6 @@
 # AI Agent Instructions for Argus
 
-Argus is being rebooted as a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21+. Keep changes aligned with `ARGUS_MASTER_SPEC.md`, even though the current codebase is legacy Fabric-only.
+Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21.10+. Keep changes aligned with `ARGUS_MASTER_SPEC.md`; current code already uses Javacord and shared :common logic across loaders.
 
 **Quick Links**
 - [AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md) – detailed workflow and QA steps

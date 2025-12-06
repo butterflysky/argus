@@ -1,14 +1,16 @@
 # Argus
 
-Kotlin-based, cache-first access control for Minecraft 1.21.x with Discord identity linking. Argus now uses a multi-loader layout (`common`, `fabric`, `neoforge`) and Javacord for Discord integration.
+Kotlin-based, cache-first access control for Minecraft 1.21.10 with Discord identity linking. Argus uses a multi-loader layout (`common`, `fabric`, `neoforge`) and Javacord for Discord integration.
 
 ## Status
-- **Current scope:** Scaffolded to match `ARGUS_MASTER_SPEC.md`. Core cache, config loader, and Fabric wiring are in place; Discord bot logic and NeoForge entrypoint are still placeholders.
+- Core cache, config loader, login gate, and Discord slash-command link flow are implemented in `:common` and wired to Fabric.
+- NeoForge entrypoint now compiles against NeoGradle (21.10.64) and forwards login/join to shared logic.
+- Multi-loader builds pass for 1.21.10; further version-matrix support is planned.
 
 ## Architecture
-- `:common` — platform-agnostic logic: JSON cache (`config/argus_db.json` + `.bak`), permission gate, config loader, and token service.
-- `:fabric` — Fabric entrypoint; hooks join events to enforce the permission gate and stubs `/argus reload`.
-- `:neoforge` — placeholder module that depends on `:common`.
+- `:common` — platform-agnostic logic: JSON cache (`config/argus_db.json` + `.bak`), permission gate, config loader, Javacord bot, and token service.
+- `:fabric` — Fabric entrypoint; hooks login/join events and exposes `/argus`/`/token` commands.
+- `:neoforge` — entrypoint compiled with NeoGradle userdev; forwards login/join to `ArgusCore`.
 
 ## Login Rules (spec)
 - OPs bypass checks.
@@ -21,7 +23,7 @@ Kotlin-based, cache-first access control for Minecraft 1.21.x with Discord ident
 ```bash
 ./gradlew build              # build all modules
 ./gradlew :fabric:runServer  # dev server (Fabric)
-# NeoForge run target will be added when the scaffold is fleshed out
+# NeoForge run target can be added via NeoGradle run configs when needed
 ```
 
 ## Configuration

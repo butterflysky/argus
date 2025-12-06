@@ -1,6 +1,8 @@
 # Argus Whitelist Database Schema
 
-This document outlines the database schema for the Argus whitelist management system.
+**Legacy note:** This schema documents the pre-reboot SQL design. The current Argus implementation is cache-first (JSON + .bak) with no database. Keep this file for historical reference only.
+
+This document outlines the database schema for the legacy Argus whitelist management system.
 
 ## Overview
 

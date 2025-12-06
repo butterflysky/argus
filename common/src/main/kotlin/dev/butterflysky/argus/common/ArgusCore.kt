@@ -109,7 +109,10 @@ object ArgusCore {
         if (hasAccess == true) return LoginResult.Allow
 
         if (hasAccess == false) {
-            return LoginResult.Deny(withInviteSuffix("Access revoked: missing Discord whitelist role"))
+            val message = if (pdata?.hasAccess == true && liveAccess == false) {
+                "Access revoked: missing Discord whitelist role"
+            } else withInviteSuffix(ArgusConfig.current().applicationMessage)
+            return LoginResult.Deny(withInviteSuffix(message))
         }
 
         if (isLegacyWhitelisted) {
@@ -121,18 +124,22 @@ object ArgusCore {
     }
 
     fun onPlayerJoin(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? {
+        if (isOp) {
+            if (whitelistEnabled && ArgusConfig.isConfigured()) {
+                val pdata = CacheStore.get(uuid)
+                if (pdata?.discordId == null) {
+                    val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
+                    return withInviteSuffix("Please link your account in Discord with /link $token")
+                }
+            }
+            return null
+        }
+
         if (whitelistEnabled && ArgusConfig.isConfigured()) {
             val kick = refreshAccessOnJoin(uuid)
             if (kick is LoginResult.Deny) return kick.message
         }
-        if (isOp && whitelistEnabled && ArgusConfig.isConfigured()) {
-            val pdata = CacheStore.get(uuid)
-            if (pdata?.discordId == null) {
-                val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
-                return withInviteSuffix("Please link your account in Discord with /link $token")
-            }
-        }
-        if (isOp) return null
+
         val data = CacheStore.get(uuid) ?: return null
         return "Welcome back, ${data.mcName ?: "player"}!"
     }

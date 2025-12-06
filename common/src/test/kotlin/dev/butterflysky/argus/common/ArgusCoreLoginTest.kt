@@ -51,7 +51,7 @@ class ArgusCoreLoginTest {
 
         val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains("Access revoked"))
+        assertEquals(ArgusConfig.current().applicationMessage, deny.message)
     }
 
     @Test

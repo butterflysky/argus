@@ -108,8 +108,8 @@ object ArgusCore {
         if (hasAccess == true) {
             val seen = CacheStore.eventsSnapshot().any { it.type == "first_allow" && it.targetUuid == uuid.toString() }
             if (!seen) {
-                val discordLabel = pdata?.discordName?.let { "$it (${pdata.discordId})" } ?: "unlinked"
-                AuditLogger.log("First login seen (allow): mc=$name ($uuid) discord=$discordLabel")
+                val discordLabel = discordLabel(pdata?.discordName ?: "unlinked", pdata?.discordId)
+                AuditLogger.log("First login seen (allow): mc=${mcLabel(name, uuid)} discord=$discordLabel")
                 CacheStore.appendEvent(EventEntry(type = "first_allow", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
                 CacheStore.save(ArgusConfig.cachePath)
             }
@@ -127,7 +127,7 @@ object ArgusCore {
             val token = LinkTokenService.issueToken(uuid, name)
             val seenLegacy = CacheStore.eventsSnapshot().any { it.type == "first_legacy_kick" && it.targetUuid == uuid.toString() }
             if (!seenLegacy) {
-                AuditLogger.log("Previously whitelisted but unlinked: mc=$name ($uuid) — kicked with link token")
+                AuditLogger.log("Previously whitelisted but unlinked: mc=${mcLabel(name, uuid)} — kicked with link token")
                 CacheStore.appendEvent(EventEntry(type = "first_legacy_kick", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
                 CacheStore.save(ArgusConfig.cachePath)
             }
@@ -178,6 +178,13 @@ object ArgusCore {
 
     private fun prefix(message: String): String = "[argus] $message"
 
+    private fun mcLabel(name: String?, uuid: UUID): String = "${name ?: "minecraft user"} ($uuid)"
+
+    private fun discordLabel(discordId: Long?): String =
+        discordId?.let { CacheStore.findByDiscordId(it)?.second?.discordName?.let { n -> "$n ($it)" } ?: "$it" } ?: "unknown"
+
+    private fun discordLabel(name: String, id: Long?): String = if (id != null) "$name ($id)" else name
+
     @JvmStatic
     fun onPlayerJoinJvm(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? = onPlayerJoin(uuid, isOp, whitelistEnabled)
 
@@ -203,7 +210,7 @@ object ArgusCore {
         CacheStore.save(ArgusConfig.cachePath)
         CacheStore.appendEvent(EventEntry(type = "link", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Linked via token"))
         val mcLabel = existing.mcName ?: "minecraft user"
-        AuditLogger.log("Linked minecraft user ${mcLabel} (${uuid}) to discord user $discordName")
+        AuditLogger.log("Linked minecraft user ${mcLabel} ($uuid) to discord user ${discordLabel(discordName, discordId)}")
         messenger?.invoke(uuid, prefix("Linked Discord user: $discordName"))
         return Result.success("Linked successfully.")
     }
@@ -214,7 +221,7 @@ object ArgusCore {
         CacheStore.upsert(target, updated)
         CacheStore.appendEvent(EventEntry(type = "whitelist_add", targetUuid = target.toString(), targetDiscordId = updated.discordId, actorDiscordId = null, message = "by $actor"))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Whitelist add: ${mcName ?: target} by $actor")
+        AuditLogger.log("Whitelist add: ${mcLabel(mcName ?: target.toString(), target)} by ${actor}")
         "Whitelisted ${mcName ?: target}"
     }
 
@@ -224,7 +231,7 @@ object ArgusCore {
         CacheStore.upsert(target, updated)
         CacheStore.appendEvent(EventEntry(type = "whitelist_remove", targetUuid = target.toString(), targetDiscordId = updated.discordId, message = "by $actor"))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Whitelist remove: ${current.mcName ?: target} by $actor")
+        AuditLogger.log("Whitelist remove: ${mcLabel(current.mcName ?: target.toString(), target)} by ${actor}")
         "Removed ${current.mcName ?: target} from whitelist"
     }
 
@@ -255,7 +262,7 @@ object ArgusCore {
             EventEntry(type = "apply_submit", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Applied as $canonical")
         )
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Application submitted: $canonical ($uuid) by discord $discordId id=$appId")
+        AuditLogger.log("Application submitted: ${mcLabel(canonical, uuid)} by ${discordLabel(discordId)} id=$appId")
         return Result.success(appId)
     }
 
@@ -274,7 +281,7 @@ object ArgusCore {
         CacheStore.updateApplication(id) { decided }
         CacheStore.appendEvent(EventEntry(type = "apply_approve", targetUuid = uuid.toString(), targetDiscordId = app.discordId, actorDiscordId = actorDiscordId, message = reason))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Application approved: ${app.mcName} ($uuid) by $actorDiscordId")
+        AuditLogger.log("Application approved: ${mcLabel(app.mcName, uuid)} by ${discordLabel(actorDiscordId)}")
         return Result.success("Approved $mcName")
     }
 
@@ -285,7 +292,9 @@ object ArgusCore {
         CacheStore.updateApplication(id) { decided }
         CacheStore.appendEvent(EventEntry(type = "apply_deny", targetUuid = app.resolvedUuid, targetDiscordId = app.discordId, actorDiscordId = actorDiscordId, message = reason))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Application denied: ${app.mcName} id=$id by $actorDiscordId reason=${reason ?: ""}")
+        val targetUuid = app.resolvedUuid?.let { UUID.fromString(it) }
+        val label = targetUuid?.let { mcLabel(app.mcName, it) } ?: app.mcName
+        AuditLogger.log("Application denied: $label id=$id by ${discordLabel(actorDiscordId)} reason=${reason ?: ""}")
         return Result.success("Denied application ${app.mcName}")
     }
 
@@ -295,7 +304,7 @@ object ArgusCore {
         CacheStore.upsert(uuid, updated)
         CacheStore.appendEvent(EventEntry(type = "warn", targetUuid = uuid.toString(), targetDiscordId = updated.discordId, actorDiscordId = actor, message = reason))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Warn: ${current.mcName ?: uuid} by $actor reason=$reason")
+        AuditLogger.log("Warn: ${mcLabel(current.mcName ?: uuid.toString(), uuid)} by ${discordLabel(actor)} reason=$reason")
         "Warned ${current.mcName ?: uuid}"
     }
 
@@ -305,7 +314,7 @@ object ArgusCore {
         CacheStore.upsert(uuid, updated)
         CacheStore.appendEvent(EventEntry(type = "ban", targetUuid = uuid.toString(), targetDiscordId = updated.discordId, actorDiscordId = actor, message = reason, untilEpochMillis = untilEpochMillis))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Ban: ${current.mcName ?: uuid} by $actor reason=$reason until=${untilEpochMillis ?: "perm"}")
+        AuditLogger.log("Ban: ${mcLabel(current.mcName ?: uuid.toString(), uuid)} by ${discordLabel(actor)} reason=$reason until=${untilEpochMillis ?: "perm"}")
         "Banned ${current.mcName ?: uuid}"
     }
 
@@ -315,14 +324,14 @@ object ArgusCore {
         CacheStore.upsert(uuid, updated)
         CacheStore.appendEvent(EventEntry(type = "unban", targetUuid = uuid.toString(), targetDiscordId = updated.discordId, actorDiscordId = actor, message = reason))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Unban: ${current.mcName ?: uuid} by $actor reason=${reason ?: ""}")
+        AuditLogger.log("Unban: ${mcLabel(current.mcName ?: uuid.toString(), uuid)} by ${discordLabel(actor)} reason=${reason ?: ""}")
         "Unbanned ${current.mcName ?: uuid}"
     }
 
     fun commentOnPlayer(uuid: UUID, actor: Long, note: String): Result<String> = runCatching {
         CacheStore.appendEvent(EventEntry(type = "comment", targetUuid = uuid.toString(), actorDiscordId = actor, message = note))
         CacheStore.save(ArgusConfig.cachePath)
-        AuditLogger.log("Comment on $uuid by $actor: $note")
+        AuditLogger.log("Comment on ${mcLabel(uuid.toString(), uuid)} by ${discordLabel(actor)}: $note")
         "Comment recorded"
     }
 

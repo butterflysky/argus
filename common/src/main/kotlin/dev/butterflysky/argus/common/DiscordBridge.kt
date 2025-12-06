@@ -215,6 +215,29 @@ object DiscordBridge {
             }
         }
 
+        discord.addButtonClickListener { event ->
+            val id = event.buttonInteraction.customId
+            val interaction = event.interaction
+            if (id.startsWith("apps_prev:") || id.startsWith("apps_next:")) {
+                val parts = id.split(":")
+                val current = parts.getOrNull(1)?.toIntOrNull() ?: return@addButtonClickListener
+                val apps = ArgusCore.listPendingApplications()
+                val page = if (id.startsWith("apps_prev:")) current - 1 else current + 1
+                val slash = interaction.asSlashCommandInteraction().orElse(null) ?: return@addButtonClickListener
+                sendApplicationsPage(slash, apps, page)
+            }
+
+            if (id.startsWith("apps_apr:") || id.startsWith("apps_deny:")) {
+                val appId = id.substringAfter(":")
+                val approve = id.startsWith("apps_apr:")
+                val result = if (approve) ArgusCore.approveApplication(appId, interaction.user.id, null)
+                             else ArgusCore.denyApplication(appId, interaction.user.id, null)
+                interaction.createImmediateResponder()
+                    .setContent(result.getOrElse { "Failed: ${it.message}" })
+                    .respond()
+            }
+        }
+
         discord.addAutocompleteCreateListener { event ->
             val interaction = event.autocompleteInteraction
             if (interaction.fullCommandName != "whitelist") return@addAutocompleteCreateListener
@@ -389,14 +412,37 @@ object DiscordBridge {
     }
 
     private fun listApplications(interaction: SlashCommandInteraction) {
-        val pending = ArgusCore.listPendingApplications().take(10)
+        val pending = ArgusCore.listPendingApplications()
         if (pending.isEmpty()) {
             interaction.createImmediateResponder().setContent("No pending applications").respond()
             return
         }
-        val lines = pending.joinToString("\\n") { "- ${it.mcName} (${it.id.take(8)}) submitted ${it.submittedAtEpochMillis}" }
+        sendApplicationsPage(interaction, pending, 0)
+    }
+
+    private fun sendApplicationsPage(interaction: SlashCommandInteraction, apps: List<WhitelistApplication>, page: Int) {
+        val pageSize = 5
+        val totalPages = (apps.size + pageSize - 1) / pageSize
+        val start = page * pageSize
+        val slice = apps.drop(start).take(pageSize)
+        val embed = EmbedBuilder()
+            .setTitle("Pending applications (${page + 1}/$totalPages)")
+            .setColor(Color(0x3498db))
+            .setDescription(
+                slice.joinToString("\\n") {
+                    val ageSeconds = (System.currentTimeMillis() - it.submittedAtEpochMillis) / 1000
+                    "- ${it.mcName} (id ${it.id.take(8)}), ${ageSeconds}s ago"
+                }
+            )
+        val controls = mutableListOf<Button>()
+        if (page > 0) controls += Button.secondary("apps_prev:$page", "Prev")
+        if (page < totalPages - 1) controls += Button.secondary("apps_next:$page", "Next")
+        controls += Button.success("apps_apr:${slice.firstOrNull()?.id ?: ""}", "Approve top")
+        controls += Button.danger("apps_deny:${slice.firstOrNull()?.id ?: ""}", "Deny top")
+
         interaction.createImmediateResponder()
-            .setContent("Pending applications (first 10):\\n$lines")
+            .addEmbed(embed)
+            .addComponents(ActionRow.of(controls as List<Button>))
             .respond()
     }
 

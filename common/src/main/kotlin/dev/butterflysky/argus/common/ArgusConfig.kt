@@ -15,7 +15,8 @@ data class ArgusSettings(
     val adminRoleId: Long? = null,
     val logChannelId: Long? = null,
     val applicationMessage: String = "Access Denied: Please apply in Discord.",
-    val cacheFile: String = "config/argus_db.json"
+    val cacheFile: String = "config/argus_db.json",
+    val discordInviteUrl: String? = null
 )
 
 object ArgusConfig {
@@ -43,7 +44,8 @@ object ArgusConfig {
         FieldMeta("adminRoleId", FieldType.LONG, "345678901234567890", "Admins allowed to manage whitelist"),
         FieldMeta("logChannelId", FieldType.LONG, "456789012345678901", "Channel for audit messages"),
         FieldMeta("applicationMessage", FieldType.STRING, "Access Denied: Please apply in Discord.", "Login denial message"),
-        FieldMeta("cacheFile", FieldType.PATH, "config/argus_db.json", "Cache persistence path")
+        FieldMeta("cacheFile", FieldType.PATH, "config/argus_db.json", "Cache persistence path"),
+        FieldMeta("discordInviteUrl", FieldType.STRING, "https://discord.gg/yourserver", "Invite link shown in denial messages (optional)")
     )
 
     val cachePath: Path
@@ -83,6 +85,7 @@ object ArgusConfig {
             "logchannelid" -> settings.copy(logChannelId = value.toLongOrNull() ?: error("logChannelId must be a number"))
             "applicationmessage" -> settings.copy(applicationMessage = value)
             "cachefile" -> settings.copy(cacheFile = value)
+            "discordinviteurl" -> settings.copy(discordInviteUrl = value.ifBlank { null })
             else -> error("Unknown config field: $field")
         }
         val path = loadedPath
@@ -110,6 +113,7 @@ object ArgusConfig {
             "logchannelid" -> settings.logChannelId?.toString() ?: ""
             "applicationmessage" -> settings.applicationMessage
             "cachefile" -> settings.cacheFile
+            "discordinviteurl" -> settings.discordInviteUrl ?: ""
             else -> error("Unknown config field: $field")
         }
     }

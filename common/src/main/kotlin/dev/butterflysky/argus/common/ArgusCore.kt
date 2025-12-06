@@ -97,12 +97,16 @@ object ArgusCore {
 
         if (pdata != null && pdata.hasAccess) return LoginResult.Allow
 
-        if (isLegacyWhitelisted) {
-            val token = LinkTokenService.issueToken(uuid, name)
-            return LoginResult.AllowWithKick("Verification Required: /link $token in Discord")
+        if (pdata != null && !pdata.hasAccess) {
+            return LoginResult.Deny(withInviteSuffix("Access revoked: missing Discord whitelist role"))
         }
 
-        return LoginResult.Deny(ArgusConfig.current().applicationMessage)
+        if (isLegacyWhitelisted) {
+            val token = LinkTokenService.issueToken(uuid, name)
+            return LoginResult.AllowWithKick(withInviteSuffix("Verification Required: /link $token in Discord"))
+        }
+
+        return LoginResult.Deny(withInviteSuffix(ArgusConfig.current().applicationMessage))
     }
 
     fun onPlayerJoin(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? {
@@ -110,12 +114,17 @@ object ArgusCore {
             val pdata = CacheStore.get(uuid)
             if (pdata?.discordId == null) {
                 val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
-                return "Please link your account in Discord with /link $token"
+                return withInviteSuffix("Please link your account in Discord with /link $token")
             }
         }
         if (isOp) return null
         val data = CacheStore.get(uuid) ?: return null
         return "Welcome back, ${data.mcName ?: "player"}!"
+    }
+
+    private fun withInviteSuffix(message: String): String {
+        val invite = ArgusConfig.current().discordInviteUrl
+        return if (invite.isNullOrBlank()) message else "$message (Join: $invite)"
     }
 
     @JvmStatic

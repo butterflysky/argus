@@ -50,8 +50,8 @@ class ArgusCoreLoginTest {
         CacheStore.upsert(playerId, PlayerData(hasAccess = false))
 
         val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
-        val kick = assertIs<LoginResult.AllowWithKick>(result)
-        assertTrue(kick.message.contains("/link"))
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertTrue(deny.message.contains("Access revoked"))
     }
 
     @Test

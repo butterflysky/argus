@@ -9,5 +9,8 @@ data class PlayerData(
     val isAdmin: Boolean = false,
     val mcName: String? = null,
     val discordName: String? = null,
-    val discordNick: String? = null
+    val discordNick: String? = null,
+    val banReason: String? = null,
+    val banUntilEpochMillis: Long? = null,
+    val warnCount: Int = 0
 )

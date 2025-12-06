@@ -17,8 +17,12 @@ object CacheStore {
     private val logger = LoggerFactory.getLogger("argus-cache")
     private val json = Json { prettyPrint = true }
     private val data: MutableMap<UUID, PlayerData> = ConcurrentHashMap()
+    private val events: MutableList<EventEntry> = mutableListOf()
+    private val applications: MutableList<WhitelistApplication> = mutableListOf()
 
     fun snapshot(): Map<UUID, PlayerData> = data.toMap()
+    fun eventsSnapshot(): List<EventEntry> = events.toList()
+    fun applicationsSnapshot(): List<WhitelistApplication> = applications.toList()
 
     fun get(uuid: UUID): PlayerData? = data[uuid]
 
@@ -34,6 +38,24 @@ object CacheStore {
     fun findByName(name: String): Pair<UUID, PlayerData>? =
         data.entries.firstOrNull { it.value.mcName?.equals(name, ignoreCase = true) == true }?.toPair()
 
+    fun appendEvent(event: EventEntry) {
+        events += event
+    }
+
+    fun addApplication(app: WhitelistApplication) {
+        applications += app
+    }
+
+    fun updateApplication(id: String, updater: (WhitelistApplication) -> WhitelistApplication?): WhitelistApplication? {
+        val idx = applications.indexOfFirst { it.id == id }
+        if (idx < 0) return null
+        val updated = updater(applications[idx]) ?: return null
+        applications[idx] = updated
+        return updated
+    }
+
+    fun getApplication(id: String): WhitelistApplication? = applications.firstOrNull { it.id == id }
+
     fun load(cachePath: Path): Result<Unit> {
         val primary = cachePath
         val backup = cachePath.resolveSibling(cachePath.fileName.toString() + ".bak")
@@ -42,11 +64,16 @@ object CacheStore {
             val loaded = readFile(primary).recoverCatching { ex ->
                 logger.warn("Primary cache load failed, attempting .bak fallback: ${ex.message}")
                 readFile(backup).getOrThrow()
-            }.getOrElse { emptyMap() }
+            }.getOrElse { SerializableCache() }
 
             data.clear()
-            data.putAll(loaded)
-            logger.info("Loaded argus cache with ${data.size} entries")
+            events.clear()
+            applications.clear()
+
+            data.putAll(loaded.players.mapKeys { UUID.fromString(it.key) })
+            events.addAll(loaded.events)
+            applications.addAll(loaded.applications)
+            logger.info("Loaded argus cache with ${data.size} entries, ${events.size} events, ${applications.size} applications")
         }
     }
 
@@ -60,7 +87,11 @@ object CacheStore {
                 Files.move(primary, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
 
-            val serializable = SerializableCache(data.mapKeys { it.key.toString() })
+            val serializable = SerializableCache(
+                players = data.mapKeys { it.key.toString() },
+                events = events,
+                applications = applications
+            )
             Files.writeString(primary, json.encodeToString(serializable))
             logger.info("Saved argus cache (${data.size} entries) to ${primary.toAbsolutePath()}")
         }.onFailure { ex ->
@@ -68,11 +99,10 @@ object CacheStore {
         }
     }
 
-    private fun readFile(path: Path): Result<Map<UUID, PlayerData>> = runCatching {
-        if (!Files.exists(path)) return@runCatching emptyMap()
+    private fun readFile(path: Path): Result<SerializableCache> = runCatching {
+        if (!Files.exists(path)) return@runCatching SerializableCache()
         val text = Files.readString(path)
-        val serializable = json.decodeFromString(SerializableCache.serializer(), text)
-        serializable.players.mapKeys { UUID.fromString(it.key) }
+        json.decodeFromString(SerializableCache.serializer(), text)
     }.onFailure { ex ->
         if (ex !is IOException) {
             logger.error("Error decoding cache file ${path}: ${ex.message}", ex)
@@ -80,7 +110,33 @@ object CacheStore {
     }
 
     @Serializable
-    private data class SerializableCache(
-        val players: Map<String, PlayerData>
+    data class SerializableCache(
+        val players: Map<String, PlayerData> = emptyMap(),
+        val events: List<EventEntry> = emptyList(),
+        val applications: List<WhitelistApplication> = emptyList()
     )
 }
+
+@Serializable
+data class EventEntry(
+    val type: String,
+    val targetUuid: String? = null,
+    val targetDiscordId: Long? = null,
+    val actorDiscordId: Long? = null,
+    val message: String? = null,
+    val untilEpochMillis: Long? = null,
+    val atEpochMillis: Long = System.currentTimeMillis()
+)
+
+@Serializable
+data class WhitelistApplication(
+    val id: String,
+    val discordId: Long,
+    val mcName: String,
+    val resolvedUuid: String? = null,
+    val status: String = "pending",
+    val reason: String? = null,
+    val submittedAtEpochMillis: Long = System.currentTimeMillis(),
+    val decidedAtEpochMillis: Long? = null,
+    val decidedByDiscordId: Long? = null
+)

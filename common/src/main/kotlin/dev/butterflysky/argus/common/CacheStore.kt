@@ -11,7 +11,8 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Local cache of player data. This is the sole source of truth for login checks.
+ * Local cache of player data plus append-only audit streams (events, applications).
+ * This is the sole source of truth for login checks; no live Discord reads on the login thread.
  */
 object CacheStore {
     private val logger = LoggerFactory.getLogger("argus-cache")

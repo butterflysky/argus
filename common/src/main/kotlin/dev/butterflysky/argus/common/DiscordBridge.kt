@@ -19,6 +19,7 @@ import java.awt.Color
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
+/** Discord integration using Javacord: slash commands, role/name listeners, and audit logging. */
 object DiscordBridge {
     private val logger = LoggerFactory.getLogger("argus-discord")
     @Volatile private var api: DiscordApi? = null

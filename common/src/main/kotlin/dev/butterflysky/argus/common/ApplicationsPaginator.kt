@@ -6,6 +6,7 @@ data class ApplicationsPage<T>(
     val items: List<T>
 )
 
+/** Simple utility to page application lists for Discord embeds/buttons. */
 object ApplicationsPaginator {
     fun <T> paginate(items: List<T>, page: Int, pageSize: Int = 5): ApplicationsPage<T> {
         if (items.isEmpty()) return ApplicationsPage(0, 0, emptyList())

@@ -2,6 +2,7 @@ package dev.butterflysky.argus.common
 
 import kotlinx.serialization.Serializable
 
+/** Cached player state plus moderation fields. */
 @Serializable
 data class PlayerData(
     val discordId: Long? = null,

@@ -10,7 +10,13 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
 /**
- * Core, platform-agnostic logic. Keeps the login path cache-first and non-blocking.
+ * Platform-agnostic core for Argus.
+ *
+ * Responsibilities:
+ * - Load config/cache (.bak fallback).
+ * - Cache-only login decisions (never call Discord on login thread).
+ * - Discord bridge startup (skips safely when unconfigured).
+ * - Whitelist + moderation flows (applications, bans, warnings, comments).
  */
 object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")

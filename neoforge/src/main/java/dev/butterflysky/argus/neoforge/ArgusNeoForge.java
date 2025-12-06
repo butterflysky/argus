@@ -16,6 +16,7 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** NeoForge entrypoint wiring Argus shared logic. */
 @Mod(ArgusNeoForge.MOD_ID)
 public class ArgusNeoForge {
     public static final String MOD_ID = "argus";

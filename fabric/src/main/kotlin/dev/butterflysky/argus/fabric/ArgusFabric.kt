@@ -53,9 +53,17 @@ class ArgusFabric : ModInitializer {
     }
 
     private fun reloadConfig(ctx: CommandContext<ServerCommandSource>): Int {
-        // Placeholder: configuration loading will be implemented with the new schema.
-        ctx.source.sendFeedback({ Text.literal("Argus config reload not yet implemented") }, false)
-        return 1
+        val result = ArgusCore.initialize()
+        return result.fold(
+            onSuccess = {
+                ctx.source.sendFeedback({ Text.literal("Argus config reloaded") }, false)
+                1
+            },
+            onFailure = {
+                ctx.source.sendError(Text.literal("Argus reload failed: ${it.message}"))
+                0
+            }
+        )
     }
 
     private fun issueToken(ctx: CommandContext<ServerCommandSource>): Int {

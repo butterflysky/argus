@@ -131,7 +131,7 @@ object ArgusCore {
                 CacheStore.appendEvent(EventEntry(type = "first_legacy_kick", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
                 CacheStore.save(ArgusConfig.cachePath)
             }
-            return LoginResult.AllowWithKick(prefix(withInviteSuffix("Verification Required: /link $token in Discord")))
+            return LoginResult.Deny(prefix(withInviteSuffix("Verification Required: /link $token in Discord")))
         }
 
         return LoginResult.Deny(prefix(withInviteSuffix(ArgusConfig.current().applicationMessage)))

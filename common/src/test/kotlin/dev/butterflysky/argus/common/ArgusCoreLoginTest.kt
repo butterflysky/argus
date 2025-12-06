@@ -57,8 +57,8 @@ class ArgusCoreLoginTest {
     @Test
     fun `legacy whitelisted gets verification token kick`() {
         val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "legacy", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
-        val kick = assertIs<LoginResult.AllowWithKick>(result)
-        assertTrue(kick.message.contains("/link"))
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertTrue(deny.message.contains("/link"))
     }
 
     @Test

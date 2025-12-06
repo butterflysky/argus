@@ -24,6 +24,8 @@ import java.util.concurrent.CompletableFuture
 object DiscordBridge {
     private val logger = LoggerFactory.getLogger("argus-discord")
     @Volatile private var api: DiscordApi? = null
+    @Volatile private var serverRef: Server? = null
+    @Volatile private var whitelistRoleId: Long? = null
 
     fun start(settings: ArgusSettings): Result<Unit> {
         if (settings.botToken.isBlank()) {
@@ -43,6 +45,8 @@ object DiscordBridge {
 
             val server = discord.getServerById(guildId)
                 .orElseThrow { IllegalStateException("Guild $guildId not found") }
+            serverRef = server
+            whitelistRoleId = settings.whitelistRoleId
 
             val logChannel = settings.logChannelId?.let { server.getTextChannelById(it).orElse(null) }
             AuditLogger.configure { msg -> logToChannel(logChannel, msg) }
@@ -575,5 +579,22 @@ object DiscordBridge {
 
     private fun logToChannel(channel: ServerTextChannel?, message: String) {
         channel?.sendMessage(message)
+    }
+
+    /**
+     * Live-check whether a Discord user currently has the whitelist role. Returns:
+     *  - true  -> has role
+     *  - false -> does not have role
+     *  - null  -> could not determine (api/server unavailable or timed out)
+     */
+    fun checkWhitelistRole(discordId: Long, timeoutMillis: Long = 2000): Boolean? {
+        val api = api ?: return null
+        val server = serverRef ?: return null
+        val roleId = whitelistRoleId ?: return null
+        return runCatching {
+            val member = server.requestMember(discordId).orTimeout(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS).join()
+            val roles = member.getRoles(server)
+            roles.any { it.id == roleId }
+        }.getOrNull()
     }
 }

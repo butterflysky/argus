@@ -83,6 +83,13 @@ object ArgusCore {
         }
         val pdata = CacheStore.get(uuid)
 
+        val liveAccess = pdata?.discordId?.let { DiscordBridge.checkWhitelistRole(it) }
+        if (liveAccess != null && pdata != null) {
+            CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
+            CacheStore.save(ArgusConfig.cachePath)
+        }
+        val hasAccess = liveAccess ?: pdata?.hasAccess
+
         // Active ban check
         if (pdata?.banUntilEpochMillis != null) {
             val until = pdata.banUntilEpochMillis
@@ -95,9 +102,9 @@ object ArgusCore {
 
         if (isOp) return LoginResult.Allow
 
-        if (pdata != null && pdata.hasAccess) return LoginResult.Allow
+        if (hasAccess == true) return LoginResult.Allow
 
-        if (pdata != null && !pdata.hasAccess) {
+        if (hasAccess == false) {
             return LoginResult.Deny(withInviteSuffix("Access revoked: missing Discord whitelist role"))
         }
 

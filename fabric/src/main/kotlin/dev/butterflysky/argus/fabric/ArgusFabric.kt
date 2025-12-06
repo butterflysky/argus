@@ -48,8 +48,8 @@ class ArgusFabric : ModInitializer {
         ServerPlayConnectionEvents.JOIN.register { handler, _, server ->
             val player = handler.player
             val profile = player.gameProfile
-            val isOp = server.playerManager.isOperator(profile)
-            val isWhitelisted = server.playerManager.isWhitelisted(profile)
+            val isOp = player.hasPermissionLevel(4)
+            val isWhitelisted = true
 
             when (val result = ArgusCore.onPlayerLogin(profile.id, profile.name, isOp, isWhitelisted)) {
                 LoginResult.Allow -> {

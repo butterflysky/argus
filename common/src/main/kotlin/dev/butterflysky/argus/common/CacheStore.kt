@@ -31,6 +31,9 @@ object CacheStore {
 
     fun findByUuid(uuid: UUID): PlayerData? = data[uuid]
 
+    fun findByName(name: String): Pair<UUID, PlayerData>? =
+        data.entries.firstOrNull { it.value.mcName?.equals(name, ignoreCase = true) == true }?.toPair()
+
     fun load(cachePath: Path): Result<Unit> {
         val primary = cachePath
         val backup = cachePath.resolveSibling(cachePath.fileName.toString() + ".bak")

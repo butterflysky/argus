@@ -13,6 +13,7 @@ import org.javacord.api.interaction.SlashCommand
 import org.javacord.api.interaction.SlashCommandInteraction
 import org.javacord.api.interaction.SlashCommandOption
 import org.javacord.api.interaction.SlashCommandOptionType
+import org.javacord.api.interaction.SlashCommandOptionChoice
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -95,26 +96,26 @@ object DiscordBridge {
                 SlashCommandOption.createWithOptions(
                     SlashCommandOptionType.SUB_COMMAND,
                     "add",
-                    "Add a player UUID to the Argus whitelist",
+                    "Add a player to the Argus whitelist",
                     listOf(
-                        SlashCommandOption.createStringOption("uuid", "Player UUID", true),
+                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
                         SlashCommandOption.createStringOption("mcname", "Minecraft name (optional)", false)
                     )
                 ),
                 SlashCommandOption.createWithOptions(
                     SlashCommandOptionType.SUB_COMMAND,
                     "remove",
-                    "Remove a player UUID from the Argus whitelist",
+                    "Remove a player from the Argus whitelist",
                     listOf(
-                        SlashCommandOption.createStringOption("uuid", "Player UUID", true)
+                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true)
                     )
                 ),
                 SlashCommandOption.createWithOptions(
                     SlashCommandOptionType.SUB_COMMAND,
                     "status",
-                    "Show whitelist status for a player UUID",
+                    "Show whitelist status for a player",
                     listOf(
-                        SlashCommandOption.createStringOption("uuid", "Player UUID", true)
+                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true)
                     )
                 )
             )
@@ -129,6 +130,34 @@ object DiscordBridge {
                 "link" -> handleLinkSlash(interaction)
                 "whitelist" -> handleWhitelistSlash(interaction, server)
             }
+        }
+
+        discord.addAutocompleteCreateListener { event ->
+            val interaction = event.autocompleteInteraction
+            if (interaction.fullCommandName != "whitelist") return@addAutocompleteCreateListener
+            val focused = interaction.focusedOption
+            if (focused.name != "player") return@addAutocompleteCreateListener
+            val query = focused.stringValue.orElse("")
+
+            val choices = CacheStore.snapshot()
+                .entries
+                .asSequence()
+                .filter { entry ->
+                    val name = entry.value.mcName
+                    when {
+                        name == null -> false
+                        query.isBlank() -> true
+                        else -> name.contains(query, ignoreCase = true)
+                    }
+                }
+                .take(25)
+                .map { entry ->
+                    val label = "${entry.value.mcName} | ${entry.key}"
+                    SlashCommandOptionChoice.create(label, entry.key.toString())
+                }
+                .toList()
+
+            interaction.respondWithChoices(choices)
         }
     }
 
@@ -188,19 +217,25 @@ object DiscordBridge {
         }
     }
 
-    private fun parseUuid(interaction: SlashCommandInteraction): UUID? {
-        val uuidStr = interaction.getArgumentStringValueByName("uuid").orElse(null)
-        return runCatching { UUID.fromString(uuidStr) }.getOrElse {
-            interaction.createImmediateResponder()
-                .setContent("Invalid UUID")
-                .respond()
-            null
-        }
+    private fun parseTarget(interaction: SlashCommandInteraction): Pair<UUID, String?>? {
+        val raw = interaction.getArgumentStringValueByName("player").orElse(null) ?: return null
+
+        val uuid = runCatching { UUID.fromString(raw) }.getOrNull()
+        if (uuid != null) return uuid to CacheStore.findByUuid(uuid)?.mcName
+
+        val match = CacheStore.findByName(raw)
+        if (match != null) return match.first to match.second.mcName
+
+        interaction.createImmediateResponder()
+            .setContent("Player not found. Provide a UUID or a known cached name.")
+            .respond()
+        return null
     }
 
     private fun whitelistAdd(interaction: SlashCommandInteraction) {
-        val uuid = parseUuid(interaction) ?: return
-        val mcName = interaction.getArgumentStringValueByName("mcname").orElse(null)
+        val target = parseTarget(interaction) ?: return
+        val uuid = target.first
+        val mcName = interaction.getArgumentStringValueByName("mcname").orElse(target.second)
         val actor = interaction.user.discriminatedName
         val result = ArgusCore.whitelistAdd(uuid, mcName, actor)
         val message = result.getOrElse { "Failed: ${it.message}" }
@@ -211,7 +246,8 @@ object DiscordBridge {
     }
 
     private fun whitelistRemove(interaction: SlashCommandInteraction) {
-        val uuid = parseUuid(interaction) ?: return
+        val target = parseTarget(interaction) ?: return
+        val uuid = target.first
         val actor = interaction.user.discriminatedName
         val result = ArgusCore.whitelistRemove(uuid, actor)
         val message = result.getOrElse { "Failed: ${it.message}" }
@@ -222,7 +258,8 @@ object DiscordBridge {
     }
 
     private fun whitelistStatus(interaction: SlashCommandInteraction) {
-        val uuid = parseUuid(interaction) ?: return
+        val target = parseTarget(interaction) ?: return
+        val uuid = target.first
         val status = ArgusCore.whitelistStatus(uuid)
         interaction.createImmediateResponder()
             .setContent(status)

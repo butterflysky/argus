@@ -39,7 +39,7 @@ class ArgusModerationTest {
         val uuid = UUID.randomUUID()
         ArgusCore.banPlayer(uuid, actor = 123L, reason = "Griefing", untilEpochMillis = System.currentTimeMillis() + 60_000)
 
-        val result = ArgusCore.onPlayerLogin(uuid, "player", isOp = false, isLegacyWhitelisted = false)
+        val result = ArgusCore.onPlayerLogin(uuid, "player", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
         assertTrue(deny.message.contains("Griefing"))
     }
@@ -110,7 +110,8 @@ class ArgusModerationTest {
         ArgusConfig.load(cfgPath)
         CacheStore.load(cache)
 
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "noop", isOp = false, isLegacyWhitelisted = false)
-        assertIs<LoginResult.Allow>(result)
+        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "noop", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertEquals(ArgusConfig.current().applicationMessage, deny.message)
     }
 }

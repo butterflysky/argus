@@ -31,7 +31,7 @@ class ArgusCoreLoginTest {
 
     @Test
     fun `op bypasses gate`() {
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "op", isOp = true, isLegacyWhitelisted = false)
+        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "op", isOp = true, isLegacyWhitelisted = false, whitelistEnabled = true)
         assertIs<LoginResult.Allow>(result)
     }
 
@@ -40,7 +40,7 @@ class ArgusCoreLoginTest {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(hasAccess = true))
 
-        val result = ArgusCore.onPlayerLogin(playerId, "linked", isOp = false, isLegacyWhitelisted = false)
+        val result = ArgusCore.onPlayerLogin(playerId, "linked", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         assertIs<LoginResult.Allow>(result)
     }
 
@@ -49,21 +49,21 @@ class ArgusCoreLoginTest {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(hasAccess = false))
 
-        val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = false)
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertEquals("Access Denied: Missing Discord Role", deny.message)
+        val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
+        val kick = assertIs<LoginResult.AllowWithKick>(result)
+        assertTrue(kick.message.contains("/link"))
     }
 
     @Test
     fun `legacy whitelisted gets verification token kick`() {
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "legacy", isOp = false, isLegacyWhitelisted = true)
+        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "legacy", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         val kick = assertIs<LoginResult.AllowWithKick>(result)
-        assertTrue(kick.message.startsWith("Verification Required: !link"))
+        assertTrue(kick.message.contains("/link"))
     }
 
     @Test
     fun `stranger is denied with application message`() {
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false)
+        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
         assertEquals(ArgusConfig.current().applicationMessage, deny.message)
     }

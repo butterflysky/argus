@@ -65,15 +65,21 @@ object ArgusCore {
         uuid: UUID,
         name: String,
         isOp: Boolean,
-        isLegacyWhitelisted: Boolean
+        isLegacyWhitelisted: Boolean,
+        whitelistEnabled: Boolean
     ): LoginResult {
         if (isOp) return LoginResult.Allow
 
         val discordUp = discordStartedOverride ?: discordStarted
 
-        if (!ArgusConfig.isConfigured() || !discordUp) {
-            logger.info("Argus unconfigured or Discord unavailable; allowing login for $name")
+        if (!whitelistEnabled) {
             return LoginResult.Allow
+        }
+
+        // Fallback to vanilla whitelist if Argus/Discord not available
+        if (!ArgusConfig.isConfigured() || !discordUp) {
+            return if (isLegacyWhitelisted) LoginResult.Allow
+            else LoginResult.Deny(ArgusConfig.current().applicationMessage)
         }
         val pdata = CacheStore.get(uuid)
 
@@ -89,27 +95,31 @@ object ArgusCore {
 
         if (isOp) return LoginResult.Allow
 
-        if (pdata != null) {
-            if (pdata.hasAccess) return LoginResult.Allow
-            return LoginResult.Deny("Access Denied: Missing Discord Role")
-        }
+        if (pdata != null && pdata.hasAccess) return LoginResult.Allow
 
         if (isLegacyWhitelisted) {
             val token = LinkTokenService.issueToken(uuid, name)
-            return LoginResult.AllowWithKick("Verification Required: !link $token")
+            return LoginResult.AllowWithKick("Verification Required: /link $token in Discord")
         }
 
         return LoginResult.Deny(ArgusConfig.current().applicationMessage)
     }
 
-    fun onPlayerJoin(uuid: UUID, isOp: Boolean): String? {
+    fun onPlayerJoin(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? {
+        if (isOp && whitelistEnabled && ArgusConfig.isConfigured()) {
+            val pdata = CacheStore.get(uuid)
+            if (pdata?.discordId == null) {
+                val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
+                return "Please link your account in Discord with /link $token"
+            }
+        }
         if (isOp) return null
         val data = CacheStore.get(uuid) ?: return null
         return "Welcome back, ${data.mcName ?: "player"}!"
     }
 
     @JvmStatic
-    fun onPlayerJoinJvm(uuid: UUID, isOp: Boolean): String? = onPlayerJoin(uuid, isOp)
+    fun onPlayerJoinJvm(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? = onPlayerJoin(uuid, isOp, whitelistEnabled)
 
     /** Testing hook to emulate Discord availability without real gateway connection. */
     fun setDiscordStartedOverride(value: Boolean?) {

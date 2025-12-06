@@ -160,8 +160,9 @@ class ArgusFabric : ModInitializer {
             val name = profile.name
             val isOp = reflectBool(server.playerManager, "isOperator", profile)
             val isWhitelisted = reflectBool(server.playerManager, "isWhitelisted", profile)
+            val whitelistEnabled = reflectServerBool(server, listOf("isEnforceWhitelist"))
 
-            when (val result = ArgusCore.onPlayerLogin(uuid, name, isOp, isWhitelisted)) {
+            when (val result = ArgusCore.onPlayerLogin(uuid, name, isOp, isWhitelisted, whitelistEnabled)) {
                 LoginResult.Allow -> Unit
                 is LoginResult.AllowWithKick -> handler.disconnect(Text.literal(result.message))
                 is LoginResult.Deny -> handler.disconnect(Text.literal(result.message))
@@ -174,8 +175,9 @@ class ArgusFabric : ModInitializer {
             val player = handler.player
             val profile = player.gameProfile
             val isOp = player.hasPermissionLevel(4)
+            val whitelistEnabled = reflectServerBool(server, listOf("isEnforceWhitelist"))
 
-            ArgusCore.onPlayerJoin(profile.id, isOp)?.let {
+            ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled)?.let {
                 player.sendMessage(Text.literal(it), false)
             }
         }
@@ -209,5 +211,15 @@ class ArgusFabric : ModInitializer {
             method.isAccessible = true
             (method.invoke(target, arg) as? Boolean) ?: false
         }.getOrDefault(false)
+    }
+
+    private fun reflectServerBool(server: MinecraftServer, names: List<String>): Boolean {
+        return names.firstNotNullOfOrNull { name ->
+            runCatching {
+                val method = server.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 0 }
+                method?.isAccessible = true
+                method?.invoke(server) as? Boolean
+            }.getOrNull()
+        } ?: false
     }
 }

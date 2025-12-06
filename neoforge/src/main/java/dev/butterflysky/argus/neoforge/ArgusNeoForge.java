@@ -45,8 +45,9 @@ public class ArgusNeoForge {
         boolean isOp = player.hasPermissions(4);
         var nameAndId = player.nameAndId();
         boolean isWhitelisted = server != null && server.getPlayerList().isWhiteListed(nameAndId);
+        boolean whitelistEnabled = server != null && server.isEnforceWhitelist();
 
-        LoginResult result = ArgusCore.INSTANCE.onPlayerLogin(player.getUUID(), player.getScoreboardName(), isOp, isWhitelisted);
+        LoginResult result = ArgusCore.INSTANCE.onPlayerLogin(player.getUUID(), player.getScoreboardName(), isOp, isWhitelisted, whitelistEnabled);
         if (result instanceof LoginResult.Allow) return;
         if (result instanceof LoginResult.AllowWithKick allow) {
             player.connection.disconnect(Component.literal(allow.getMessage()));
@@ -58,7 +59,9 @@ public class ArgusNeoForge {
     @SubscribeEvent
     public void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         var player = (net.minecraft.server.level.ServerPlayer) event.getEntity();
-        String greeting = ArgusCore.INSTANCE.onPlayerJoin(player.getUUID(), player.hasPermissions(4));
+        var server = player.level().getServer();
+        boolean whitelistEnabled = server != null && server.isEnforceWhitelist();
+        String greeting = ArgusCore.INSTANCE.onPlayerJoin(player.getUUID(), player.hasPermissions(4), whitelistEnabled);
         if (greeting != null) {
             player.sendSystemMessage(Component.literal(greeting));
         }

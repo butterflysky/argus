@@ -3,6 +3,7 @@ package dev.butterflysky.argus.common
 import org.javacord.api.DiscordApi
 import org.javacord.api.DiscordApiBuilder
 import org.javacord.api.entity.channel.ServerTextChannel
+import org.javacord.api.entity.intent.Intent
 import org.javacord.api.entity.permission.Role
 import org.javacord.api.entity.server.Server
 import org.javacord.api.entity.user.User
@@ -33,7 +34,7 @@ object DiscordBridge {
         return runCatching {
             val future: CompletableFuture<DiscordApi> = DiscordApiBuilder()
                 .setToken(settings.botToken)
-                .setAllIntents()
+                .setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS)
                 .login()
 
             api = future.join()

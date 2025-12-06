@@ -107,7 +107,10 @@ object ArgusCore {
         }
 
         if (hasAccess == true) {
-            if (firstSeen) AuditLogger.log("First login seen (allow): mc=$name ($uuid) discord=${pdata?.discordId ?: "unlinked"}")
+            if (firstSeen) {
+                val discordLabel = pdata?.discordName?.let { "$it (${pdata.discordId})" } ?: "unlinked"
+                AuditLogger.log("First login seen (allow): mc=$name ($uuid) discord=$discordLabel")
+            }
             return LoginResult.Allow
         }
 
@@ -120,7 +123,6 @@ object ArgusCore {
 
         if (isLegacyWhitelisted) {
             val token = LinkTokenService.issueToken(uuid, name)
-            if (firstSeen) AuditLogger.log("First login seen (legacy kick): mc=$name ($uuid) discord=${pdata?.discordId ?: "unlinked"}")
             return LoginResult.AllowWithKick(prefix(withInviteSuffix("Verification Required: /link $token in Discord")))
         }
 

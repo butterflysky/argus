@@ -13,7 +13,7 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 dependencies {
     implementation project(":common")
-    implementation "net.neoforged:neoforge:${neo_version}"
+    implementation "net.neoforged:neoforge:${rootProject.ext.neo_version}"
 }
 
 runs {

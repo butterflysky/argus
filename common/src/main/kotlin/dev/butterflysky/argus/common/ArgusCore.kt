@@ -48,6 +48,13 @@ object ArgusCore {
             .onFailure { logger.warn("Discord startup skipped/failed: ${it.message}") }
     }
 
+    fun reloadConfig(): Result<Unit> = initialize().onSuccess { startDiscord() }
+
+    @JvmStatic
+    fun reloadConfigJvm() {
+        reloadConfig().onFailure { logger.error("Failed to reload Argus config", it) }
+    }
+
     @JvmStatic
     fun startDiscordJvm() {
         startDiscord()

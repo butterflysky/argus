@@ -1,7 +1,9 @@
 package dev.butterflysky.argus.fabric
 
+import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import dev.butterflysky.argus.common.ArgusCore
+import dev.butterflysky.argus.common.ArgusConfig
 import dev.butterflysky.argus.common.LoginResult
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
@@ -41,6 +43,26 @@ class ArgusFabric : ModInitializer {
                             .executes { ctx -> reloadConfig(ctx) }
                     )
                     .then(
+                        literal("help")
+                            .executes { ctx ->
+                                ctx.source.sendFeedback({ Text.literal(helpText()) }, false)
+                                1
+                            }
+                    )
+                    .then(
+                        literal("config")
+                            .then(
+                                literal("set")
+                                    .then(
+                                        net.minecraft.server.command.CommandManager.argument("field", StringArgumentType.word())
+                                            .then(
+                                                net.minecraft.server.command.CommandManager.argument("value", StringArgumentType.greedyString())
+                                                    .executes { ctx -> setConfig(ctx) }
+                                            )
+                                    )
+                            )
+                    )
+                    .then(
                         literal("token")
                             .requires { it.hasPermissionLevel(3) }
                             .then(
@@ -49,6 +71,18 @@ class ArgusFabric : ModInitializer {
                             )
                     )
             )
+        }
+    }
+
+    private fun setConfig(ctx: CommandContext<ServerCommandSource>): Int {
+        val field = StringArgumentType.getString(ctx, "field")
+        val value = StringArgumentType.getString(ctx, "value")
+        val result = ArgusConfig.update(field, value)
+            .onSuccess { ArgusCore.reloadConfig() }
+        return if (result.isSuccess) {
+            ctx.source.sendFeedback({ Text.literal("Set $field") }, false); 1
+        } else {
+            ctx.source.sendError(Text.literal("Failed: ${result.exceptionOrNull()?.message}")); 0
         }
     }
 
@@ -73,6 +107,12 @@ class ArgusFabric : ModInitializer {
         ctx.source.sendFeedback({ Text.literal("Argus link token for ${profile.name}: $token") }, false)
         return 1
     }
+
+    private fun helpText(): String = """
+        /argus reload - reload config and restart Discord (if configured)
+        /argus token <player> - issue a link token for that player
+        Discord-side: /whitelist (add/remove/status/apply/list/approve/deny/warn/ban/unban/comment/review/my/help)
+    """.trimIndent()
 
     private fun registerLoginGuard() {
         ServerLoginConnectionEvents.QUERY_START.register { handler, server, _, _ ->

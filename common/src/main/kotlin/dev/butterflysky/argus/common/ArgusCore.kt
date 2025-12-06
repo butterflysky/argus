@@ -83,7 +83,11 @@ object ArgusCore {
         }
         val pdata = CacheStore.get(uuid)
 
-        val liveAccess = pdata?.discordId?.let { DiscordBridge.checkWhitelistRole(it) }
+        // Only pay the live Discord check cost if cache would block them and we have a Discord link.
+        val liveAccess = if (pdata?.discordId != null && pdata.hasAccess != true) {
+            DiscordBridge.checkWhitelistRole(pdata.discordId)
+        } else null
+
         if (liveAccess != null && pdata != null) {
             CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
             CacheStore.save(ArgusConfig.cachePath)
@@ -117,6 +121,10 @@ object ArgusCore {
     }
 
     fun onPlayerJoin(uuid: UUID, isOp: Boolean, whitelistEnabled: Boolean): String? {
+        if (whitelistEnabled && ArgusConfig.isConfigured()) {
+            val kick = refreshAccessOnJoin(uuid)
+            if (kick is LoginResult.Deny) return kick.message
+        }
         if (isOp && whitelistEnabled && ArgusConfig.isConfigured()) {
             val pdata = CacheStore.get(uuid)
             if (pdata?.discordId == null) {
@@ -127,6 +135,17 @@ object ArgusCore {
         if (isOp) return null
         val data = CacheStore.get(uuid) ?: return null
         return "Welcome back, ${data.mcName ?: "player"}!"
+    }
+
+    /** Live role check on join; returns Deny to kick if role missing. */
+    private fun refreshAccessOnJoin(uuid: UUID): LoginResult? {
+        val pdata = CacheStore.get(uuid) ?: return null
+        val discordId = pdata.discordId ?: return null
+        val liveAccess = DiscordBridge.checkWhitelistRole(discordId)
+        if (liveAccess == null) return null
+        CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
+        CacheStore.save(ArgusConfig.cachePath)
+        return if (liveAccess) null else LoginResult.Deny(withInviteSuffix("Access revoked: missing Discord whitelist role"))
     }
 
     private fun withInviteSuffix(message: String): String {

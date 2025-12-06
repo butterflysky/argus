@@ -61,9 +61,13 @@ public class ArgusNeoForge {
         var player = (net.minecraft.server.level.ServerPlayer) event.getEntity();
         var server = player.level().getServer();
         boolean whitelistEnabled = server != null && server.isEnforceWhitelist();
-        String greeting = ArgusCore.INSTANCE.onPlayerJoin(player.getUUID(), player.hasPermissions(4), whitelistEnabled);
-        if (greeting != null) {
-            player.sendSystemMessage(Component.literal(greeting));
+        String message = ArgusCore.INSTANCE.onPlayerJoin(player.getUUID(), player.hasPermissions(4), whitelistEnabled);
+        if (message != null) {
+            if (message.startsWith("Access revoked")) {
+                player.connection.disconnect(Component.literal(message));
+            } else {
+                player.sendSystemMessage(Component.literal(message));
+            }
         }
     }
 

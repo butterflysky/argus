@@ -177,8 +177,13 @@ class ArgusFabric : ModInitializer {
             val isOp = player.hasPermissionLevel(4)
             val whitelistEnabled = reflectServerBool(server, listOf("isEnforceWhitelist"))
 
-            ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled)?.let {
-                player.sendMessage(Text.literal(it), false)
+            ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled)?.let { message ->
+                // If message is a kick, disconnect; otherwise send chat message.
+                if (message.startsWith("Access revoked")) {
+                    player.networkHandler.disconnect(Text.literal(message))
+                } else {
+                    player.sendMessage(Text.literal(message), false)
+                }
             }
         }
 

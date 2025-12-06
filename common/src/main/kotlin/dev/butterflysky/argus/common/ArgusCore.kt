@@ -16,12 +16,22 @@ object ArgusCore {
             .mapCatching { CacheStore.load(ArgusConfig.cachePath).getOrThrow() }
     }
 
+    @JvmStatic
+    fun initializeJvm() {
+        initialize().onFailure { logger.error("Failed to initialize Argus core", it) }
+    }
+
     fun startDiscord(): Result<Unit> {
         if (discordStarted) return Result.success(Unit)
         val settings = ArgusConfig.current()
         return DiscordBridge.start(settings)
             .onSuccess { discordStarted = true }
             .onFailure { logger.warn("Discord startup skipped/failed: ${it.message}") }
+    }
+
+    @JvmStatic
+    fun startDiscordJvm() {
+        startDiscord()
     }
 
     fun onPlayerLogin(
@@ -52,6 +62,9 @@ object ArgusCore {
         val data = CacheStore.get(uuid) ?: return null
         return "Welcome back, ${data.mcName ?: "player"}!"
     }
+
+    @JvmStatic
+    fun onPlayerJoinJvm(uuid: UUID, isOp: Boolean): String? = onPlayerJoin(uuid, isOp)
 
     fun linkDiscordUser(token: String, discordId: Long, discordName: String, discordNick: String?): Result<String> {
         val uuid = LinkTokenService.consume(token) ?: return Result.failure(IllegalArgumentException("Invalid or expired token"))

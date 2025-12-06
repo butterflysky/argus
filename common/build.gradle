@@ -8,8 +8,15 @@ dependencies {
     implementation "org.javacord:javacord:${rootProject.ext.javacordVersion}"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${rootProject.ext.serializationVersion}"
     implementation "org.slf4j:slf4j-api:${rootProject.ext.slf4jVersion}"
+
+    testImplementation "org.jetbrains.kotlin:kotlin-test"
+    testImplementation "org.junit.jupiter:junit-jupiter:${rootProject.ext.junitVersion}"
 }
 
 java {
     withSourcesJar()
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }

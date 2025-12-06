@@ -11,6 +11,7 @@ ext {
     serializationVersion = "1.6.3"
     javacordVersion = project.findProperty("javacord_version") ?: "3.8.0"
     slf4jVersion = "2.0.13"
+    junitVersion = project.findProperty("junit_version") ?: "5.11.0"
 }
 
 subprojects {

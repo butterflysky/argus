@@ -87,16 +87,9 @@ class ArgusFabric : ModInitializer {
             val player = handler.player
             val profile = player.gameProfile
             val isOp = player.hasPermissionLevel(4)
-            val isWhitelisted = true
 
-            when (val result = ArgusCore.onPlayerLogin(profile.id, profile.name, isOp, isWhitelisted)) {
-                LoginResult.Allow -> {
-                    ArgusCore.onPlayerJoin(profile.id, isOp)?.let {
-                        player.sendMessage(Text.literal(it), false)
-                    }
-                }
-                is LoginResult.AllowWithKick -> player.networkHandler.disconnect(Text.literal(result.message))
-                is LoginResult.Deny -> player.networkHandler.disconnect(Text.literal(result.message))
+            ArgusCore.onPlayerJoin(profile.id, isOp)?.let {
+                player.sendMessage(Text.literal(it), false)
             }
         }
 

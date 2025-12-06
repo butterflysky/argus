@@ -1,7 +1,6 @@
 plugins {
-    id 'java'
-    id 'org.jetbrains.kotlin.jvm'
-    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'java-library'
+    id 'maven-publish'
     id 'net.neoforged.gradle.userdev' version '7.1.6'
 }
 
@@ -22,12 +21,11 @@ runs {
     server { argument '--nogui' }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.release = 21
-}
+sourceSets.main.resources { srcDir 'src/generated/resources' }
 
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions.jvmTarget = "21"
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
 }
 
 java {

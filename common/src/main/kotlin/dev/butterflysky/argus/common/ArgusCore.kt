@@ -52,4 +52,19 @@ object ArgusCore {
         val data = CacheStore.get(uuid) ?: return null
         return "Welcome back, ${data.mcName ?: "player"}!"
     }
+
+    fun linkDiscordUser(token: String, discordId: Long, discordName: String, discordNick: String?): Result<String> {
+        val uuid = LinkTokenService.consume(token) ?: return Result.failure(IllegalArgumentException("Invalid or expired token"))
+        val existing = CacheStore.get(uuid) ?: PlayerData()
+        val updated = existing.copy(
+            discordId = discordId,
+            discordName = discordName,
+            discordNick = discordNick,
+            hasAccess = true
+        )
+        CacheStore.upsert(uuid, updated)
+        CacheStore.save(ArgusConfig.cachePath)
+        AuditLogger.log("Linked ${uuid} to Discord $discordName (access granted)")
+        return Result.success("Linked successfully; access granted.")
+    }
 }

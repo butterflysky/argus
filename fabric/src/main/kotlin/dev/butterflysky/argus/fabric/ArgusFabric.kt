@@ -40,6 +40,14 @@ class ArgusFabric : ModInitializer {
                         literal("reload")
                             .executes { ctx -> reloadConfig(ctx) }
                     )
+                    .then(
+                        literal("token")
+                            .requires { it.hasPermissionLevel(3) }
+                            .then(
+                                net.minecraft.server.command.CommandManager.argument("player", net.minecraft.command.argument.GameProfileArgumentType.gameProfile())
+                                    .executes { ctx -> issueToken(ctx) }
+                            )
+                    )
             )
         }
     }
@@ -47,6 +55,14 @@ class ArgusFabric : ModInitializer {
     private fun reloadConfig(ctx: CommandContext<ServerCommandSource>): Int {
         // Placeholder: configuration loading will be implemented with the new schema.
         ctx.source.sendFeedback({ Text.literal("Argus config reload not yet implemented") }, false)
+        return 1
+    }
+
+    private fun issueToken(ctx: CommandContext<ServerCommandSource>): Int {
+        val profiles = net.minecraft.command.argument.GameProfileArgumentType.getProfileArgument(ctx, "player")
+        val profile = profiles.firstOrNull() ?: return 0
+        val token = dev.butterflysky.argus.common.LinkTokenService.issueToken(profile.id, profile.name)
+        ctx.source.sendFeedback({ Text.literal("Argus link token for ${profile.name}: $token") }, false)
         return 1
     }
 

@@ -6,6 +6,7 @@ import org.javacord.api.entity.channel.ServerTextChannel
 import org.javacord.api.entity.permission.Role
 import org.javacord.api.entity.server.Server
 import org.javacord.api.entity.user.User
+import org.javacord.api.event.message.MessageCreateEvent
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -38,6 +39,7 @@ object DiscordBridge {
 
             registerRoleListeners(server, settings)
             registerIdentityListeners(server)
+            registerMessageCommands(server)
         }
     }
 
@@ -62,6 +64,40 @@ object DiscordBridge {
         }
         api?.addUserChangeNameListener { event ->
             AuditLogger.log("Identity Update: ${event.oldName} is now ${event.newName}")
+        }
+    }
+
+    private fun registerMessageCommands(server: Server) {
+        api?.addMessageCreateListener { event ->
+            if (event.server.orElse(null) != server) return@addMessageCreateListener
+            handleLinkCommand(event)
+        }
+    }
+
+    private fun handleLinkCommand(event: MessageCreateEvent) {
+        val content = event.messageContent.trim()
+        val parts = content.split(" ")
+        if (parts.size < 2) return
+        val keyword = parts[0].lowercase()
+        if (keyword !in listOf("!link", "/link")) return
+
+        val token = parts[1]
+        val user = event.messageAuthor
+        if (!user.isUser) return
+
+        val displayNick = user.displayName
+
+        val result = ArgusCore.linkDiscordUser(
+            token = token,
+            discordId = user.id,
+            discordName = user.discriminatedName,
+            discordNick = displayNick
+        )
+
+        result.onSuccess { msg ->
+            event.channel.sendMessage(msg)
+        }.onFailure { ex ->
+            event.channel.sendMessage("Link failed: ${ex.message}")
         }
     }
 

@@ -8,11 +8,20 @@ import java.util.UUID
  */
 object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")
+    @Volatile private var discordStarted = false
 
     fun initialize(): Result<Unit> {
         logger.info("Initializing Argus core (cache-first)")
         return ArgusConfig.load()
             .mapCatching { CacheStore.load(ArgusConfig.cachePath).getOrThrow() }
+    }
+
+    fun startDiscord(): Result<Unit> {
+        if (discordStarted) return Result.success(Unit)
+        val settings = ArgusConfig.current()
+        return DiscordBridge.start(settings)
+            .onSuccess { discordStarted = true }
+            .onFailure { logger.warn("Discord startup skipped/failed: ${it.message}") }
     }
 
     fun onPlayerLogin(

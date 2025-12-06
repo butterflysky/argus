@@ -21,6 +21,8 @@ class ArgusFabric : ModInitializer {
         ArgusCore.initialize()
             .onFailure { logger.error("Failed to load Argus cache", it) }
 
+        ArgusCore.startDiscord()
+
         registerCommands()
         registerJoinGuard()
     }

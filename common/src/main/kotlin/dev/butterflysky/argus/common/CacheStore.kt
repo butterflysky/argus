@@ -26,6 +26,9 @@ object CacheStore {
         data[uuid] = player
     }
 
+    fun findByDiscordId(discordId: Long): Pair<UUID, PlayerData>? =
+        data.entries.firstOrNull { it.value.discordId == discordId }?.toPair()
+
     fun load(cachePath: Path): Result<Unit> {
         val primary = cachePath
         val backup = cachePath.resolveSibling(cachePath.fileName.toString() + ".bak")

@@ -26,6 +26,9 @@ Kotlin-based, cache-first access control for Minecraft 1.21.10 with Discord iden
 # NeoForge run target can be added via NeoGradle run configs when needed
 ```
 
+## Documentation
+Static docs (HTML) live in `docs/` and can be served as a simple static site. Start at `docs/index.html` for setup, commands, and playtest checklist.
+
 ## Configuration
 `config/argus.json` is created on first run (or via `ArgusCore.initialize()`):
 ```json

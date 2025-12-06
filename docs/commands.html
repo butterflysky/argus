@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Argus Commands</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Argus Commands</h1>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="setup.html">Setup</a>
+      <a href="playtest.html">Playtest</a>
+    </nav>
+  </header>
+  <main>
+    <h2 id="whitelist">Whitelist &amp; moderation</h2>
+    <table>
+      <tr><th>Command</th><th>Who</th><th>Description</th></tr>
+      <tr><td><code>/whitelist add player:&lt;name|uuid&gt; [discord] [mcname]</code></td><td>admin</td><td>Grant access; optional Discord user to link.</td></tr>
+      <tr><td><code>/whitelist remove player:&lt;name|uuid&gt; [discord]</code></td><td>admin</td><td>Revoke access (keeps link for history).</td></tr>
+      <tr><td><code>/whitelist status player:&lt;name|uuid&gt;</code></td><td>admin</td><td>Show access/ban state.</td></tr>
+      <tr><td><code>/whitelist apply mcname:&lt;name&gt;</code></td><td>user</td><td>Submit application (Mojang-validated).</td></tr>
+      <tr><td><code>/whitelist list-applications</code></td><td>admin</td><td>Paged list of pending apps with inline approve/deny.</td></tr>
+      <tr><td><code>/whitelist approve|deny application:&lt;id&gt; [reason]</code></td><td>admin</td><td>Decide an application.</td></tr>
+      <tr><td><code>/whitelist warn player:&lt;...&gt; reason:&lt;text&gt;</code></td><td>admin</td><td>Record warning.</td></tr>
+      <tr><td><code>/whitelist ban player:&lt;...&gt; reason:&lt;text&gt; [duration_minutes]</code></td><td>admin</td><td>Ban (duration or permanent).</td></tr>
+      <tr><td><code>/whitelist unban player:&lt;...&gt;</code></td><td>admin</td><td>Clear active ban.</td></tr>
+      <tr><td><code>/whitelist comment player:&lt;...&gt; note:&lt;text&gt;</code></td><td>admin</td><td>Add admin-only comment.</td></tr>
+      <tr><td><code>/whitelist review player:&lt;...&gt;</code></td><td>admin</td><td>Show history (comments hidden from users).</td></tr>
+      <tr><td><code>/whitelist my</code></td><td>user</td><td>See your warnings and active/last ban.</td></tr>
+      <tr><td><code>/whitelist help</code></td><td>all</td><td>Short command help.</td></tr>
+    </table>
+  </main>
+</body>
+</html>

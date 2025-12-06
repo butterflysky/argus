@@ -33,6 +33,10 @@ object ArgusCore {
     fun startDiscord(): Result<Unit> {
         if (discordStarted) return Result.success(Unit)
         val settings = ArgusConfig.current()
+        if (settings.botToken.isBlank() || settings.guildId == null) {
+            logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
+            return Result.success(Unit)
+        }
         return DiscordBridge.start(settings)
             .onSuccess { discordStarted = true }
             .onFailure { logger.warn("Discord startup skipped/failed: ${it.message}") }

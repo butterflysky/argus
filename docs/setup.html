@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Argus Setup</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Argus Setup</h1>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="commands.html">Commands</a>
+      <a href="playtest.html">Playtest</a>
+    </nav>
+  </header>
+  <main>
+    <h2 id="configuration">Configuration</h2>
+    <p>On first run Argus writes <code>config/argus.json</code>. Fill these:</p>
+    <table>
+      <tr><th>Field</th><th>Description</th></tr>
+      <tr><td>botToken</td><td>Discord bot token (leave blank to disable Discord; server still runs).</td></tr>
+      <tr><td>guildId</td><td>Discord server ID.</td></tr>
+      <tr><td>whitelistRoleId</td><td>Discord role granting access.</td></tr>
+      <tr><td>adminRoleId</td><td>Discord role allowed to run admin commands.</td></tr>
+      <tr><td>logChannelId</td><td>Channel for audit logs (optional).</td></tr>
+      <tr><td>applicationMessage</td><td>Kick message for unlinked players.</td></tr>
+      <tr><td>cacheFile</td><td>Path to cache JSON (default <code>config/argus_db.json</code>).</td></tr>
+    </table>
+
+    <h2 id="build-run">Build &amp; Run</h2>
+    <pre><code>./gradlew build
+./gradlew :fabric:runServer   # Fabric dev server
+./gradlew :neoforge:build     # NeoForge mod jar
+</code></pre>
+
+    <h2 id="fail-safe">Fail-safe startup</h2>
+    <p>If Discord is unconfigured (blank token or missing guildId), Argus logs a notice and skips the bot. Login gate still works from cache; server start is not blocked.</p>
+  </main>
+</body>
+</html>

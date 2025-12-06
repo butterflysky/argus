@@ -1,0 +1,10 @@
+body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 1.5rem; line-height: 1.6; }
+header { border-bottom: 1px solid #ddd; margin-bottom: 1rem; }
+nav a { margin-right: 1rem; text-decoration: none; color: #1565c0; }
+nav a:hover { text-decoration: underline; }
+h1, h2, h3 { color: #0d47a1; }
+code { background: #f4f4f4; padding: 0.1rem 0.3rem; border-radius: 3px; }
+pre { background: #f4f4f4; padding: 0.6rem; border-radius: 4px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+th { background: #f0f6ff; }

@@ -14,10 +14,11 @@ Kotlin-based, cache-first access control for Minecraft 1.21.10 with Discord iden
 
 ## Login Rules (spec)
 - OPs bypass checks.
-- Linked users must have `hasAccess` in the cache.
-- Legacy vanilla-whitelisted users get a temporary allow + kick with a `!link <token>` message.
-- Strangers are denied with `applicationMessage` from config.
-- Cache is the only source used during login; no Discord calls on the login thread.
+- Linked users must have `hasAccess` in the cache; if cache would deny, Argus does a one-off Discord role refresh (short timeout) before final decision.
+- Legacy vanilla-whitelisted users get a temporary allow + kick with a link token.
+- Strangers are denied with `applicationMessage` from config (optionally with an invite link).
+- Join hook performs a live Discord role check (short timeout, falls back to cache); if whitelist role is missing the player is kicked and cache/audit are updated.
+- If Discord/config are unavailable, Argus stays cache-only; server startup is never blocked.
 
 ## Build & Run
 ```bash

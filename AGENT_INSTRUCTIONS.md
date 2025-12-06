@@ -18,9 +18,10 @@ These instructions match the current Argus direction in `ARGUS_MASTER_SPEC.md`: 
 ## Coding Standards (spec-driven)
 - Language/targets: Java 21, Kotlin 2.1.x, package `dev.butterflysky.argus`.
 - Discord: prefer **Javacord** inside `:common`.
-- Login safety: all login decisions read from the local cache only—no Discord/network calls on the login thread.
+- Login safety: **cache-first**; login decisions read from `argus_db.json`. If a linked user would be denied, perform a one-shot Discord role refresh (short timeout) to re-evaluate before final deny. No other live calls on the login thread.
+- Join safety: on successful login, perform a live Discord role check (short timeout, falls back to cache). If whitelist role is missing, kick with “no longer whitelisted” and update cache/audit. This keeps cache aligned with Discord.
 - Cache safety: before writing `argus_db.json`, rename the existing file to `.bak`; on load, fall back to `.bak` if needed.
-- Permission gate: OPs bypass; linked users need `hasAccess`; legacy whitelisted users may enter once and are kicked with a link token; strangers are denied with the application message.
+- Permission gate: OPs bypass; linked users need `hasAccess`; legacy vanilla-whitelisted users may enter once and are kicked with a link token; strangers are denied with the application message (plus optional invite link).
 - Audit/identity: after cache mutation, log to console and to the Discord log channel; track Discord name/nick changes and record them.
 - Logging: use Fabric `LoggerFactory.getLogger()`. Prefer Kotlin `Result` when it clarifies error handling.
 - Dependency policy: when (re)bootstrapping, bump to the latest supported dependency versions, then pin; future upgrades are explicit and intentional.

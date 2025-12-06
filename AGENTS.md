@@ -13,9 +13,10 @@ Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21
 - Discord library: **Javacord** (spec choice; keep consistent unless explicitly changed).
 - Java 21 / Kotlin 2.1.x; package namespace `dev.butterflysky.argus`. Prefer Kotlin for new work.
 - Auth/Permissions rules from the spec:
-  - Login checks read **only** from the local cache file `argus_db.json`; never block login on Discord I/O.
+  - Login path is **cache-first**: evaluate from `argus_db.json` only. If a linked user would be denied by cache, Argus performs a one-off Discord role refresh (short timeout) before final decision; otherwise no live I/O on login. OPs bypass everything.
+  - Join path performs a live Discord role check (short timeout, falls back to cache) and kicks if the whitelist role is missing, logging the change. This keeps the cache in sync after the player is online.
   - Before saving, rename existing cache to `.bak`; on load, fall back to `.bak` if the main file fails.
-  - OPs bypass checks. Linked users require `hasAccess`; legacy whitelisted users get a temporary allow + kick with a link token; strangers are denied with the application message.
+  - Legacy vanilla-whitelisted users: allowed once, then kicked with a link token message. Strangers are denied with the configured application message (with optional Discord invite).
   - Audit mutations: update cache → log to console → send to Discord log channel. Track Discord name/nick changes.
 
 ## Issue Tracking with bd (beads)

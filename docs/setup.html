@@ -34,8 +34,12 @@
 ./gradlew :neoforge:build     # NeoForge mod jar
 </code></pre>
 
-    <h2 id="fail-safe">Fail-safe startup</h2>
-    <p>If Discord is unconfigured (blank token or missing guildId), Argus logs a notice and skips the bot. Login gate still works from cache; server start is not blocked.</p>
+    <h2 id="fail-safe">Fail-safe &amp; live checks</h2>
+    <ul>
+      <li>Discord optional: if token/guild are missing or Discord is down, Argus runs cache-only and never blocks server start.</li>
+      <li>Login thread is cache-first; if a linked user would be denied, Argus does one short Discord role refresh before final decision. Otherwise no live calls on login.</li>
+      <li>After login, a live Discord role check (short timeout, falls back to cache) keeps the cache aligned; if the whitelist role is missing the player is kicked with a message and the cache/audit are updated.</li>
+    </ul>
   </main>
 </body>
 </html>

@@ -83,7 +83,6 @@ object ArgusCore {
             else LoginResult.Deny(prefix(ArgusConfig.current().applicationMessage))
         }
         val pdata = CacheStore.get(uuid)
-        val firstSeen = pdata == null
 
         // Only pay the live Discord check cost if cache would block them and we have a Discord link.
         val liveAccess = if (pdata?.discordId != null && pdata.hasAccess != true) {
@@ -107,9 +106,12 @@ object ArgusCore {
         }
 
         if (hasAccess == true) {
-            if (firstSeen) {
+            val seen = CacheStore.eventsSnapshot().any { it.type == "first_allow" && it.targetUuid == uuid.toString() }
+            if (!seen) {
                 val discordLabel = pdata?.discordName?.let { "$it (${pdata.discordId})" } ?: "unlinked"
                 AuditLogger.log("First login seen (allow): mc=$name ($uuid) discord=$discordLabel")
+                CacheStore.appendEvent(EventEntry(type = "first_allow", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
+                CacheStore.save(ArgusConfig.cachePath)
             }
             return LoginResult.Allow
         }
@@ -123,6 +125,13 @@ object ArgusCore {
 
         if (isLegacyWhitelisted) {
             val token = LinkTokenService.issueToken(uuid, name)
+            val seenLegacy = CacheStore.eventsSnapshot().any { it.type == "first_legacy_kick" && it.targetUuid == uuid.toString() }
+            if (!seenLegacy) {
+                val discordLabel = pdata?.discordName?.let { "$it (${pdata.discordId})" } ?: "unlinked"
+                AuditLogger.log("Previously whitelisted but unlinked: mc=$name ($uuid) discord=$discordLabel — kicked with link token")
+                CacheStore.appendEvent(EventEntry(type = "first_legacy_kick", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
+                CacheStore.save(ArgusConfig.cachePath)
+            }
             return LoginResult.AllowWithKick(prefix(withInviteSuffix("Verification Required: /link $token in Discord")))
         }
 

@@ -127,8 +127,7 @@ object ArgusCore {
             val token = LinkTokenService.issueToken(uuid, name)
             val seenLegacy = CacheStore.eventsSnapshot().any { it.type == "first_legacy_kick" && it.targetUuid == uuid.toString() }
             if (!seenLegacy) {
-                val discordLabel = pdata?.discordName?.let { "$it (${pdata.discordId})" } ?: "unlinked"
-                AuditLogger.log("Previously whitelisted but unlinked: mc=$name ($uuid) discord=$discordLabel — kicked with link token")
+                AuditLogger.log("Previously whitelisted but unlinked: mc=$name ($uuid) — kicked with link token")
                 CacheStore.appendEvent(EventEntry(type = "first_legacy_kick", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
                 CacheStore.save(ArgusConfig.cachePath)
             }

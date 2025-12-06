@@ -292,12 +292,13 @@ object DiscordBridge {
         val token = tokenOpt.get()
         val user = interaction.user
         val server = interaction.server.orElse(null)
+        val displayName = server?.let { user.getDisplayName(it) } ?: user.name
 
         val result = ArgusCore.linkDiscordUser(
             token = token,
             discordId = user.id,
-            discordName = user.discriminatedName,
-            discordNick = server?.let { user.getDisplayName(it) } ?: user.discriminatedName
+            discordName = displayName,
+            discordNick = server?.let { user.getNickname(it).orElse(null) } ?: displayName
         )
 
         val embed = EmbedBuilder()

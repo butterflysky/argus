@@ -6,12 +6,15 @@ import dev.butterflysky.argus.common.LoginResult
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.networking.v1.ServerLoginConnectionEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.command.CommandManager.literal
 import net.minecraft.server.command.ServerCommandSource
+import net.minecraft.server.network.ServerLoginNetworkHandler
 import net.minecraft.text.Text
 import org.slf4j.LoggerFactory
+import java.util.UUID
 
 class ArgusFabric : ModInitializer {
     private val logger = LoggerFactory.getLogger("argus-fabric")
@@ -24,7 +27,8 @@ class ArgusFabric : ModInitializer {
         ArgusCore.startDiscord()
 
         registerCommands()
-        registerJoinGuard()
+        registerLoginGuard()
+        registerJoinGreeting()
     }
 
     private fun registerCommands() {
@@ -46,7 +50,23 @@ class ArgusFabric : ModInitializer {
         return 1
     }
 
-    private fun registerJoinGuard() {
+    private fun registerLoginGuard() {
+        ServerLoginConnectionEvents.QUERY_START.register { handler, server, _, _ ->
+            val profile = extractProfile(handler) ?: return@register
+            val uuid: UUID = profile.id
+            val name = profile.name
+            val isOp = reflectBool(server.playerManager, "isOperator", profile)
+            val isWhitelisted = reflectBool(server.playerManager, "isWhitelisted", profile)
+
+            when (val result = ArgusCore.onPlayerLogin(uuid, name, isOp, isWhitelisted)) {
+                LoginResult.Allow -> Unit
+                is LoginResult.AllowWithKick -> handler.disconnect(Text.literal(result.message))
+                is LoginResult.Deny -> handler.disconnect(Text.literal(result.message))
+            }
+        }
+    }
+
+    private fun registerJoinGreeting() {
         ServerPlayConnectionEvents.JOIN.register { handler, _, server ->
             val player = handler.player
             val profile = player.gameProfile
@@ -67,5 +87,31 @@ class ArgusFabric : ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register { server: MinecraftServer ->
             logger.info("Argus login guards registered on server {}", server.name)
         }
+    }
+
+    private fun extractProfile(handler: ServerLoginNetworkHandler): com.mojang.authlib.GameProfile? {
+        val candidates = listOf("profile", "gameProfile", "field_14168", "field_14346")
+        for (name in candidates) {
+            runCatching {
+                val field = handler.javaClass.getDeclaredField(name)
+                field.isAccessible = true
+                val value = field.get(handler)
+                if (value is com.mojang.authlib.GameProfile) return value
+            }
+        }
+        return runCatching {
+            val method = handler.javaClass.methods.firstOrNull { it.name in listOf("getProfile", "getGameProfile") && it.parameterCount == 0 }
+            method?.invoke(handler) as? com.mojang.authlib.GameProfile
+        }.getOrNull()
+    }
+
+    private fun reflectBool(target: Any, methodName: String, arg: Any): Boolean {
+        return runCatching {
+            val method = target.javaClass.methods.firstOrNull {
+                it.name == methodName && it.parameterCount == 1
+            } ?: return@runCatching false
+            method.isAccessible = true
+            (method.invoke(target, arg) as? Boolean) ?: false
+        }.getOrDefault(false)
     }
 }

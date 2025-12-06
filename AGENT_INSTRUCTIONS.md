@@ -25,16 +25,12 @@ These instructions match the current Argus direction in `ARGUS_MASTER_SPEC.md`: 
 - Dependency policy: when (re)bootstrapping, bump to the latest supported dependency versions, then pin; future upgrades are explicit and intentional.
 
 ## Build & Test
-- Toolchain: JDK 21, Gradle wrapper, Loom (with Vineflower decompiler once configured in the root build).
-- Current commands (legacy Fabric codebase):
-  - Build: `./gradlew build`
-  - Tests: `./gradlew test`
-  - Run client/server: `./gradlew runClient`, `./gradlew runServer`
-- Target commands after multi-loader split:
-  - `./gradlew :common:build`
-  - `./gradlew :fabric:runServer`
-  - `./gradlew :neoforge:runServer` (once scaffolded)
-- Run `./gradlew test` and, when relevant, `./gradlew build` before committing code changes.
+- Toolchain: JDK 21, Gradle wrapper, Loom (Vineflower configured).
+- Commands:
+  - Build all: `./gradlew build`
+  - Module builds: `./gradlew :common:build`, `./gradlew :fabric:build`, `./gradlew :neoforge:build`
+  - Run dev server (Fabric): `./gradlew :fabric:runServer`
+- Run `./gradlew build` before committing code changes when code is modified.
 
 ## File Organization and Conventions
 - Shared logic belongs in `:common`; platform specifics stay in their module.

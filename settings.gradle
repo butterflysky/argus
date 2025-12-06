@@ -8,3 +8,6 @@ pluginManagement {
 		gradlePluginPortal()
 	}
 }
+
+rootProject.name = "argus"
+include("common", "fabric", "neoforge")

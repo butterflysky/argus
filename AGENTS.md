@@ -31,9 +31,8 @@ Argus is being rebooted as a Kotlin-based, multi-loader (Fabric + NeoForge) mod 
 ## Planning Docs
 - Store any AI-generated plans/designs in `history/`. Keep the repo root clean. Avoid markdown TODO lists.
 
-## Build & Run (current and target)
-- Current (Fabric-only): `./gradlew build`, `./gradlew runClient`, `./gradlew runServer`, `./gradlew test`.
-- Target after multi-loader split: `./gradlew :common:build`, `./gradlew :fabric:runServer`, `./gradlew :neoforge:runServer` (scaffold), `./gradlew test`.
+## Build & Run
+- Multi-project now active: `./gradlew build`, `./gradlew :fabric:runServer`, `./gradlew :common:build`, `./gradlew :neoforge:build`.
 - Logs: `run/logs/latest.log`; crash reports: `run/crash-reports/`; JVM errors: `run/hs_err_pid*.log`.
 
 ## Version Control

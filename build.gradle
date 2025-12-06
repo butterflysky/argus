@@ -1,201 +1,82 @@
 plugins {
-	id 'fabric-loom' version '1.10-SNAPSHOT'
-	id 'maven-publish'
-	id "org.jetbrains.kotlin.jvm" version "2.1.20"
-	id "org.jetbrains.kotlin.plugin.serialization" version "2.1.20"
-  id 'com.gradleup.shadow' version '8.3.6'
+    id 'base'
+    id 'fabric-loom' version '1.10-SNAPSHOT' apply false
+    id 'org.jetbrains.kotlin.jvm' version '2.1.20' apply false
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.20' apply false
+    id 'idea'
+    id 'eclipse'
 }
 
-version = project.mod_version
-group = project.maven_group
-
-base {
-	archivesName = project.archives_base_name
+ext {
+    serializationVersion = "1.6.3"
+    javacordVersion = project.findProperty("javacord_version") ?: "3.8.0"
+    slf4jVersion = "2.0.13"
 }
 
-repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
-	
-	// Maven Central for JDA and other dependencies
-	mavenCentral()
-	mavenLocal()
-}
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'org.jetbrains.kotlin.jvm'
+    apply plugin: 'org.jetbrains.kotlin.plugin.serialization'
+    apply plugin: 'idea'
+    apply plugin: 'eclipse'
 
-loom {
-	splitEnvironmentSourceSets()
+    group = project.findProperty("maven_group") ?: "dev.butterflysky"
+    version = project.findProperty("mod_version") ?: "0.0.1"
 
-	mods {
-		"argus" {
-			sourceSet sourceSets.main
-			sourceSet sourceSets.client
-		}
-	}
-}
-
-configurations {
-    shadow
-    implementation.extendsFrom(shadow)
-}
-
-dependencies {
-  // Minecraft and Fabric dependencies
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-	modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
-	
-  // External dependencies
-  //
-	// Discord integration
-  shadow("net.dv8tion:JDA:${project.jda_version}")  {
-      exclude group: 'net.java.dev.jna', module: 'jna'
-  }
-	
-	// Database dependencies
-	shadow "org.xerial:sqlite-jdbc:${project.sqlite_version}"
-	shadow "com.zaxxer:HikariCP:${project.hikaricp_version}"
-	shadow "org.jetbrains.exposed:exposed-core:${project.exposed_version}"
-	shadow "org.jetbrains.exposed:exposed-dao:${project.exposed_version}"  
-	shadow "org.jetbrains.exposed:exposed-jdbc:${project.exposed_version}"
-	shadow "org.jetbrains.exposed:exposed-kotlin-datetime:${project.exposed_version}"
-	
-	// Serialization
-	shadow "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3"
-	
-	// Testing dependencies
-	testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.0"
-	testImplementation "org.junit.jupiter:junit-jupiter-engine:5.10.0"
-	testImplementation "io.mockk:mockk:1.13.8"
-	testImplementation "org.mockito:mockito-core:5.7.0"
-	testImplementation "org.mockito.kotlin:mockito-kotlin:5.2.1"
-	testImplementation "org.assertj:assertj-core:3.24.2"
-	testImplementation "com.h2database:h2:2.2.224"  // In-memory database for testing
-}
-
-shadowJar {
-    configurations = [project.configurations.shadow]
-
-    relocate 'net.dv8tion.jda', 'dev.butterflysky.argus.shadow.net.dv8tion.jda'
-    relocate 'com.zaxxer', 'dev.butterflysky.argus.shadow.com.zaxxer'
-    relocate 'org.xerial', 'dev.butterflysky.argus.shadow.org.xerial'
-    
-    // Disable shadowing of Exposed - it causes reflection issues with Kotlin
-    // relocate 'org.jetbrains.exposed', 'dev.butterflysky.argus.shadow.org.jetbrains.exposed'
-
-    // Exclude unnecessary files that might cause conflicts
-    exclude 'META-INF/*.SF'
-    exclude 'META-INF/*.DSA'
-    exclude 'META-INF/*.RSA'
-
-    mergeServiceFiles()
-}
-
-// Make our remapped jar depend on shadow
-remapJar {
-  dependsOn shadowJar
-  // Use the shadow jar as the input for remapping
-  input = shadowJar.archiveFile
-}
-
-processResources {
-	inputs.property "version", project.version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
-	}
-}
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
-}
-
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
-	kotlinOptions {
-		jvmTarget = "21"
-	}
-}
-
-java {
-	withSourcesJar()
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
-}
-
-test {
-	useJUnitPlatform()
-	testLogging {
-		events "passed", "skipped", "failed"
-	}
-}
-
-jar {
-	inputs.property "archivesName", project.base.archivesName
-
-	from("LICENSE") {
-		rename { "${it}_${inputs.properties.archivesName}"}
-	}
-}
-
-// configure the maven publication
-publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			artifactId = project.archives_base_name
-			from components.java
-		}
-	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
-	}
-}
-
-task analyzeDependencies {
-  doLast {
-    println "\n=== Analyzing shadow configuration ==="
-    
-    configurations.shadow.resolvedConfiguration.resolvedArtifacts.each { artifact ->
-      def id = artifact.moduleVersion.id
-      println "${id.group}:${id.name}:${id.version}"
-      
-      // If it's a jar, we can list its contents
-      if (artifact.file.name.endsWith('.jar')) {
-        try {
-          def jar = new java.util.jar.JarFile(artifact.file)
-          def entries = jar.entries()
-          
-          // Find all property files that might conflict
-          def propertyFiles = []
-          while (entries.hasMoreElements()) {
-            def entry = entries.nextElement()
-            if (entry.name.endsWith('.properties') || 
-                entry.name.startsWith('META-INF/')) {
-              propertyFiles.add(entry.name)
-            }
-          }
-          
-          if (propertyFiles.size() > 0) {
-            println "  - Contains ${propertyFiles.size()} property/service files:"
-            propertyFiles.take(10).each { println "    - ${it}" }
-            if (propertyFiles.size() > 10) {
-              println "    - ... (${propertyFiles.size() - 10} more)"
-            }
-          }
-          
-          jar.close()
-        } catch (Exception e) {
-          println "  - Error analyzing jar: ${e.message}"
+    repositories {
+        maven {
+            name = 'Fabric'
+            url = 'https://maven.fabricmc.net/'
         }
-      }
+        mavenCentral()
     }
-  }
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+        withSourcesJar()
+    }
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions.jvmTarget = "21"
+    }
+}
+
+configure(subprojects.findAll { it.name == "fabric" }) {
+    apply plugin: 'fabric-loom'
+
+    dependencies {
+        minecraft "com.mojang:minecraft:${project.minecraft_version}"
+        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+        modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
+        implementation project(":common")
+    }
+
+    loom {
+        splitEnvironmentSourceSets()
+        decompilers {
+            vineflower { }
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.release = 21
+    }
+}
+
+project(":common") {
+    dependencies {
+        implementation "org.javacord:javacord:${rootProject.ext.javacordVersion}"
+        implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${rootProject.ext.serializationVersion}"
+    }
+}
+
+project(":neoforge") {
+    // Placeholder: will add NeoForge specifics in a later task.
+}
+
+tasks.named("build") {
+    dependsOn(subprojects.collect { it.tasks.named("build") })
 }

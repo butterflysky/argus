@@ -1,0 +1,15 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+dependencies {
+    implementation "org.javacord:javacord:${rootProject.ext.javacordVersion}"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:${rootProject.ext.serializationVersion}"
+    implementation "org.slf4j:slf4j-api:${rootProject.ext.slf4jVersion}"
+}
+
+java {
+    withSourcesJar()
+}

@@ -1,0 +1,25 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(":common")
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions.jvmTarget = "21"
+}
+
+java {
+    withSourcesJar()
+}

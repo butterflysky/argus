@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "argus",
+  "version": "${version}",
+  "name": "Argus",
+  "description": "Cache-first access control with Discord linking",
+  "authors": ["Lina Edwards (butterflysky)"],
+  "contact": {
+    "sources": "https://github.com/butterflysky/argus"
+  },
+  "license": "AGPL-3.0",
+  "icon": "assets/argus/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      {
+        "value": "dev.butterflysky.argus.fabric.ArgusFabric",
+        "adapter": "kotlin"
+      }
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.12",
+    "minecraft": "~1.21.5",
+    "java": ">=21",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*"
+  }
+}

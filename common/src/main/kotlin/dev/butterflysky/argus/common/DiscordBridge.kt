@@ -12,6 +12,7 @@ import org.javacord.api.entity.message.component.Button
 import org.javacord.api.interaction.SlashCommand
 import org.javacord.api.interaction.SlashCommandInteraction
 import org.javacord.api.interaction.SlashCommandOption
+import org.javacord.api.interaction.SlashCommandOptionType
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -87,13 +88,46 @@ object DiscordBridge {
             )
         )
 
-        discord.bulkOverwriteServerApplicationCommands(server.id, setOf(linkCommand)).join()
+        val whitelistCommand = SlashCommand.with(
+            "whitelist",
+            "Manage Argus whitelist (admins only)",
+            listOf(
+                SlashCommandOption.createWithOptions(
+                    SlashCommandOptionType.SUB_COMMAND,
+                    "add",
+                    "Add a player UUID to the Argus whitelist",
+                    listOf(
+                        SlashCommandOption.createStringOption("uuid", "Player UUID", true),
+                        SlashCommandOption.createStringOption("mcname", "Minecraft name (optional)", false)
+                    )
+                ),
+                SlashCommandOption.createWithOptions(
+                    SlashCommandOptionType.SUB_COMMAND,
+                    "remove",
+                    "Remove a player UUID from the Argus whitelist",
+                    listOf(
+                        SlashCommandOption.createStringOption("uuid", "Player UUID", true)
+                    )
+                ),
+                SlashCommandOption.createWithOptions(
+                    SlashCommandOptionType.SUB_COMMAND,
+                    "status",
+                    "Show whitelist status for a player UUID",
+                    listOf(
+                        SlashCommandOption.createStringOption("uuid", "Player UUID", true)
+                    )
+                )
+            )
+        )
+
+        discord.bulkOverwriteServerApplicationCommands(server.id, setOf(linkCommand, whitelistCommand)).join()
 
         discord.addSlashCommandCreateListener { event ->
             val interaction = event.slashCommandInteraction
             if (interaction.server.orElse(null) != server) return@addSlashCommandCreateListener
             when (interaction.commandName.lowercase()) {
                 "link" -> handleLinkSlash(interaction)
+                "whitelist" -> handleWhitelistSlash(interaction, server)
             }
         }
     }
@@ -131,6 +165,67 @@ object DiscordBridge {
         interaction.createImmediateResponder()
             .addEmbed(embed)
             .addComponents(ActionRow.of(Button.primary("ok", "OK")))
+            .respond()
+    }
+
+    private fun handleWhitelistSlash(interaction: SlashCommandInteraction, server: Server) {
+        val settings = ArgusConfig.current()
+        val adminRoleId = settings.adminRoleId
+        val member = interaction.user
+        val hasAdminRole = adminRoleId != null && member.getRoles(server).any { it.id == adminRoleId }
+        if (!hasAdminRole) {
+            interaction.createImmediateResponder()
+                .setContent("You need the admin role to run this command.")
+                .respond()
+            return
+        }
+
+        val sub = interaction.options.firstOrNull()?.name?.lowercase() ?: return
+        when (sub) {
+            "add" -> whitelistAdd(interaction)
+            "remove" -> whitelistRemove(interaction)
+            "status" -> whitelistStatus(interaction)
+        }
+    }
+
+    private fun parseUuid(interaction: SlashCommandInteraction): UUID? {
+        val uuidStr = interaction.getArgumentStringValueByName("uuid").orElse(null)
+        return runCatching { UUID.fromString(uuidStr) }.getOrElse {
+            interaction.createImmediateResponder()
+                .setContent("Invalid UUID")
+                .respond()
+            null
+        }
+    }
+
+    private fun whitelistAdd(interaction: SlashCommandInteraction) {
+        val uuid = parseUuid(interaction) ?: return
+        val mcName = interaction.getArgumentStringValueByName("mcname").orElse(null)
+        val actor = interaction.user.discriminatedName
+        val result = ArgusCore.whitelistAdd(uuid, mcName, actor)
+        val message = result.getOrElse { "Failed: ${it.message}" }
+
+        interaction.createImmediateResponder()
+            .setContent(message)
+            .respond()
+    }
+
+    private fun whitelistRemove(interaction: SlashCommandInteraction) {
+        val uuid = parseUuid(interaction) ?: return
+        val actor = interaction.user.discriminatedName
+        val result = ArgusCore.whitelistRemove(uuid, actor)
+        val message = result.getOrElse { "Failed: ${it.message}" }
+
+        interaction.createImmediateResponder()
+            .setContent(message)
+            .respond()
+    }
+
+    private fun whitelistStatus(interaction: SlashCommandInteraction) {
+        val uuid = parseUuid(interaction) ?: return
+        val status = ArgusCore.whitelistStatus(uuid)
+        interaction.createImmediateResponder()
+            .setContent(status)
             .respond()
     }
 

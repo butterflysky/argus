@@ -80,4 +80,31 @@ object ArgusCore {
         AuditLogger.log("Linked ${uuid} to Discord $discordName (access granted)")
         return Result.success("Linked successfully; access granted.")
     }
+
+    fun whitelistAdd(target: UUID, mcName: String?, actor: String): Result<String> = runCatching {
+        val current = CacheStore.get(target) ?: PlayerData()
+        val updated = current.copy(hasAccess = true, mcName = mcName ?: current.mcName)
+        CacheStore.upsert(target, updated)
+        CacheStore.save(ArgusConfig.cachePath)
+        AuditLogger.log("Whitelist add by $actor: $target (${mcName ?: current.mcName ?: "unknown"})")
+        "Whitelisted ${mcName ?: target}"
+    }
+
+    fun whitelistRemove(target: UUID, actor: String): Result<String> = runCatching {
+        val current = CacheStore.get(target) ?: PlayerData()
+        val updated = current.copy(hasAccess = false)
+        CacheStore.upsert(target, updated)
+        CacheStore.save(ArgusConfig.cachePath)
+        AuditLogger.log("Whitelist remove by $actor: $target")
+        "Removed ${current.mcName ?: target} from whitelist"
+    }
+
+    fun whitelistStatus(target: UUID): String {
+        val entry = CacheStore.get(target) ?: return "No entry for $target"
+        return buildString {
+            append("hasAccess=${entry.hasAccess}")
+            if (entry.mcName != null) append(" mcName=${entry.mcName}")
+            if (entry.discordId != null) append(" discordId=${entry.discordId}")
+        }
+    }
 }

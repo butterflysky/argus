@@ -137,6 +137,10 @@ tasks.named("build") {
     dependsOn(subprojects.collect { it.tasks.named("build") })
 }
 
+tasks.named("check") {
+    dependsOn("spotlessCheck", "fabricSmoke", "neoforgeSmoke")
+}
+
 // --- Local dev scenarios (non-versioned, uses scratch/scenarios) ---
 def scenarioDir = layout.projectDirectory.dir("scratch/scenarios")
 def runDir = layout.projectDirectory.dir("fabric/run")

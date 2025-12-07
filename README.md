@@ -1,5 +1,7 @@
 # Argus
 
+[![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml)
+
 Kotlin-based, cache-first access control for Minecraft 1.21.10 with Discord identity linking. Argus uses a multi-loader layout (`common`, `fabric`, `neoforge`) and Javacord for Discord integration.
 
 ## Status

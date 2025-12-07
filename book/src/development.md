@@ -1,4 +1,4 @@
-# CI & Verification
+# Development & CI
 
 - GitHub Actions: `.github/workflows/ci.yml`
   - `spotlessCheck` (ktlint)

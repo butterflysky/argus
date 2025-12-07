@@ -1,8 +1,9 @@
 # Argus
 
-[![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml)
+[![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml) [![Docs](https://github.com/butterflysky/argus/actions/workflows/pages.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/pages.yml)
 
-Docs (mdBook): generate with `~/.local/bin/mdbook build book` (output in `docs-book/`; not checked in).
+Docs (mdBook): https://butterflysky.github.io/argus/  
+Generate locally with `~/.local/bin/mdbook build book` (output in `docs-book/`; ignored by git).
 
 Kotlin-based, cache-first access control for Minecraft 1.21.10 with Discord identity linking. Argus uses a multi-loader layout (`common`, `fabric`, `neoforge`) and Javacord for Discord integration.
 

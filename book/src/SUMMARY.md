@@ -1,8 +1,11 @@
 # Summary
 
+## User Guide
 - [Overview](overview.md)
 - [Setup](setup.md)
+- [Configuration](configuration.md)
 - [Commands](commands.md)
 - [Playtest](playtest.md)
-- [Configuration](configuration.md)
-- [CI & Verification](ci.md)
+
+## Development
+- [Development & CI](development.md)

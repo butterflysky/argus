@@ -1,4 +1,4 @@
-# What is Argus?
+# Argus
 
 Argus keeps your Minecraft server tied to your Discord: every player must be linked to a Discord user who holds your whitelist role.
 

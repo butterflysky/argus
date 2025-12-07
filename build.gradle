@@ -4,6 +4,8 @@ plugins {
     id 'org.jetbrains.kotlin.jvm' version '2.1.20' apply false
     id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.20' apply false
     id 'com.diffplug.spotless' version '6.25.0' apply false
+    id 'com.modrinth.minotaur' version '2.+' apply false
+    id 'com.matthewprenger.cursegradle' version '1.4.0' apply false
     id 'idea'
     id 'eclipse'
 }
@@ -155,6 +157,96 @@ tasks.register("spotlessApply") {
     group = "verification"
     description = "Run spotlessApply on all subprojects"
     dependsOn(subprojects.collect { it.tasks.matching { it.name == "spotlessApply" } })
+}
+
+// Optional publishing stubs (activated only when tokens + project IDs are provided)
+def modrinthToken = System.getenv("MODRINTH_TOKEN") ?: findProperty("modrinthToken")
+def modrinthFabricId = System.getenv("MODRINTH_PROJECT_FABRIC") ?: findProperty("modrinthProjectFabric")
+def modrinthNeoId = System.getenv("MODRINTH_PROJECT_NEOFORGE") ?: findProperty("modrinthProjectNeoforge")
+
+def curseToken = System.getenv("CURSEFORGE_TOKEN") ?: findProperty("curseforgeToken")
+def curseProjectId = System.getenv("CURSEFORGE_PROJECT_ID") ?: findProperty("curseforgeProjectId")
+
+def gameVersions = [rootProject.ext.minecraft_version]
+
+if (modrinthToken && modrinthFabricId) {
+    project(":fabric").pluginManager.apply("com.modrinth.minotaur")
+    project(":fabric").modrinth {
+        token = modrinthToken
+        projectId = modrinthFabricId
+        versionNumber = "v${rootProject.version}-fabric"
+        versionName = "Argus ${rootProject.version} (Fabric)"
+        loaders = ["fabric"]
+        gameVersions = gameVersions
+        uploadFile = project(":fabric").tasks.named("remapJar")
+    }
+    tasks.register("publishModrinthFabric") {
+        group = "publishing"
+        dependsOn(":fabric:modrinth")
+    }
+} else {
+    tasks.register("publishModrinthFabric") {
+        group = "publishing"
+        doLast { logger.lifecycle("Modrinth Fabric publish skipped (set MODRINTH_TOKEN and MODRINTH_PROJECT_FABRIC to enable)") }
+    }
+}
+
+if (modrinthToken && modrinthNeoId) {
+    project(":neoforge").pluginManager.apply("com.modrinth.minotaur")
+    project(":neoforge").modrinth {
+        token = modrinthToken
+        projectId = modrinthNeoId
+        versionNumber = "v${rootProject.version}-neoforge"
+        versionName = "Argus ${rootProject.version} (NeoForge)"
+        loaders = ["neoforge"]
+        gameVersions = gameVersions
+        uploadFile = project(":neoforge").tasks.named("jar")
+    }
+    tasks.register("publishModrinthNeoforge") {
+        group = "publishing"
+        dependsOn(":neoforge:modrinth")
+    }
+} else {
+    tasks.register("publishModrinthNeoforge") {
+        group = "publishing"
+        doLast { logger.lifecycle("Modrinth NeoForge publish skipped (set MODRINTH_TOKEN and MODRINTH_PROJECT_NEOFORGE to enable)") }
+    }
+}
+
+if (curseToken && curseProjectId) {
+    project(":fabric").pluginManager.apply("com.matthewprenger.cursegradle")
+    project(":neoforge").pluginManager.apply("com.matthewprenger.cursegradle")
+
+    project(":fabric").curseforge {
+        apiKey = curseToken
+        project {
+            id = curseProjectId
+            releaseType = "release"
+            addGameVersion(rootProject.ext.minecraft_version)
+            addGameVersion("Fabric")
+            mainArtifact(project(":fabric").tasks.named("remapJar"))
+        }
+    }
+    project(":neoforge").curseforge {
+        apiKey = curseToken
+        project {
+            id = curseProjectId
+            releaseType = "release"
+            addGameVersion(rootProject.ext.minecraft_version)
+            addGameVersion("NeoForge")
+            mainArtifact(project(":neoforge").tasks.named("jar"))
+        }
+    }
+
+    tasks.register("publishCurseforge") {
+        group = "publishing"
+        dependsOn(":fabric:curseforge", ":neoforge:curseforge")
+    }
+} else {
+    tasks.register("publishCurseforge") {
+        group = "publishing"
+        doLast { logger.lifecycle("CurseForge publish skipped (set CURSEFORGE_TOKEN and CURSEFORGE_PROJECT_ID to enable)") }
+    }
 }
 
 [

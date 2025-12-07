@@ -11,6 +11,12 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    env:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      MODRINTH_PROJECT_FABRIC: ${{ secrets.MODRINTH_PROJECT_FABRIC }}
+      MODRINTH_PROJECT_NEOFORGE: ${{ secrets.MODRINTH_PROJECT_NEOFORGE }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+      CURSEFORGE_PROJECT_ID: ${{ secrets.CURSEFORGE_PROJECT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,3 +45,9 @@ jobs:
             neoforge/build/neoforge/*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish to Modrinth (if configured)
+        if: env.MODRINTH_TOKEN != '' && (env.MODRINTH_PROJECT_FABRIC != '' || env.MODRINTH_PROJECT_NEOFORGE != '')
+        run: ./gradlew publishModrinthFabric publishModrinthNeoforge
+      - name: Publish to CurseForge (if configured)
+        if: env.CURSEFORGE_TOKEN != '' && env.CURSEFORGE_PROJECT_ID != ''
+        run: ./gradlew publishCurseforge

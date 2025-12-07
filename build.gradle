@@ -145,3 +145,34 @@ def runDir = layout.projectDirectory.dir("fabric/run")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
 }
+
+// --- Packaging smoke checks (headless) ---
+tasks.register("fabricSmoke") {
+    group = "verification"
+    description = "Headless smoke: fabric jar contains metadata and entrypoints"
+    dependsOn(":fabric:build")
+    doLast {
+        def jarFile = project(":fabric").fileTree(project(":fabric").layout.buildDirectory.dir("fabric")).matching {
+            include("**/*.jar")
+        }.singleFile
+        def entries = project.zipTree(jarFile).files.collect { it.path.substring(it.path.indexOf("!")+1) }
+        assert entries.any { it.endsWith("fabric.mod.json") } : "fabric.mod.json missing in ${jarFile}"
+        assert entries.any { it.contains("argus") } : "Argus classes missing in ${jarFile}"
+    }
+}
+
+tasks.register("neoforgeSmoke") {
+    group = "verification"
+    description = "Headless smoke: neoforge jar contains metadata and classes"
+    dependsOn(":neoforge:build")
+    doLast {
+        def jarFile = project(":neoforge").fileTree(project(":neoforge").layout.buildDirectory.dir("neoforge")).matching {
+            include("**/*.jar")
+            exclude("**/*-sources.jar")
+            exclude("**/*-javadoc.jar")
+        }.singleFile
+        def entries = project.zipTree(jarFile).files.collect { it.path.substring(it.path.indexOf("!")+1) }
+        assert entries.any { it.endsWith("META-INF/neoforge.mods.toml") } : "neoforge.mods.toml missing in ${jarFile}"
+        assert entries.any { it.contains("argus") } : "Argus classes missing in ${jarFile}"
+    }
+}

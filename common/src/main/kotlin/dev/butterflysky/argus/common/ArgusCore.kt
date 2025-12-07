@@ -22,6 +22,7 @@ object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")
     @Volatile private var discordStarted = false
     @Volatile private var discordStartedOverride: Boolean? = null
+    @Volatile private var roleCheckOverride: ((Long) -> Boolean?)? = null
     @Volatile private var messenger: ((UUID, String) -> Unit)? = null
     private val httpClient = HttpClient.newBuilder()
         .connectTimeout(5.seconds.toJavaDuration())
@@ -96,7 +97,7 @@ object ArgusCore {
 
         // Only pay the live Discord check cost if cache would block them and we have a Discord link.
         val liveAccess = if (pdata?.discordId != null && pdata.hasAccess != true) {
-            DiscordBridge.checkWhitelistRole(pdata.discordId)
+            checkWhitelistRole(pdata.discordId)
         } else null
 
         if (liveAccess != null && pdata != null) {
@@ -174,12 +175,15 @@ object ArgusCore {
     private fun refreshAccessOnJoin(uuid: UUID): LoginResult? {
         val pdata = CacheStore.get(uuid) ?: return null
         val discordId = pdata.discordId ?: return null
-        val liveAccess = DiscordBridge.checkWhitelistRole(discordId)
+        val liveAccess = checkWhitelistRole(discordId)
         if (liveAccess == null) return null
         CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
         CacheStore.save(ArgusConfig.cachePath)
         return if (liveAccess) null else LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
     }
+
+    private fun checkWhitelistRole(discordId: Long): Boolean? =
+        roleCheckOverride?.invoke(discordId) ?: DiscordBridge.checkWhitelistRole(discordId)
 
     private fun withInviteSuffix(message: String): String {
         val invite = ArgusConfig.current().discordInviteUrl
@@ -201,6 +205,11 @@ object ArgusCore {
     /** Testing hook to emulate Discord availability without real gateway connection. */
     fun setDiscordStartedOverride(value: Boolean?) {
         discordStartedOverride = value
+    }
+
+    /** Testing hook to override whitelist role checks (for headless tests). */
+    fun setRoleCheckOverride(checker: ((Long) -> Boolean?)?) {
+        roleCheckOverride = checker
     }
 
     fun registerMessenger(handler: (UUID, String) -> Unit) {

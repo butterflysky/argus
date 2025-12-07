@@ -1,6 +1,6 @@
 # Argus
 
-[![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml) [![Docs](https://github.com/butterflysky/argus/actions/workflows/pages.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/pages.yml)
+[![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml) [![Docs](https://github.com/butterflysky/argus/actions/workflows/pages.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/pages.yml) [![Release](https://img.shields.io/github/v/release/butterflysky/argus?logo=github&label=release)](https://github.com/butterflysky/argus/releases)
 
 Docs (mdBook): https://butterflysky.github.io/argus/  
 Generate locally with `~/.local/bin/mdbook build book` (output in `docs-book/`; ignored by git).

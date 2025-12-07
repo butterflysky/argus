@@ -1,0 +1,8 @@
+.sidebar .sidebar-scrollbox::before {
+    content: "Argus";
+    display: block;
+    padding: 14px 24px 6px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--sidebar-fg);
+}

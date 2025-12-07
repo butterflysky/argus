@@ -145,6 +145,18 @@ tasks.named("check") {
 def scenarioDir = layout.projectDirectory.dir("scratch/scenarios")
 def runDir = layout.projectDirectory.dir("fabric/run")
 
+// Root-level spotless aggregators (subprojects own the real work)
+tasks.register("spotlessCheck") {
+    group = "verification"
+    description = "Run spotlessCheck on all subprojects"
+    dependsOn(subprojects.collect { it.tasks.matching { it.name == "spotlessCheck" } })
+}
+tasks.register("spotlessApply") {
+    group = "verification"
+    description = "Run spotlessApply on all subprojects"
+    dependsOn(subprojects.collect { it.tasks.matching { it.name == "spotlessApply" } })
+}
+
 [
         [task: "Correct", dir: "correct", desc: "Apply current known-good config/ops/whitelist to fabric/run"],
         [task: "WhitelistOff", dir: "whitelist_off", desc: "Whitelist disabled"],
@@ -169,13 +181,13 @@ def runDir = layout.projectDirectory.dir("fabric/run")
 tasks.register("fabricSmoke") {
     group = "verification"
     description = "Headless smoke: fabric jar contains metadata and entrypoints"
-    dependsOn(":fabric:build")
+    def fabricProject = project(":fabric")
+    def fabricJar = fabricProject.tasks.named("remapJar").flatMap { it.archiveFile }
+    inputs.file(fabricJar)
+    dependsOn(fabricProject.tasks.named("remapJar"))
     doLast {
-        def jarFile = project(":fabric").fileTree(project(":fabric").layout.buildDirectory.dir("libs")).matching {
-            include("*fabric*.jar")
-            exclude("*-sources.jar", "*-javadoc.jar")
-        }.singleFile
-        def entries = project.zipTree(jarFile).files.collect { it.path.substring(it.path.indexOf("!")+1) }
+        def jarFile = fabricJar.get().asFile
+        def entries = zipTree(jarFile).files.collect { it.path.substring(it.path.indexOf("!") + 1) }
         assert entries.any { it.endsWith("fabric.mod.json") } : "fabric.mod.json missing in ${jarFile}"
         assert entries.any { it.contains("argus") } : "Argus classes missing in ${jarFile}"
     }
@@ -184,14 +196,13 @@ tasks.register("fabricSmoke") {
 tasks.register("neoforgeSmoke") {
     group = "verification"
     description = "Headless smoke: neoforge jar contains metadata and classes"
-    dependsOn(":neoforge:build")
+    def neoProject = project(":neoforge")
+    def neoJar = neoProject.tasks.named("jar").flatMap { it.archiveFile }
+    inputs.file(neoJar)
+    dependsOn(neoProject.tasks.named("jar"))
     doLast {
-        def jarFile = project(":neoforge").fileTree(project(":neoforge").layout.buildDirectory.dir("neoforge")).matching {
-            include("**/*.jar")
-            exclude("**/*-sources.jar")
-            exclude("**/*-javadoc.jar")
-        }.singleFile
-        def entries = project.zipTree(jarFile).files.collect { it.path.substring(it.path.indexOf("!")+1) }
+        def jarFile = neoJar.get().asFile
+        def entries = zipTree(jarFile).files.collect { it.path.substring(it.path.indexOf("!") + 1) }
         assert entries.any { it.endsWith("META-INF/neoforge.mods.toml") } : "neoforge.mods.toml missing in ${jarFile}"
         assert entries.any { it.contains("argus") } : "Argus classes missing in ${jarFile}"
     }

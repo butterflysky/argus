@@ -666,7 +666,7 @@ object DiscordBridge {
                     discordNick = newNick,
                 )
             CacheStore.upsert(uuid, updated)
-            if (nameChanged && newName != null) {
+            if (nameChanged) {
                 AuditLogger.log("Discord name changed: ${pd.discordName} -> $newName ${discordLabel(newName, discordId)}")
             }
             if (nickChanged) {

@@ -121,8 +121,8 @@ object ArgusCore {
         if (pdata?.banUntilEpochMillis != null) {
             val until = pdata.banUntilEpochMillis
             val reason = pdata.banReason ?: "Banned"
-            if (until == null || until > System.currentTimeMillis()) {
-                val remaining = if (until == null) "permanent" else "${(until - System.currentTimeMillis()) / 1000}s remaining"
+            if (until > System.currentTimeMillis()) {
+                val remaining = "${(until - System.currentTimeMillis()) / 1000}s remaining"
                 return LoginResult.Deny(prefix("$reason ($remaining)"))
             }
         }

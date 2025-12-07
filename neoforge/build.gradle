@@ -28,6 +28,12 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
-java {
-    withSourcesJar()
+// Artifact naming: argus-<mod_version>-<mc_version>-neoforge.jar
+tasks.named("jar") {
+    archiveBaseName.set("${rootProject.archives_base_name}-${rootProject.ext.minecraft_version}")
+    archiveVersion.set("${project.version}-neoforge")
+    archiveClassifier.set("")
 }
+
+// Disable sources jar in release outputs
+tasks.matching { it.name == "sourcesJar" }.configureEach { enabled = false }

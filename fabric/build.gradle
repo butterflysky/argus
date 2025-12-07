@@ -31,6 +31,21 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     kotlinOptions.jvmTarget = "21"
 }
 
-java {
-    withSourcesJar()
+// Artifact naming: argus-<mod_version>-<mc_version>-fabric.jar
+def desiredBase = "${rootProject.archives_base_name}-${rootProject.ext.minecraft_version}"
+def desiredVersion = "${project.version}-fabric"
+
+tasks.named("jar") {
+    archiveBaseName.set(desiredBase)
+    archiveVersion.set(desiredVersion)
+    archiveClassifier.set("")
 }
+
+tasks.named("remapJar") {
+    archiveBaseName.set(desiredBase)
+    archiveVersion.set(desiredVersion)
+    archiveClassifier.set("")
+}
+
+// Disable sources jar in release outputs
+tasks.matching { it.name in ["sourcesJar", "remapSourcesJar"] }.configureEach { enabled = false }

@@ -6,7 +6,7 @@
   - [Discord Application](discord-setup.md)
 - [Configuration](configuration.md)
 - [Commands](commands.md)
-- [Playtest](playtest.md)
+  - [Playtest](playtest.md)
 
 ## Development
 - [Development & CI](development.md)

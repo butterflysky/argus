@@ -1,8 +1,24 @@
-# Configuration Details
+# Configuration at a glance
 
-- **Cache-first login**: All decisions start from `argus_db.json`. If a linked user would be denied, Argus performs one short-timeout Discord role refresh before final decision.
-- **Join live check**: After login, Argus does a live role check (short timeout, falls back to cache). If the whitelist role is missing, the player is kicked and cache/audit are updated.
-- **Legacy vanilla-whitelisted**: Denied immediately with a link token (they never complete login).
-- **OPs**: Always allowed. If Discord/config are unavailable, Argus stays cache-only and never blocks startup.
-- **Bans**: Active bans deny with reason/time remaining; expired bans allow; permanent bans deny.
-- **Audit**: Every cache mutation logs to console and Discord audit channel with names + IDs (link, approve/deny, warn/ban/unban, comments, role loss, first login, legacy kick, name/nick changes).
+**Where:** `config/argus.json` (created on first run)
+
+**Key fields**
+- `botToken`, `guildId`, `whitelistRoleId`, `adminRoleId` — required for Discord enforcement.
+- `logChannelId` — optional audit channel.
+- `applicationMessage` — text shown to strangers/denied users (invite link is appended if `discordInviteUrl` is set).
+- `cacheFile` — leave default unless you have a custom path.
+
+**Set and view (in-game)**
+- `/argus config get <field>`
+- `/argus config set <field> <value>` (tab-complete shows fields and allowed values)
+- `/argus reload` to apply changes.
+
+**Runtime rules**
+- Cache-first login; one short Discord refresh only if cache would deny a linked player.
+- Live role check after join; kicks if whitelist role is missing, updates cache/audit.
+- OPs always bypass; if Discord/config is down, Argus stays cache-only.
+- Legacy vanilla-whitelisted but unlinked are denied with a link token.
+- Bans: active bans deny; expired allow; permanent bans deny.
+
+**Audit**
+- Every cache mutation logs to console and (if set) to the Discord audit channel with names + IDs: link/approve/deny/warn/ban/unban/comments/role loss/first login/legacy kick/name or nick changes.

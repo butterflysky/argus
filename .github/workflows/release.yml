@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Spotless + tests + smoke
+        run: ./gradlew spotlessCheck test fabricSmoke neoforgeSmoke
+      - name: Build jars
+        run: ./gradlew build
+      - name: Collect artifacts
+        id: artifacts
+        run: |
+          echo "fabric_jars=$(ls fabric/build/libs/*fabric*.jar | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          echo "neoforge_jars=$(ls neoforge/build/neoforge/*.jar | tr '\n' ' ')" >> $GITHUB_OUTPUT
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            fabric/build/libs/*fabric*.jar
+            neoforge/build/neoforge/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

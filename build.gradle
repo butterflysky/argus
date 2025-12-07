@@ -121,3 +121,27 @@ project(":neoforge") {
 tasks.named("build") {
     dependsOn(subprojects.collect { it.tasks.named("build") })
 }
+
+// --- Local dev scenarios (non-versioned, uses scratch/scenarios) ---
+def scenarioDir = layout.projectDirectory.dir("scratch/scenarios")
+def runDir = layout.projectDirectory.dir("fabric/run")
+
+[
+        [task: "Correct", dir: "correct", desc: "Apply current known-good config/ops/whitelist to fabric/run"],
+        [task: "WhitelistOff", dir: "whitelist_off", desc: "Whitelist disabled"],
+        [task: "Misconfigured", dir: "misconfigured", desc: "Argus misconfigured (blank token/guild)"],
+        [task: "LinkedWhitelisted", dir: "linked_whitelisted", desc: "Non-op linked + whitelisted with cache access"],
+        [task: "LegacyUnlinked", dir: "legacy_unlinked", desc: "Legacy vanilla-whitelisted but unlinked"],
+        [task: "Stranger", dir: "stranger", desc: "Stranger (no whitelist, no cache)"],
+        [task: "OpOnly", dir: "op_only", desc: "OP only, no whitelist entries"]
+].each { spec ->
+    tasks.register("applyScenario${spec.task}", Copy) {
+        group = "scenarios"
+        description = spec.desc
+        from(scenarioDir.dir(spec.dir)) {
+            include("server.properties", "ops.json", "whitelist.json", "config/**")
+        }
+        into(runDir)
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+}

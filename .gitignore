@@ -46,3 +46,6 @@ replay_*.log
 # project scratch directory
 scratch/
 logs/
+
+# mdBook build output
+/docs-book/

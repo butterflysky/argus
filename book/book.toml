@@ -1,0 +1,9 @@
+[book]
+title = "Argus"
+author = "ButterflySky"
+multilingual = false
+src = "src"
+
+[build]
+build-dir = "../docs-book"
+create-missing = true

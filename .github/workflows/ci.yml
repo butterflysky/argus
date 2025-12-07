@@ -24,3 +24,5 @@ jobs:
         run: ./gradlew spotlessCheck
       - name: Test and smoke
         run: ./gradlew test fabricSmoke neoforgeSmoke
+      - name: Build mdBook
+        run: ~/.local/bin/mdbook build book

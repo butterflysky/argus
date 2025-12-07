@@ -84,6 +84,16 @@ object ArgusCore {
         }
         val pdata = CacheStore.get(uuid)
 
+        // Track Minecraft name changes when we have existing cache data.
+        if (pdata != null && pdata.mcName != null && pdata.mcName != name) {
+            AuditLogger.log("MC name changed: ${pdata.mcName} -> $name (${uuid})")
+            CacheStore.upsert(uuid, pdata.copy(mcName = name))
+            CacheStore.save(ArgusConfig.cachePath)
+        } else if (pdata != null && pdata.mcName == null) {
+            CacheStore.upsert(uuid, pdata.copy(mcName = name))
+            CacheStore.save(ArgusConfig.cachePath)
+        }
+
         // Only pay the live Discord check cost if cache would block them and we have a Discord link.
         val liveAccess = if (pdata?.discordId != null && pdata.hasAccess != true) {
             DiscordBridge.checkWhitelistRole(pdata.discordId)

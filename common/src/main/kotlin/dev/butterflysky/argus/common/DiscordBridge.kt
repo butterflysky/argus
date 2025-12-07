@@ -76,10 +76,19 @@ object DiscordBridge {
         api?.addUserChangeNicknameListener { event ->
             val user = event.user
             if (event.server != server) return@addUserChangeNicknameListener
-            AuditLogger.log("Identity Update: ${user.discriminatedName} nick -> ${event.newNickname.orElse("(cleared)")}")
+            val oldNick = event.oldNickname.orElse(null)
+            val newNick = event.newNickname.orElse(null)
+            if (oldNick == newNick) return@addUserChangeNicknameListener
+            AuditLogger.log("Discord nick changed: ${oldNick ?: "(none)"} -> ${newNick ?: "(none)"} ${discordLabel(user.name, user.id)}")
+            updatePlayerByDiscord(user.id) { pd -> pd.copy(discordNick = newNick) }.also { if (it) CacheStore.save(ArgusConfig.cachePath) }
         }
         api?.addUserChangeNameListener { event ->
-            AuditLogger.log("Identity Update: ${event.oldName} is now ${event.newName}")
+            val user = event.user
+            val oldName = event.oldName
+            val newName = event.newName
+            if (oldName == newName) return@addUserChangeNameListener
+            AuditLogger.log("Discord name changed: $oldName -> $newName ${discordLabel(newName, user.id)}")
+            updatePlayerByDiscord(user.id) { pd -> pd.copy(discordName = newName) }.also { if (it) CacheStore.save(ArgusConfig.cachePath) }
         }
     }
 
@@ -558,19 +567,30 @@ object DiscordBridge {
         val hasAccess = settings.whitelistRoleId?.let { roles.any { r -> r.id == it } } ?: false
         val isAdmin = settings.adminRoleId?.let { roles.any { r -> r.id == it } } ?: false
 
-        val updated = updatePlayerByDiscord(discordId) { player ->
-            player.copy(
-                hasAccess = hasAccess,
-                isAdmin = isAdmin,
-                discordName = user.name,
-                discordNick = user.getNickname(server).orElse(null)
-            )
-        }
+        val entry = CacheStore.findByDiscordId(discordId) ?: return
+        val player = entry.second
+        val newName = user.name
+        val newNick = user.getNickname(server).orElse(null)
 
-        if (updated) {
-            AuditLogger.log("Role update: ${user.discriminatedName} -> access=$hasAccess admin=$isAdmin")
-            CacheStore.save(ArgusConfig.cachePath)
+        val nameChanged = player.discordName != null && player.discordName != newName
+        val nickChanged = player.discordNick != newNick
+
+        val updatedPlayer = player.copy(
+            hasAccess = hasAccess,
+            isAdmin = isAdmin,
+            discordName = newName,
+            discordNick = newNick
+        )
+        CacheStore.upsert(entry.first, updatedPlayer)
+
+        if (nameChanged) {
+            AuditLogger.log("Discord name changed: ${player.discordName} -> $newName ${discordLabel(newName, discordId)}")
         }
+        if (nickChanged) {
+            AuditLogger.log("Discord nick changed: ${player.discordNick ?: "(none)"} -> ${newNick ?: "(none)"} ${discordLabel(newName, discordId)}")
+        }
+        AuditLogger.log("Role update: ${discordLabel(newName, discordId)} -> access=$hasAccess admin=$isAdmin")
+        CacheStore.save(ArgusConfig.cachePath)
     }
 
     private fun updatePlayerByDiscord(discordId: Long, mutator: (PlayerData) -> PlayerData): Boolean {
@@ -599,6 +619,8 @@ object DiscordBridge {
             roles.any { it.id == roleId }
         }.getOrNull()
     }
+
+    private fun discordLabel(name: String?, id: Long) = "${name ?: "unknown"} ($id)"
 
     private fun SlashCommandInteraction.replyEphemeral() = createImmediateResponder().setFlags(MessageFlag.EPHEMERAL)
     private fun ButtonInteraction.replyEphemeral() = createImmediateResponder().setFlags(MessageFlag.EPHEMERAL)

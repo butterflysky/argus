@@ -3,6 +3,7 @@ plugins {
     id 'fabric-loom' version '1.11-SNAPSHOT' apply false
     id 'org.jetbrains.kotlin.jvm' version '2.1.20' apply false
     id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.20' apply false
+    id 'com.diffplug.spotless' version '6.25.0' apply false
     id 'idea'
     id 'eclipse'
 }
@@ -50,6 +51,7 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'org.jetbrains.kotlin.plugin.serialization'
+    apply plugin: 'com.diffplug.spotless'
     apply plugin: 'idea'
     apply plugin: 'eclipse'
 
@@ -72,6 +74,19 @@ subprojects {
 
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
         kotlinOptions.jvmTarget = "21"
+    }
+
+    spotless {
+        kotlin {
+            ktlint("1.2.1")
+            target("src/**/*.kt")
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+        kotlinGradle {
+            ktlint("1.2.1")
+            target("**/*.gradle.kts")
+        }
     }
 
     // Place main jars under build/<project>/<mc_target> for clarity when switching targets
@@ -152,8 +167,9 @@ tasks.register("fabricSmoke") {
     description = "Headless smoke: fabric jar contains metadata and entrypoints"
     dependsOn(":fabric:build")
     doLast {
-        def jarFile = project(":fabric").fileTree(project(":fabric").layout.buildDirectory.dir("fabric")).matching {
-            include("**/*.jar")
+        def jarFile = project(":fabric").fileTree(project(":fabric").layout.buildDirectory.dir("libs")).matching {
+            include("*fabric*.jar")
+            exclude("*-sources.jar", "*-javadoc.jar")
         }.singleFile
         def entries = project.zipTree(jarFile).files.collect { it.path.substring(it.path.indexOf("!")+1) }
         assert entries.any { it.endsWith("fabric.mod.json") } : "fabric.mod.json missing in ${jarFile}"

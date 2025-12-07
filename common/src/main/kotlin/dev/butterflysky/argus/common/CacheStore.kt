@@ -22,17 +22,21 @@ object CacheStore {
     private val applications: MutableList<WhitelistApplication> = mutableListOf()
 
     fun snapshot(): Map<UUID, PlayerData> = data.toMap()
+
     fun eventsSnapshot(): List<EventEntry> = events.toList()
+
     fun applicationsSnapshot(): List<WhitelistApplication> = applications.toList()
 
     fun get(uuid: UUID): PlayerData? = data[uuid]
 
-    fun upsert(uuid: UUID, player: PlayerData) {
+    fun upsert(
+        uuid: UUID,
+        player: PlayerData,
+    ) {
         data[uuid] = player
     }
 
-    fun findByDiscordId(discordId: Long): Pair<UUID, PlayerData>? =
-        data.entries.firstOrNull { it.value.discordId == discordId }?.toPair()
+    fun findByDiscordId(discordId: Long): Pair<UUID, PlayerData>? = data.entries.firstOrNull { it.value.discordId == discordId }?.toPair()
 
     fun findByUuid(uuid: UUID): PlayerData? = data[uuid]
 
@@ -47,7 +51,10 @@ object CacheStore {
         applications += app
     }
 
-    fun updateApplication(id: String, updater: (WhitelistApplication) -> WhitelistApplication?): WhitelistApplication? {
+    fun updateApplication(
+        id: String,
+        updater: (WhitelistApplication) -> WhitelistApplication?,
+    ): WhitelistApplication? {
         val idx = applications.indexOfFirst { it.id == id }
         if (idx < 0) return null
         val updated = updater(applications[idx]) ?: return null
@@ -62,10 +69,11 @@ object CacheStore {
         val backup = cachePath.resolveSibling(cachePath.fileName.toString() + ".bak")
 
         return runCatching {
-            val loaded = readFile(primary).recoverCatching { ex ->
-                logger.warn("Primary cache load failed, attempting .bak fallback: ${ex.message}")
-                readFile(backup).getOrThrow()
-            }.getOrElse { SerializableCache() }
+            val loaded =
+                readFile(primary).recoverCatching { ex ->
+                    logger.warn("Primary cache load failed, attempting .bak fallback: ${ex.message}")
+                    readFile(backup).getOrThrow()
+                }.getOrElse { SerializableCache() }
 
             data.clear()
             events.clear()
@@ -88,11 +96,12 @@ object CacheStore {
                 Files.move(primary, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
 
-            val serializable = SerializableCache(
-                players = data.mapKeys { it.key.toString() },
-                events = events,
-                applications = applications
-            )
+            val serializable =
+                SerializableCache(
+                    players = data.mapKeys { it.key.toString() },
+                    events = events,
+                    applications = applications,
+                )
             Files.writeString(primary, json.encodeToString(serializable))
             logger.info("Saved argus cache (${data.size} entries) to ${primary.toAbsolutePath()}")
         }.onFailure { ex ->
@@ -100,21 +109,22 @@ object CacheStore {
         }
     }
 
-    private fun readFile(path: Path): Result<SerializableCache> = runCatching {
-        if (!Files.exists(path)) return@runCatching SerializableCache()
-        val text = Files.readString(path)
-        json.decodeFromString(SerializableCache.serializer(), text)
-    }.onFailure { ex ->
-        if (ex !is IOException) {
-            logger.error("Error decoding cache file ${path}: ${ex.message}", ex)
+    private fun readFile(path: Path): Result<SerializableCache> =
+        runCatching {
+            if (!Files.exists(path)) return@runCatching SerializableCache()
+            val text = Files.readString(path)
+            json.decodeFromString(SerializableCache.serializer(), text)
+        }.onFailure { ex ->
+            if (ex !is IOException) {
+                logger.error("Error decoding cache file $path: ${ex.message}", ex)
+            }
         }
-    }
 
     @Serializable
     data class SerializableCache(
         val players: Map<String, PlayerData> = emptyMap(),
         val events: List<EventEntry> = emptyList(),
-        val applications: List<WhitelistApplication> = emptyList()
+        val applications: List<WhitelistApplication> = emptyList(),
     )
 }
 
@@ -126,7 +136,7 @@ data class EventEntry(
     val actorDiscordId: Long? = null,
     val message: String? = null,
     val untilEpochMillis: Long? = null,
-    val atEpochMillis: Long = System.currentTimeMillis()
+    val atEpochMillis: Long = System.currentTimeMillis(),
 )
 
 @Serializable
@@ -139,5 +149,5 @@ data class WhitelistApplication(
     val reason: String? = null,
     val submittedAtEpochMillis: Long = System.currentTimeMillis(),
     val decidedAtEpochMillis: Long? = null,
-    val decidedByDiscordId: Long? = null
+    val decidedByDiscordId: Long? = null,
 )

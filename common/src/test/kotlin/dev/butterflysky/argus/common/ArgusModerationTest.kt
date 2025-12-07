@@ -12,19 +12,19 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ArgusModerationTest {
-
     @TempDir
     lateinit var tempDir: Path
 
     private fun loadConfig(): Path {
         val cache = tempDir.resolve("argus_db.json")
-        val cfg = ArgusSettings(
-            botToken = "token",
-            guildId = 1L,
-            whitelistRoleId = 2L,
-            adminRoleId = 3L,
-            cacheFile = cache.toString()
-        )
+        val cfg =
+            ArgusSettings(
+                botToken = "token",
+                guildId = 1L,
+                whitelistRoleId = 2L,
+                adminRoleId = 3L,
+                cacheFile = cache.toString(),
+            )
         val cfgPath = tempDir.resolve("argus.json")
         Files.writeString(cfgPath, Json.encodeToString(cfg))
         ArgusConfig.load(cfgPath)
@@ -48,13 +48,14 @@ class ArgusModerationTest {
     fun `approve application grants access and links`() {
         loadConfig()
         val uuid = UUID.randomUUID()
-        val app = WhitelistApplication(
-            id = "app-1",
-            discordId = 999L,
-            mcName = "Tester",
-            resolvedUuid = uuid.toString(),
-            status = "pending"
-        )
+        val app =
+            WhitelistApplication(
+                id = "app-1",
+                discordId = 999L,
+                mcName = "Tester",
+                resolvedUuid = uuid.toString(),
+                status = "pending",
+            )
         CacheStore.addApplication(app)
 
         val result = ArgusCore.approveApplication(app.id, actorDiscordId = 777L, reason = "ok")
@@ -85,13 +86,14 @@ class ArgusModerationTest {
     fun `deny application records decision`() {
         loadConfig()
         val uuid = UUID.randomUUID()
-        val app = WhitelistApplication(
-            id = "app-2",
-            discordId = 111L,
-            mcName = "Nope",
-            resolvedUuid = uuid.toString(),
-            status = "pending"
-        )
+        val app =
+            WhitelistApplication(
+                id = "app-2",
+                discordId = 111L,
+                mcName = "Nope",
+                resolvedUuid = uuid.toString(),
+                status = "pending",
+            )
         CacheStore.addApplication(app)
         val result = ArgusCore.denyApplication(app.id, actorDiscordId = 222L, reason = "bad")
         assertTrue(result.isSuccess)

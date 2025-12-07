@@ -11,11 +11,12 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ArgusScenarioIntegrationTest {
-
     private val auditLogs = mutableListOf<String>()
 
     @BeforeEach
-    fun setup(@TempDir tempDir: Path) {
+    fun setup(
+        @TempDir tempDir: Path,
+    ) {
         auditLogs.clear()
         AuditLogger.configure { auditLogs += it }
         ArgusCore.setDiscordStartedOverride(true)
@@ -23,13 +24,14 @@ class ArgusScenarioIntegrationTest {
 
         val cachePath = tempDir.resolve("argus_db.json")
         val cfgPath = tempDir.resolve("argus.json")
-        val cfg = ArgusSettings(
-            botToken = "token",
-            guildId = 1L,
-            whitelistRoleId = 2L,
-            adminRoleId = 3L,
-            cacheFile = cachePath.toString()
-        )
+        val cfg =
+            ArgusSettings(
+                botToken = "token",
+                guildId = 1L,
+                whitelistRoleId = 2L,
+                adminRoleId = 3L,
+                cacheFile = cachePath.toString(),
+            )
         Files.writeString(cfgPath, kotlinx.serialization.json.Json.encodeToString(ArgusSettings.serializer(), cfg))
         ArgusConfig.load(cfgPath)
         CacheStore.load(cachePath)
@@ -44,7 +46,14 @@ class ArgusScenarioIntegrationTest {
 
     @Test
     fun `whitelist off allows everyone`() {
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "player", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = false)
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "player",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = false,
+            )
         assertIs<LoginResult.Allow>(result)
     }
 
@@ -52,7 +61,14 @@ class ArgusScenarioIntegrationTest {
     fun `misconfigured argus falls back to vanilla deny`() {
         // Simulate misconfig
         ArgusCore.setDiscordStartedOverride(false)
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "player", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "player",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
+            )
         val deny = assertIs<LoginResult.Deny>(result)
         assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
     }
@@ -66,7 +82,14 @@ class ArgusScenarioIntegrationTest {
 
     @Test
     fun `stranger denied with application message`() {
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "stranger",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
+            )
         val deny = assertIs<LoginResult.Deny>(result)
         assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
     }
@@ -103,8 +126,8 @@ class ArgusScenarioIntegrationTest {
             PlayerData(
                 hasAccess = true,
                 banReason = "Griefing",
-                banUntilEpochMillis = System.currentTimeMillis() + 60_000
-            )
+                banUntilEpochMillis = System.currentTimeMillis() + 60_000,
+            ),
         )
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
@@ -119,8 +142,8 @@ class ArgusScenarioIntegrationTest {
             PlayerData(
                 hasAccess = true,
                 banReason = "Temp ban",
-                banUntilEpochMillis = System.currentTimeMillis() - 1_000
-            )
+                banUntilEpochMillis = System.currentTimeMillis() - 1_000,
+            ),
         )
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
         assertIs<LoginResult.Allow>(result)
@@ -134,8 +157,8 @@ class ArgusScenarioIntegrationTest {
             PlayerData(
                 hasAccess = true,
                 banReason = "Permanent ban",
-                banUntilEpochMillis = Long.MAX_VALUE
-            )
+                banUntilEpochMillis = Long.MAX_VALUE,
+            ),
         )
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)

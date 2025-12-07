@@ -8,7 +8,6 @@ import java.util.UUID
 import kotlin.test.assertEquals
 
 class CacheStoreTest {
-
     @TempDir
     lateinit var tempDir: Path
 

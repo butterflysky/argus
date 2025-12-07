@@ -13,5 +13,5 @@ data class PlayerData(
     val discordNick: String? = null,
     val banReason: String? = null,
     val banUntilEpochMillis: Long? = null,
-    val warnCount: Int = 0
+    val warnCount: Int = 0,
 )

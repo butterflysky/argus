@@ -4,19 +4,19 @@ import org.javacord.api.DiscordApi
 import org.javacord.api.DiscordApiBuilder
 import org.javacord.api.entity.channel.ServerTextChannel
 import org.javacord.api.entity.intent.Intent
+import org.javacord.api.entity.message.MessageFlag
+import org.javacord.api.entity.message.component.ActionRow
+import org.javacord.api.entity.message.component.Button
+import org.javacord.api.entity.message.embed.EmbedBuilder
 import org.javacord.api.entity.permission.Role
 import org.javacord.api.entity.server.Server
 import org.javacord.api.entity.user.User
-import org.javacord.api.entity.message.MessageFlag
-import org.javacord.api.entity.message.embed.EmbedBuilder
-import org.javacord.api.entity.message.component.ActionRow
-import org.javacord.api.entity.message.component.Button
+import org.javacord.api.interaction.ButtonInteraction
 import org.javacord.api.interaction.SlashCommand
 import org.javacord.api.interaction.SlashCommandInteraction
 import org.javacord.api.interaction.SlashCommandOption
 import org.javacord.api.interaction.SlashCommandOptionChoice
 import org.javacord.api.interaction.SlashCommandOptionType
-import org.javacord.api.interaction.ButtonInteraction
 import org.slf4j.LoggerFactory
 import java.awt.Color
 import java.util.UUID
@@ -25,9 +25,13 @@ import java.util.concurrent.CompletableFuture
 /** Discord integration using Javacord: slash commands, role/name listeners, and audit logging. */
 object DiscordBridge {
     private val logger = LoggerFactory.getLogger("argus-discord")
+
     @Volatile private var api: DiscordApi? = null
+
     @Volatile private var serverRef: Server? = null
+
     @Volatile private var whitelistRoleId: Long? = null
+
     @Volatile private var adminRoleId: Long? = null
 
     fun start(settings: ArgusSettings): Result<Unit> {
@@ -37,17 +41,19 @@ object DiscordBridge {
         val guildId = settings.guildId ?: return Result.failure(IllegalStateException("guildId not set"))
 
         return runCatching {
-            val future: CompletableFuture<DiscordApi> = DiscordApiBuilder()
-                .setToken(settings.botToken)
-                .setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS)
-                .login()
+            val future: CompletableFuture<DiscordApi> =
+                DiscordApiBuilder()
+                    .setToken(settings.botToken)
+                    .setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS)
+                    .login()
 
             api = future.join()
             val discord = api ?: throw IllegalStateException("Discord API not initialized")
             logger.info("Discord bot logged in as ${discord.yourself.discriminatedName}")
 
-            val server = discord.getServerById(guildId)
-                .orElseThrow { IllegalStateException("Guild $guildId not found") }
+            val server =
+                discord.getServerById(guildId)
+                    .orElseThrow { IllegalStateException("Guild $guildId not found") }
             serverRef = server
             whitelistRoleId = settings.whitelistRoleId
             adminRoleId = settings.adminRoleId
@@ -86,7 +92,7 @@ object DiscordBridge {
                 oldName = user.name,
                 newName = user.name,
                 oldNick = oldNick,
-                newNick = newNick
+                newNick = newNick,
             )
         }
         api?.addUserChangeNameListener { event ->
@@ -99,7 +105,7 @@ object DiscordBridge {
                 oldName = oldName,
                 newName = newName,
                 oldNick = null,
-                newNick = null
+                newNick = null,
             )
         }
     }
@@ -107,131 +113,133 @@ object DiscordBridge {
     private fun registerSlashCommands(server: Server) {
         val discord = api ?: return
 
-        val linkCommand = SlashCommand.with(
-            "link",
-            "Link your Discord account with a token",
-            listOf(
-                SlashCommandOption.createStringOption(
-                    "token",
-                    "Link token from the Minecraft server",
-                    true
-                )
+        val linkCommand =
+            SlashCommand.with(
+                "link",
+                "Link your Discord account with a token",
+                listOf(
+                    SlashCommandOption.createStringOption(
+                        "token",
+                        "Link token from the Minecraft server",
+                        true,
+                    ),
+                ),
             )
-        )
 
-        val whitelistCommand = SlashCommand.with(
-            "whitelist",
-            "Manage Argus whitelist",
-            listOf(
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "add",
-                    "Add a player to the Argus whitelist",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createStringOption("mcname", "Minecraft name (optional)", false),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
-                    )
+        val whitelistCommand =
+            SlashCommand.with(
+                "whitelist",
+                "Manage Argus whitelist",
+                listOf(
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "add",
+                        "Add a player to the Argus whitelist",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createStringOption("mcname", "Minecraft name (optional)", false),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "remove",
+                        "Remove a player from the Argus whitelist",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "status",
+                        "Show whitelist status for a player",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "apply",
+                        "Submit a whitelist application",
+                        listOf(
+                            SlashCommandOption.createStringOption("mcname", "Minecraft username", true),
+                        ),
+                    ),
+                    SlashCommandOption.createSubcommand("list-applications", "List pending applications (admin)"),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "approve",
+                        "Approve an application (admin)",
+                        listOf(
+                            SlashCommandOption.createStringOption("application", "Application ID", true, true),
+                            SlashCommandOption.createStringOption("reason", "Reason (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "deny",
+                        "Deny an application (admin)",
+                        listOf(
+                            SlashCommandOption.createStringOption("application", "Application ID", true, true),
+                            SlashCommandOption.createStringOption("reason", "Reason (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "comment",
+                        "Add an admin comment on a player",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createStringOption("note", "Comment text", true),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "review",
+                        "Review history for a player",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "warn",
+                        "Warn a player",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createStringOption("reason", "Reason", true),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "ban",
+                        "Ban a player",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createStringOption("reason", "Reason", true),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                            SlashCommandOption.createLongOption("duration_minutes", "Duration in minutes (omit for permanent)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createWithOptions(
+                        SlashCommandOptionType.SUB_COMMAND,
+                        "unban",
+                        "Unban a player",
+                        listOf(
+                            SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
+                            SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
+                            SlashCommandOption.createStringOption("reason", "Reason (optional)", false),
+                        ),
+                    ),
+                    SlashCommandOption.createSubcommand("my", "Show your own warnings/bans"),
+                    SlashCommandOption.createSubcommand("help", "Show command help"),
                 ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "remove",
-                    "Remove a player from the Argus whitelist",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "status",
-                    "Show whitelist status for a player",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "apply",
-                    "Submit a whitelist application",
-                    listOf(
-                        SlashCommandOption.createStringOption("mcname", "Minecraft username", true)
-                    )
-                ),
-                SlashCommandOption.createSubcommand("list-applications", "List pending applications (admin)"),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "approve",
-                    "Approve an application (admin)",
-                    listOf(
-                        SlashCommandOption.createStringOption("application", "Application ID", true, true),
-                        SlashCommandOption.createStringOption("reason", "Reason (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "deny",
-                    "Deny an application (admin)",
-                    listOf(
-                        SlashCommandOption.createStringOption("application", "Application ID", true, true),
-                        SlashCommandOption.createStringOption("reason", "Reason (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "comment",
-                    "Add an admin comment on a player",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createStringOption("note", "Comment text", true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "review",
-                    "Review history for a player",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "warn",
-                    "Warn a player",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createStringOption("reason", "Reason", true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "ban",
-                    "Ban a player",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createStringOption("reason", "Reason", true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
-                        SlashCommandOption.createLongOption("duration_minutes", "Duration in minutes (omit for permanent)", false)
-                    )
-                ),
-                SlashCommandOption.createWithOptions(
-                    SlashCommandOptionType.SUB_COMMAND,
-                    "unban",
-                    "Unban a player",
-                    listOf(
-                        SlashCommandOption.createStringOption("player", "Player UUID or name", true, true),
-                        SlashCommandOption.createUserOption("discord", "Discord user (optional)", false),
-                        SlashCommandOption.createStringOption("reason", "Reason (optional)", false)
-                    )
-                ),
-                SlashCommandOption.createSubcommand("my", "Show your own warnings/bans"),
-                SlashCommandOption.createSubcommand("help", "Show command help")
             )
-        )
 
         discord.bulkOverwriteServerApplicationCommands(server.id, setOf(linkCommand, whitelistCommand)).join()
 
@@ -259,8 +267,12 @@ object DiscordBridge {
             if (id.startsWith("apps_apr:") || id.startsWith("apps_deny:")) {
                 val appId = id.substringAfter(":")
                 val approve = id.startsWith("apps_apr:")
-                val result = if (approve) ArgusCore.approveApplication(appId, interaction.user.id, null)
-                             else ArgusCore.denyApplication(appId, interaction.user.id, null)
+                val result =
+                    if (approve) {
+                        ArgusCore.approveApplication(appId, interaction.user.id, null)
+                    } else {
+                        ArgusCore.denyApplication(appId, interaction.user.id, null)
+                    }
                 event.buttonInteraction.replyEphemeral()
                     .setContent(result.getOrElse { "Failed: ${it.message}" })
                     .respond()
@@ -273,23 +285,24 @@ object DiscordBridge {
             when (interaction.focusedOption.name) {
                 "player" -> {
                     val query = interaction.focusedOption.stringValue.orElse("")
-                    val choices = CacheStore.snapshot()
-                        .entries
-                        .asSequence()
-                        .filter { entry ->
-                            val name = entry.value.mcName
-                            when {
-                                name == null -> false
-                                query.isBlank() -> true
-                                else -> name.contains(query, ignoreCase = true)
+                    val choices =
+                        CacheStore.snapshot()
+                            .entries
+                            .asSequence()
+                            .filter { entry ->
+                                val name = entry.value.mcName
+                                when {
+                                    name == null -> false
+                                    query.isBlank() -> true
+                                    else -> name.contains(query, ignoreCase = true)
+                                }
                             }
-                        }
-                        .take(25)
-                        .map { entry ->
-                            val label = "${entry.value.mcName} | ${entry.key}"
-                            SlashCommandOptionChoice.create(label, entry.key.toString())
-                        }
-                        .toList()
+                            .take(25)
+                            .map { entry ->
+                                val label = "${entry.value.mcName} | ${entry.key}"
+                                SlashCommandOptionChoice.create(label, entry.key.toString())
+                            }
+                            .toList()
                     interaction.respondWithChoices(choices)
                 }
                 "application" -> {
@@ -315,30 +328,35 @@ object DiscordBridge {
         val server = interaction.server.orElse(null)
         val displayName = server?.let { user.getDisplayName(it) } ?: user.name
 
-        val result = ArgusCore.linkDiscordUser(
-            token = token,
-            discordId = user.id,
-            discordName = displayName,
-            discordNick = server?.let { user.getNickname(it).orElse(null) } ?: displayName
-        )
-
-        val embed = EmbedBuilder()
-            .setTitle("Argus Link")
-            .setDescription(
-                if (result.isSuccess) {
-                    result.getOrNull()
-                } else {
-                    "Link failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
-                }
+        val result =
+            ArgusCore.linkDiscordUser(
+                token = token,
+                discordId = user.id,
+                discordName = displayName,
+                discordNick = server?.let { user.getNickname(it).orElse(null) } ?: displayName,
             )
-            .setColor(if (result.isSuccess) java.awt.Color(0x2ecc71) else java.awt.Color(0xe74c3c))
+
+        val embed =
+            EmbedBuilder()
+                .setTitle("Argus Link")
+                .setDescription(
+                    if (result.isSuccess) {
+                        result.getOrNull()
+                    } else {
+                        "Link failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
+                    },
+                )
+                .setColor(if (result.isSuccess) java.awt.Color(0x2ecc71) else java.awt.Color(0xe74c3c))
 
         interaction.replyEphemeral()
             .addEmbed(embed)
             .respond()
     }
 
-    private fun handleWhitelistSlash(interaction: SlashCommandInteraction, server: Server) {
+    private fun handleWhitelistSlash(
+        interaction: SlashCommandInteraction,
+        server: Server,
+    ) {
         val sub = interaction.options.firstOrNull()?.name?.lowercase() ?: return
         val publicSubs = setOf("apply", "my", "help")
 
@@ -449,19 +467,24 @@ object DiscordBridge {
         sendApplicationsPage(interaction, pending, 0)
     }
 
-    private fun sendApplicationsPage(interaction: SlashCommandInteraction, apps: List<WhitelistApplication>, page: Int) {
+    private fun sendApplicationsPage(
+        interaction: SlashCommandInteraction,
+        apps: List<WhitelistApplication>,
+        page: Int,
+    ) {
         val pageData = ApplicationsPaginator.paginate(apps, page, 5)
         val slice = pageData.items
         val totalPages = pageData.totalPages
-        val embed = EmbedBuilder()
-            .setTitle("Pending applications (${pageData.page + 1}/$totalPages)")
-            .setColor(Color(0x3498db))
-            .setDescription(
-                slice.joinToString("\\n") {
-                    val ageSeconds = (System.currentTimeMillis() - it.submittedAtEpochMillis) / 1000
-                    "- ${it.mcName} (id ${it.id.take(8)}), ${ageSeconds}s ago"
-                }
-            )
+        val embed =
+            EmbedBuilder()
+                .setTitle("Pending applications (${pageData.page + 1}/$totalPages)")
+                .setColor(Color(0x3498db))
+                .setDescription(
+                    slice.joinToString("\\n") {
+                        val ageSeconds = (System.currentTimeMillis() - it.submittedAtEpochMillis) / 1000
+                        "- ${it.mcName} (id ${it.id.take(8)}), ${ageSeconds}s ago"
+                    },
+                )
         val controls = mutableListOf<Button>()
         if (pageData.page > 0) controls += Button.secondary("apps_prev:${pageData.page}", "Prev")
         if (pageData.page < totalPages - 1) controls += Button.secondary("apps_next:${pageData.page}", "Next")
@@ -547,18 +570,23 @@ object DiscordBridge {
         val (warnCount, banMsg) = ArgusCore.userWarningsAndBan(interaction.user.id)
         val pd = CacheStore.findByDiscordId(interaction.user.id)?.second
         val activeBan = pd?.banReason
-        val text = buildString {
-            append("Warnings: $warnCount")
-            if (activeBan != null) append("\\nActive ban: $activeBan")
-            else if (banMsg != null) append("\\nLast ban: $banMsg")
-        }
+        val text =
+            buildString {
+                append("Warnings: $warnCount")
+                if (activeBan != null) {
+                    append("\\nActive ban: $activeBan")
+                } else if (banMsg != null) {
+                    append("\\nLast ban: $banMsg")
+                }
+            }
         interaction.replyEphemeral()
             .setContent(text.ifBlank { "No records." })
             .respond()
     }
 
     private fun help(interaction: SlashCommandInteraction) {
-        val helpText = """
+        val helpText =
+            """
             /whitelist add player:<mc|uuid> [discord:user] [mcname] — whitelist and link
             /whitelist remove player:<mc|uuid>
             /whitelist status player:<mc|uuid>
@@ -568,13 +596,17 @@ object DiscordBridge {
             /whitelist warn|ban|unban player:<mc|uuid> [reason] [duration_minutes]
             /whitelist comment|review player:<mc|uuid> [...]
             /whitelist my — see your warnings/bans
-        """.trimIndent()
+            """.trimIndent()
         interaction.replyEphemeral()
             .setContent(helpText)
             .respond()
     }
 
-    private fun handleRoleChange(user: User, roles: List<Role>, server: Server) {
+    private fun handleRoleChange(
+        user: User,
+        roles: List<Role>,
+        server: Server,
+    ) {
         val discordId = user.id
         val hasAccess = whitelistRoleId?.let { rid -> roles.any { r -> r.id == rid } } ?: false
         val isAdmin = adminRoleId?.let { rid -> roles.any { r -> r.id == rid } } ?: false
@@ -583,7 +615,10 @@ object DiscordBridge {
         applyRoleUpdate(discordId, newName, newNick, hasAccess, isAdmin)
     }
 
-    private fun logToChannel(channel: ServerTextChannel?, message: String) {
+    private fun logToChannel(
+        channel: ServerTextChannel?,
+        message: String,
+    ) {
         channel?.sendMessage(message)
     }
 
@@ -593,7 +628,10 @@ object DiscordBridge {
      *  - false -> does not have role
      *  - null  -> could not determine (api/server unavailable or timed out)
      */
-    fun checkWhitelistRole(discordId: Long, timeoutMillis: Long = 2000): Boolean? {
+    fun checkWhitelistRole(
+        discordId: Long,
+        timeoutMillis: Long = 2000,
+    ): Boolean? {
         val api = api ?: return null
         val server = serverRef ?: return null
         val roleId = whitelistRoleId ?: return null
@@ -604,7 +642,10 @@ object DiscordBridge {
         }.getOrNull()
     }
 
-    private fun discordLabel(name: String?, id: Long) = "${name ?: "unknown"} ($id)"
+    private fun discordLabel(
+        name: String?,
+        id: Long,
+    ) = "${name ?: "unknown"} ($id)"
 
     // ---------- Headless/test hooks ----------
     internal fun applyIdentityChange(
@@ -612,23 +653,29 @@ object DiscordBridge {
         oldName: String? = null,
         newName: String? = null,
         oldNick: String? = null,
-        newNick: String? = null
+        newNick: String? = null,
     ) {
         val entry = CacheStore.findByDiscordId(discordId)
         if (entry != null) {
             val (uuid, pd) = entry
             val nameChanged = newName != null && pd.discordName != null && pd.discordName != newName
             val nickChanged = newNick != pd.discordNick
-            val updated = pd.copy(
-                discordName = newName ?: pd.discordName,
-                discordNick = newNick
-            )
+            val updated =
+                pd.copy(
+                    discordName = newName ?: pd.discordName,
+                    discordNick = newNick,
+                )
             CacheStore.upsert(uuid, updated)
             if (nameChanged && newName != null) {
                 AuditLogger.log("Discord name changed: ${pd.discordName} -> $newName ${discordLabel(newName, discordId)}")
             }
             if (nickChanged) {
-                AuditLogger.log("Discord nick changed: ${pd.discordNick ?: "(none)"} -> ${newNick ?: "(none)"} ${discordLabel(newName ?: pd.discordName, discordId)}")
+                AuditLogger.log(
+                    "Discord nick changed: ${pd.discordNick ?: "(none)"} -> ${newNick ?: "(none)"} ${discordLabel(
+                        newName ?: pd.discordName,
+                        discordId,
+                    )}",
+                )
             }
             CacheStore.save(ArgusConfig.cachePath)
         } else {
@@ -647,31 +694,38 @@ object DiscordBridge {
         discordName: String,
         discordNick: String?,
         hasAccess: Boolean,
-        isAdmin: Boolean
+        isAdmin: Boolean,
     ) {
         val entry = CacheStore.findByDiscordId(discordId) ?: return
         val (uuid, player) = entry
         val nameChanged = player.discordName != null && player.discordName != discordName
         val nickChanged = player.discordNick != discordNick
 
-        val updated = player.copy(
-            hasAccess = hasAccess,
-            isAdmin = isAdmin,
-            discordName = discordName,
-            discordNick = discordNick
-        )
+        val updated =
+            player.copy(
+                hasAccess = hasAccess,
+                isAdmin = isAdmin,
+                discordName = discordName,
+                discordNick = discordNick,
+            )
         CacheStore.upsert(uuid, updated)
 
         if (nameChanged) {
             AuditLogger.log("Discord name changed: ${player.discordName} -> $discordName ${discordLabel(discordName, discordId)}")
         }
         if (nickChanged) {
-            AuditLogger.log("Discord nick changed: ${player.discordNick ?: "(none)"} -> ${discordNick ?: "(none)"} ${discordLabel(discordName, discordId)}")
+            AuditLogger.log(
+                "Discord nick changed: ${player.discordNick ?: "(none)"} -> ${discordNick ?: "(none)"} ${discordLabel(
+                    discordName,
+                    discordId,
+                )}",
+            )
         }
         AuditLogger.log("Role update: ${discordLabel(discordName, discordId)} -> access=$hasAccess admin=$isAdmin")
         CacheStore.save(ArgusConfig.cachePath)
     }
 
     private fun SlashCommandInteraction.replyEphemeral() = createImmediateResponder().setFlags(MessageFlag.EPHEMERAL)
+
     private fun ButtonInteraction.replyEphemeral() = createImmediateResponder().setFlags(MessageFlag.EPHEMERAL)
 }

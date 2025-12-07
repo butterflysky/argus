@@ -12,7 +12,10 @@ object LinkTokenService {
     private val tokens: MutableMap<String, UUID> = ConcurrentHashMap()
     private val reverse: MutableMap<UUID, String> = ConcurrentHashMap()
 
-    fun issueToken(uuid: UUID, mcName: String): String {
+    fun issueToken(
+        uuid: UUID,
+        mcName: String,
+    ): String {
         reverse[uuid]?.let { existing -> return existing }
         val token = generateToken()
         tokens[token] = uuid

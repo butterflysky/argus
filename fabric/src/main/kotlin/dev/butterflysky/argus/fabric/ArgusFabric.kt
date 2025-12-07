@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.networking.v1.ServerLoginConnectionEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.minecraft.command.CommandSource
-import net.minecraft.command.suggestion.SuggestionProviders
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.command.CommandManager.literal
 import net.minecraft.server.command.ServerCommandSource
@@ -46,14 +45,14 @@ class ArgusFabric : ModInitializer {
                     .requires { it.hasPermissionLevel(3) }
                     .then(
                         literal("reload")
-                            .executes { ctx -> reloadConfig(ctx) }
+                            .executes { ctx -> reloadConfig(ctx) },
                     )
                     .then(
                         literal("help")
                             .executes { ctx ->
                                 ctx.source.sendFeedback({ Text.literal(helpText()) }, false)
                                 1
-                            }
+                            },
                     )
                     .then(
                         literal("config")
@@ -62,8 +61,8 @@ class ArgusFabric : ModInitializer {
                                     .then(
                                         net.minecraft.server.command.CommandManager.argument("field", StringArgumentType.word())
                                             .suggests(::suggestFields)
-                                            .executes { ctx -> getConfig(ctx) }
-                                    )
+                                            .executes { ctx -> getConfig(ctx) },
+                                    ),
                             )
                             .then(
                                 literal("set")
@@ -71,21 +70,27 @@ class ArgusFabric : ModInitializer {
                                         net.minecraft.server.command.CommandManager.argument("field", StringArgumentType.word())
                                             .suggests(::suggestFields)
                                             .then(
-                                                net.minecraft.server.command.CommandManager.argument("value", StringArgumentType.greedyString())
+                                                net.minecraft.server.command.CommandManager.argument(
+                                                    "value",
+                                                    StringArgumentType.greedyString(),
+                                                )
                                                     .suggests(::suggestValue)
-                                                    .executes { ctx -> setConfig(ctx) }
-                                            )
-                                    )
-                            )
+                                                    .executes { ctx -> setConfig(ctx) },
+                                            ),
+                                    ),
+                            ),
                     )
                     .then(
                         literal("token")
                             .requires { it.hasPermissionLevel(3) }
                             .then(
-                                net.minecraft.server.command.CommandManager.argument("player", net.minecraft.command.argument.GameProfileArgumentType.gameProfile())
-                                    .executes { ctx -> issueToken(ctx) }
-                            )
-                    )
+                                net.minecraft.server.command.CommandManager.argument(
+                                    "player",
+                                    net.minecraft.command.argument.GameProfileArgumentType.gameProfile(),
+                                )
+                                    .executes { ctx -> issueToken(ctx) },
+                            ),
+                    ),
             )
         }
     }
@@ -93,15 +98,18 @@ class ArgusFabric : ModInitializer {
     private fun setConfig(ctx: CommandContext<ServerCommandSource>): Int {
         val field = StringArgumentType.getString(ctx, "field")
         val value = StringArgumentType.getString(ctx, "value")
-        val result = ArgusConfig.update(field, value)
-            .onSuccess { ArgusCore.reloadConfig() }
+        val result =
+            ArgusConfig.update(field, value)
+                .onSuccess { ArgusCore.reloadConfig() }
         return result.fold(
             onSuccess = {
-                ctx.source.sendFeedback({ Text.literal("Set $field") }, false); 1
+                ctx.source.sendFeedback({ Text.literal("Set $field") }, false)
+                1
             },
             onFailure = {
-                ctx.source.sendError(Text.literal("Failed: ${it.message}")); 0
-            }
+                ctx.source.sendError(Text.literal("Failed: ${it.message}"))
+                0
+            },
         )
     }
 
@@ -110,11 +118,13 @@ class ArgusFabric : ModInitializer {
         val result = ArgusConfig.get(field)
         return result.fold(
             onSuccess = {
-                ctx.source.sendFeedback({ Text.literal("$field = $it") }, false); 1
+                ctx.source.sendFeedback({ Text.literal("$field = $it") }, false)
+                1
             },
             onFailure = {
-                ctx.source.sendError(Text.literal("Unknown or invalid field: ${it.message}")); 0
-            }
+                ctx.source.sendError(Text.literal("Unknown or invalid field: ${it.message}"))
+                0
+            },
         )
     }
 
@@ -128,7 +138,7 @@ class ArgusFabric : ModInitializer {
             onFailure = {
                 ctx.source.sendError(Text.literal("Argus reload failed: ${it.message}"))
                 0
-            }
+            },
         )
     }
 
@@ -140,18 +150,24 @@ class ArgusFabric : ModInitializer {
         return 1
     }
 
-    private fun helpText(): String = """
+    private fun helpText(): String =
+        """
         /argus reload - reload config and restart Discord (if configured)
         /argus config get <field> - show current value
         /argus config set <field> <value> - update argus.json (tab-complete fields)
         /argus token <player> - issue a link token for that player
         Discord-side: /whitelist (add/remove/status/apply/list/approve/deny/warn/ban/unban/comment/review/my/help)
-    """.trimIndent()
+        """.trimIndent()
 
-    private fun suggestFields(ctx: CommandContext<ServerCommandSource>, builder: com.mojang.brigadier.suggestion.SuggestionsBuilder) =
-        net.minecraft.command.CommandSource.suggestMatching(ArgusConfig.fieldNames(), builder)
+    private fun suggestFields(
+        ctx: CommandContext<ServerCommandSource>,
+        builder: com.mojang.brigadier.suggestion.SuggestionsBuilder,
+    ) = net.minecraft.command.CommandSource.suggestMatching(ArgusConfig.fieldNames(), builder)
 
-    private fun suggestValue(ctx: CommandContext<ServerCommandSource>, builder: com.mojang.brigadier.suggestion.SuggestionsBuilder): java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> {
+    private fun suggestValue(
+        ctx: CommandContext<ServerCommandSource>,
+        builder: com.mojang.brigadier.suggestion.SuggestionsBuilder,
+    ): java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> {
         val field = runCatching { StringArgumentType.getString(ctx, "field") }.getOrNull()
         field?.let { ArgusConfig.sampleValue(it)?.let { sample -> builder.suggest(sample) } }
         return builder.buildFuture()
@@ -209,22 +225,37 @@ class ArgusFabric : ModInitializer {
             }
         }
         return runCatching {
-            val method = handler.javaClass.methods.firstOrNull { it.name in listOf("getProfile", "getGameProfile") && it.parameterCount == 0 }
+            val method =
+                handler.javaClass.methods.firstOrNull {
+                    it.name in
+                        listOf(
+                            "getProfile",
+                            "getGameProfile",
+                        ) && it.parameterCount == 0
+                }
             method?.invoke(handler) as? com.mojang.authlib.GameProfile
         }.getOrNull()
     }
 
-    private fun reflectBool(target: Any, methodName: String, arg: Any): Boolean {
+    private fun reflectBool(
+        target: Any,
+        methodName: String,
+        arg: Any,
+    ): Boolean {
         return runCatching {
-            val method = target.javaClass.methods.firstOrNull {
-                it.name == methodName && it.parameterCount == 1
-            } ?: return@runCatching false
+            val method =
+                target.javaClass.methods.firstOrNull {
+                    it.name == methodName && it.parameterCount == 1
+                } ?: return@runCatching false
             method.isAccessible = true
             (method.invoke(target, arg) as? Boolean) ?: false
         }.getOrDefault(false)
     }
 
-    private fun reflectServerBool(server: MinecraftServer, names: List<String>): Boolean {
+    private fun reflectServerBool(
+        server: MinecraftServer,
+        names: List<String>,
+    ): Boolean {
         return names.firstNotNullOfOrNull { name ->
             runCatching {
                 val method = server.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 0 }

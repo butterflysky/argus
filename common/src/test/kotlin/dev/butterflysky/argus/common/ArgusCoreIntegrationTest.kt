@@ -13,11 +13,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ArgusCoreIntegrationTest {
-
     private val auditLogs = mutableListOf<String>()
 
     @BeforeEach
-    fun setup(@TempDir tempDir: Path) {
+    fun setup(
+        @TempDir tempDir: Path,
+    ) {
         auditLogs.clear()
         AuditLogger.configure { auditLogs += it }
         ArgusCore.setDiscordStartedOverride(true)
@@ -25,13 +26,14 @@ class ArgusCoreIntegrationTest {
 
         val cachePath = tempDir.resolve("argus_db.json")
         val cfgPath = tempDir.resolve("argus.json")
-        val cfg = ArgusSettings(
-            botToken = "token",
-            guildId = 1L,
-            whitelistRoleId = 2L,
-            adminRoleId = 3L,
-            cacheFile = cachePath.toString()
-        )
+        val cfg =
+            ArgusSettings(
+                botToken = "token",
+                guildId = 1L,
+                whitelistRoleId = 2L,
+                adminRoleId = 3L,
+                cacheFile = cachePath.toString(),
+            )
         Files.writeString(cfgPath, kotlinx.serialization.json.Json.encodeToString(ArgusSettings.serializer(), cfg))
         ArgusConfig.load(cfgPath)
         CacheStore.load(cachePath)

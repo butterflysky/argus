@@ -10,13 +10,13 @@ class ApplicationsPaginatorTest {
         val first = ApplicationsPaginator.paginate(items, page = 0, pageSize = 5)
         assertEquals(0, first.page)
         assertEquals(3, first.totalPages)
-        assertEquals(listOf(1,2,3,4,5), first.items)
+        assertEquals(listOf(1, 2, 3, 4, 5), first.items)
 
         val mid = ApplicationsPaginator.paginate(items, page = 1, pageSize = 5)
-        assertEquals(listOf(6,7,8,9,10), mid.items)
+        assertEquals(listOf(6, 7, 8, 9, 10), mid.items)
 
         val clamped = ApplicationsPaginator.paginate(items, page = 10, pageSize = 5)
         assertEquals(2, clamped.page)
-        assertEquals(listOf(11,12), clamped.items)
+        assertEquals(listOf(11, 12), clamped.items)
     }
 }

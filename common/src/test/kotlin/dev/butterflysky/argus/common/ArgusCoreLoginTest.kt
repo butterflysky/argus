@@ -11,18 +11,20 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ArgusCoreLoginTest {
-
     @BeforeEach
-    fun resetCache(@TempDir tempDir: Path) {
+    fun resetCache(
+        @TempDir tempDir: Path,
+    ) {
         val cachePath = tempDir.resolve("argus_db.json")
         val cfgPath = tempDir.resolve("argus.json")
-        val cfg = ArgusSettings(
-            botToken = "token",
-            guildId = 1L,
-            whitelistRoleId = 2L,
-            adminRoleId = 3L,
-            cacheFile = cachePath.toString()
-        )
+        val cfg =
+            ArgusSettings(
+                botToken = "token",
+                guildId = 1L,
+                whitelistRoleId = 2L,
+                adminRoleId = 3L,
+                cacheFile = cachePath.toString(),
+            )
         Files.writeString(cfgPath, kotlinx.serialization.json.Json.encodeToString(ArgusSettings.serializer(), cfg))
         ArgusConfig.load(cfgPath)
         CacheStore.load(cachePath)
@@ -63,7 +65,14 @@ class ArgusCoreLoginTest {
 
     @Test
     fun `stranger is denied with application message`() {
-        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "stranger",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
+            )
         val deny = assertIs<LoginResult.Deny>(result)
         assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
     }

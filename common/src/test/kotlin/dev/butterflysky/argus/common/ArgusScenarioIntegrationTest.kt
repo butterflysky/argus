@@ -88,4 +88,57 @@ class ArgusScenarioIntegrationTest {
         val deny = assertIs<LoginResult.Deny>(result)
         assertTrue(deny.message.contains("/link"))
     }
+
+    @Test
+    fun `op bypasses all checks`() {
+        val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "op", isOp = true, isLegacyWhitelisted = false, whitelistEnabled = true)
+        assertIs<LoginResult.Allow>(result)
+    }
+
+    @Test
+    fun `active timed ban denies with reason`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(
+            playerId,
+            PlayerData(
+                hasAccess = true,
+                banReason = "Griefing",
+                banUntilEpochMillis = System.currentTimeMillis() + 60_000
+            )
+        )
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertTrue(deny.message.contains("Griefing"))
+    }
+
+    @Test
+    fun `expired ban allows`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(
+            playerId,
+            PlayerData(
+                hasAccess = true,
+                banReason = "Temp ban",
+                banUntilEpochMillis = System.currentTimeMillis() - 1_000
+            )
+        )
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+        assertIs<LoginResult.Allow>(result)
+    }
+
+    @Test
+    fun `permanent ban denies`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(
+            playerId,
+            PlayerData(
+                hasAccess = true,
+                banReason = "Permanent ban",
+                banUntilEpochMillis = Long.MAX_VALUE
+            )
+        )
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertTrue(deny.message.contains("Permanent ban", ignoreCase = true) || deny.message.contains("permanent", ignoreCase = true))
+    }
 }

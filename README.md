@@ -27,6 +27,9 @@ Kotlin-based, cache-first access control for Minecraft 1.21.10 with Discord iden
 ./gradlew build              # build all modules
 ./gradlew :fabric:runServer  # dev server (Fabric)
 # NeoForge run target can be added via NeoGradle run configs when needed
+
+# Full verification bundle
+./gradlew check   # runs spotlessCheck + tests + Fabric/NeoForge smoke jars
 ```
 
 ## Documentation

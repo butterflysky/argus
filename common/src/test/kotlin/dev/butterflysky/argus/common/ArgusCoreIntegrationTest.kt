@@ -95,4 +95,17 @@ class ArgusCoreIntegrationTest {
         assertTrue(auditLogs.any { it.contains("MC name changed: old -> newname") })
         assertEquals("newname", CacheStore.get(playerId)?.mcName)
     }
+
+    @Test
+    fun `discord identity change is logged and cached`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 50L, discordName = "oldName", discordNick = "oldNick"))
+
+        DiscordBridge.applyIdentityChange(50L, oldName = "oldName", newName = "newName", oldNick = "oldNick", newNick = "newNick")
+
+        assertEquals("newName", CacheStore.get(playerId)?.discordName)
+        assertEquals("newNick", CacheStore.get(playerId)?.discordNick)
+        assertTrue(auditLogs.any { it.contains("Discord name changed: oldName -> newName") })
+        assertTrue(auditLogs.any { it.contains("Discord nick changed: oldNick") })
+    }
 }

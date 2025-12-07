@@ -8,6 +8,17 @@
 - `applicationMessage` — text shown to strangers/denied users (invite link is appended if `discordInviteUrl` is set).
 - `cacheFile` — leave default unless you have a custom path.
 
+## Discord field reference (what to set)
+- `botToken` — Bot token from Discord Developer Portal → Bot → *Reset Token*. Required to start the bot.
+- `guildId` — ID of the Discord server the bot was invited to.
+- `whitelistRoleId` — Role that grants Minecraft access; Argus checks this on login/join.
+- `adminRoleId` — Role allowed to run admin slash commands (approve/deny/warn/ban/comment, config).
+- `logChannelId` — Text channel for audit logs; leave blank to log only to console.
+- `discordInviteUrl` — Optional invite link appended to deny messages so players can join your Discord.
+- `applicationMessage` — Deny text for strangers/denied users; keep short (“Please apply in Discord.”).
+
+Use Discord’s Developer Mode to copy IDs (right‑click → Copy ID). See [Discord Application](discord-setup.md) for step-by-step setup.
+
 **Set and view (in-game)**
 - `/argus config get <field>`
 - `/argus config set <field> <value>` (tab-complete shows fields and allowed values)

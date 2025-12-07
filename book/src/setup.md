@@ -6,7 +6,7 @@
 
 2) Start once to generate `config/argus.json`.
 
-3) Fill `config/argus.json`:
+3) Fill `config/argus.json` (see [Discord Application](discord-setup.md) for creating the bot and grabbing IDs):
 
 | Field | Description |
 | --- | --- |

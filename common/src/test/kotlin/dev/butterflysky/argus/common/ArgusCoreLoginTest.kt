@@ -40,6 +40,8 @@ class ArgusCoreLoginTest {
     @AfterEach
     fun tearDown() {
         AuditLogger.configure(null)
+        ArgusCore.setRoleCheckOverride(null)
+        ArgusCore.setDiscordStartedOverride(null)
     }
 
     @Test
@@ -58,17 +60,19 @@ class ArgusCoreLoginTest {
     }
 
     @Test
-    fun `linked player missing role is denied`() {
+    fun `linked player missing role is denied (enforced)`() {
         val playerId = UUID.randomUUID()
-        CacheStore.upsert(playerId, PlayerData(hasAccess = false))
+        CacheStore.upsert(playerId, PlayerData(discordId = 42L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
 
         val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
-        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+        assertTrue(deny.message.contains("missing Discord whitelist role"))
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
 
     @Test
-    fun `dry-run allows but logs missing role`() {
+    fun `linked player missing role is allowed in dry-run and logs`() {
         ArgusConfig.update("enforcementEnabled", "false")
         ArgusCore.reloadConfig()
         ArgusCore.setDiscordStartedOverride(true)
@@ -84,10 +88,55 @@ class ArgusCoreLoginTest {
     }
 
     @Test
+    fun `linked player not in guild is denied and cache set false`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 99L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
+
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertTrue(deny.message.contains("not in Discord guild"))
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
+    }
+
+    @Test
+    fun `linked player not in guild dry-run allows and logs`() {
+        ArgusConfig.update("enforcementEnabled", "false")
+        ArgusCore.reloadConfig()
+        ArgusCore.setDiscordStartedOverride(true)
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 99L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
+
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+
+        assertIs<LoginResult.Allow>(result)
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("not in Discord guild") })
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
+    }
+
+    @Test
     fun `legacy whitelisted gets verification token kick`() {
         val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "legacy", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
         assertTrue(deny.message.contains("/link"))
+    }
+
+    @Test
+    fun `legacy whitelisted dry-run issues token but allows`() {
+        ArgusConfig.update("enforcementEnabled", "false")
+        ArgusCore.reloadConfig()
+        ArgusCore.setDiscordStartedOverride(true)
+        val uuid = UUID.randomUUID()
+
+        val result = ArgusCore.onPlayerLogin(uuid, "legacy", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
+
+        assertIs<LoginResult.Allow>(result)
+        // token should exist and be stable until consumed
+        val token1 = LinkTokenService.issueToken(uuid, "legacy")
+        val token2 = LinkTokenService.issueToken(uuid, "legacy")
+        assertEquals(token1, token2)
     }
 
     @Test
@@ -102,5 +151,79 @@ class ArgusCoreLoginTest {
             )
         val deny = assertIs<LoginResult.Deny>(result)
         assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+    }
+
+    @Test
+    fun `stranger denial includes invite when configured`() {
+        ArgusConfig.update("discordInviteUrl", "https://discord.gg/test")
+        ArgusCore.reloadConfig()
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "stranger",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
+            )
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertTrue(deny.message.contains("Access Denied"))
+        assertTrue(deny.message.contains("discord.gg/test"))
+    }
+
+    @Test
+    fun `stranger dry-run is allowed but logs`() {
+        ArgusConfig.update("enforcementEnabled", "false")
+        ArgusCore.reloadConfig()
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "stranger",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
+            )
+        assertIs<LoginResult.Allow>(result)
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would deny stranger") })
+    }
+
+    @Test
+    fun `live refresh allows when cache denies but role present`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 7L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.HasRole }
+
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+
+        assertIs<LoginResult.Allow>(result)
+        assertEquals(true, CacheStore.get(playerId)?.hasAccess)
+    }
+
+    @Test
+    fun `live refresh in dry-run allows but leaves cache unchanged`() {
+        ArgusConfig.update("enforcementEnabled", "false")
+        ArgusCore.reloadConfig()
+        ArgusCore.setDiscordStartedOverride(true)
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 7L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.HasRole }
+
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+
+        assertIs<LoginResult.Allow>(result)
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would deny") }.not()) // no deny log; allowed
+    }
+
+    @Test
+    fun `transient discord failure on login keeps cache decision`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 55L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.Indeterminate }
+
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
+
+        val deny = assertIs<LoginResult.Deny>(result)
+        assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
 }

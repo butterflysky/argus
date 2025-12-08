@@ -83,7 +83,7 @@ object ArgusConfig {
 
     fun current(): ArgusSettings = settings
 
-    fun load(path: Path = defaultPath): Result<ArgusSettings> =
+    fun load(path: Path = loadedPath): Result<ArgusSettings> =
         runCatching {
             Files.createDirectories(path.parent)
             if (!Files.exists(path)) {

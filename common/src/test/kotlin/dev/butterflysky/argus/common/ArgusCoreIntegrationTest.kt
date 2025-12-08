@@ -117,6 +117,40 @@ class ArgusCoreIntegrationTest {
     }
 
     @Test
+    fun `join refresh dry-run missing role does not kick`() {
+        ArgusConfig.update("enforcementEnabled", "false")
+        ArgusCore.reloadConfig()
+        ArgusCore.setDiscordStartedOverride(true)
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 10L, hasAccess = true, mcName = "mc"))
+        ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
+
+        val msg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
+
+        assertNotNull(msg)
+        assertTrue(msg.contains("Welcome"))
+        assertEquals(true, CacheStore.get(playerId)?.hasAccess)
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would revoke") })
+    }
+
+    @Test
+    fun `join refresh dry-run not in guild does not kick`() {
+        ArgusConfig.update("enforcementEnabled", "false")
+        ArgusCore.reloadConfig()
+        ArgusCore.setDiscordStartedOverride(true)
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 10L, hasAccess = true, mcName = "mc"))
+        ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
+
+        val msg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
+
+        assertNotNull(msg)
+        assertTrue(msg.contains("Welcome"))
+        assertEquals(true, CacheStore.get(playerId)?.hasAccess)
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("left Discord guild") })
+    }
+
+    @Test
     fun `minecraft name change is logged and cached`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(mcName = "old"))

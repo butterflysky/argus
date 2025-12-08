@@ -2,9 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.8] - 2025-12-08
+- Embedded Javacord (and its deps) inside the Fabric jar so Discord starts even on servers without external libs.
+- Retained bundled common classes; NeoForge packaging unchanged.
+- No gameplay/logic changes—packaging fix only.
+
 ## [1.0.7] - 2025-12-08
-- Bundle Javacord into both Fabric and NeoForge jars (fixes Discord startup NoClassDefFoundError on prod).
-- No behavior changes; packaging only.
+- Attempted to bundle Javacord into both Fabric and NeoForge jars; NeoForge succeeded but Fabric was missing it.
+- No behavior changes; packaging intent only.
 
 ## [1.0.6] - 2025-12-08
 - Included common classes in both Fabric and NeoForge jars (validated contents) to avoid NoClassDefFoundError on prod.

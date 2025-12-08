@@ -13,6 +13,10 @@ repositories {
     mavenCentral()
 }
 
+configurations {
+    javacordBundle
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
@@ -20,7 +24,7 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
     modImplementation "org.javacord:javacord:${rootProject.ext.javacordVersion}"
-    include "org.javacord:javacord:${rootProject.ext.javacordVersion}"
+    javacordBundle "org.javacord:javacord:${rootProject.ext.javacordVersion}"
 
     implementation project(":common")
 }
@@ -47,6 +51,9 @@ tasks.named("jar") {
     archiveClassifier.set("")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(project(":common").sourceSets.main.output.classesDirs)
+    from {
+        configurations.javacordBundle.collect { it.isDirectory() ? it : zipTree(it) }
+    }
 }
 
 tasks.named("remapJar") {

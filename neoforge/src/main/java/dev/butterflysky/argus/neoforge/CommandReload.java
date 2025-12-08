@@ -20,8 +20,7 @@ public class CommandReload {
             .requires(stack -> stack.hasPermission(3))
             .then(Commands.literal("reload")
                 .executes(ctx -> {
-                    ArgusCore.initializeJvm();
-                    ArgusCore.startDiscordJvm();
+                    ArgusCore.reloadConfigJvm();
                     ctx.getSource().sendSuccess(() -> Component.literal("Argus config reloaded"), false);
                     return 1;
                 })

@@ -34,6 +34,20 @@ object DiscordBridge {
 
     @Volatile private var adminRoleId: Long? = null
 
+    fun stop() {
+        try {
+            api?.disconnect()?.join()
+        } catch (t: Throwable) {
+            logger.warn("Error while shutting down Discord", t)
+        } finally {
+            AuditLogger.configure(null)
+            api = null
+            serverRef = null
+            whitelistRoleId = null
+            adminRoleId = null
+        }
+    }
+
     fun start(settings: ArgusSettings): Result<Unit> {
         if (settings.botToken.isBlank()) {
             return Result.failure(IllegalStateException("Discord bot token is empty"))
@@ -58,7 +72,14 @@ object DiscordBridge {
             whitelistRoleId = settings.whitelistRoleId
             adminRoleId = settings.adminRoleId
 
-            val logChannel = settings.logChannelId?.let { server.getTextChannelById(it).orElse(null) }
+            val logChannel =
+                settings.logChannelId?.let {
+                    server.getTextChannelById(it).orElse(null).also { ch ->
+                        if (ch == null) {
+                            logger.warn("Log channel $it not found or not a text channel; audit messages will stay in console only")
+                        }
+                    }
+                }
             AuditLogger.configure { msg -> logToChannel(logChannel, msg) }
 
             registerRoleListeners(server)
@@ -619,7 +640,10 @@ object DiscordBridge {
         channel: ServerTextChannel?,
         message: String,
     ) {
-        channel?.sendMessage(message)
+        channel?.sendMessage(message)?.exceptionally {
+            logger.warn("Failed to send audit log to Discord channel: ${it.message}")
+            null
+        }
     }
 
     /**

@@ -95,6 +95,12 @@ class ArgusFabric : ModInitializer {
         }
     }
 
+    init {
+        ServerLifecycleEvents.SERVER_STOPPING.register(ServerLifecycleEvents.ServerStopping { _ ->
+            ArgusCore.stopDiscord()
+        })
+    }
+
     private fun setConfig(ctx: CommandContext<ServerCommandSource>): Int {
         val field = StringArgumentType.getString(ctx, "field")
         val value = StringArgumentType.getString(ctx, "value")
@@ -129,7 +135,7 @@ class ArgusFabric : ModInitializer {
     }
 
     private fun reloadConfig(ctx: CommandContext<ServerCommandSource>): Int {
-        val result = ArgusCore.initialize()
+        val result = ArgusCore.reloadConfig()
         return result.fold(
             onSuccess = {
                 ctx.source.sendFeedback({ Text.literal("Argus config reloaded") }, false)

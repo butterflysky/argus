@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 - Added jar-level smoke test that boots ArgusCore from the remapped jar with only production deps (catches packaging slips).
 - Packaging-only; logic unchanged.
 
+## [1.0.11] - 2025-12-08
+- Added graceful Discord shutdown on server stop (Fabric + NeoForge) to prevent long exit hangs.
+- `/argus reload` now fully restarts Discord (stop + start) instead of only reloading config.
+- No functional gameplay changes.
+
 ## [1.0.8] - 2025-12-08
 - Embedded Javacord (and its deps) inside the Fabric jar so Discord starts even on servers without external libs.
 - Retained bundled common classes; NeoForge packaging unchanged.

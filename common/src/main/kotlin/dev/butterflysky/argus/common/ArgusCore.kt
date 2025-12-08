@@ -56,7 +56,12 @@ object ArgusCore {
             .onFailure { logger.warn("Discord startup skipped/failed: ${it.message}") }
     }
 
-    fun reloadConfig(): Result<Unit> = initialize().onSuccess { startDiscord() }
+    fun reloadConfig(): Result<Unit> =
+        initialize().onSuccess {
+            DiscordBridge.stop()
+            discordStarted = false
+            startDiscord()
+        }
 
     @JvmStatic
     fun reloadConfigJvm() {
@@ -66,6 +71,11 @@ object ArgusCore {
     @JvmStatic
     fun startDiscordJvm() {
         startDiscord()
+    }
+
+    fun stopDiscord() {
+        DiscordBridge.stop()
+        discordStarted = false
     }
 
     fun onPlayerLogin(

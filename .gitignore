@@ -34,6 +34,8 @@ bin/
 run/
 fabric/run/
 neoforge/runs/
+config/
+common/config/
 
 # java
 

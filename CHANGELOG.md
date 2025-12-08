@@ -26,25 +26,21 @@ All notable changes to this project will be documented in this file.
 - Clarified NeoForge smokes (`neoforgeJarSmoke`, `:neoforge:neoforgeRunSmoke`) and wired runtime smoke into CI/release.
 - Shared icon moved to `:common` and included in both loader jars.
 
-## [0.2.6] - 2025-12-08
+## 0.2.6 - 2025-12-08
 - Added NeoForge runtime smoke task and CI wiring.
 
-## [0.2.5] - 2025-12-07
+## 0.2.5 - 2025-12-07
 - Release housekeeping.
 
-## [0.2.4] - 2025-12-07
+## 0.2.4 - 2025-12-07
 - Docs: README streamlined, setup docs reorganized, unnumbered overview.
 
-## [0.2.3] - 2025-12-07
+## 0.2.3 - 2025-12-07
 - Fixed NeoForge mods.toml expansion and command registration bus.
 
 [Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.4...HEAD
-[1.0.4]: https://github.com/butterflysky/argus/compare/v1.0.3...v1.0.4
-[1.0.3]: https://github.com/butterflysky/argus/compare/v1.0.2...v1.0.3
-[1.0.2]: https://github.com/butterflysky/argus/compare/v1.0.1...v1.0.2
-[1.0.1]: https://github.com/butterflysky/argus/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/butterflysky/argus/compare/v0.2.6...v1.0.0
-[0.2.6]: https://github.com/butterflysky/argus/compare/v0.2.5...v0.2.6
-[0.2.5]: https://github.com/butterflysky/argus/compare/v0.2.4...v0.2.5
-[0.2.4]: https://github.com/butterflysky/argus/compare/v0.2.3...v0.2.4
-[0.2.3]: https://github.com/butterflysky/argus/compare/v0.2.2...v0.2.3
+[1.0.4]: https://github.com/butterflysky/argus/releases/tag/v1.0.4
+[1.0.3]: https://github.com/butterflysky/argus/releases/tag/v1.0.3
+[1.0.2]: https://github.com/butterflysky/argus/releases/tag/v1.0.2
+[1.0.1]: https://github.com/butterflysky/argus/releases/tag/v1.0.1
+[1.0.0]: https://github.com/butterflysky/argus/releases/tag/v1.0.0

@@ -50,7 +50,7 @@ class ArgusCoreIntegrationTest {
     fun `cache deny refreshed to allow`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 10L, hasAccess = false, mcName = "mc"))
-        ArgusCore.setRoleCheckOverride { true }
+        ArgusCore.setRoleCheckOverride { RoleStatus.HasRole }
 
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
@@ -63,7 +63,7 @@ class ArgusCoreIntegrationTest {
     fun `cache deny refreshed to deny`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 10L, hasAccess = false, mcName = "mc"))
-        ArgusCore.setRoleCheckOverride { false }
+        ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
 
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
@@ -77,7 +77,7 @@ class ArgusCoreIntegrationTest {
     fun `join refresh kicks when role removed`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 10L, hasAccess = true, mcName = "mc"))
-        ArgusCore.setRoleCheckOverride { false }
+        ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
 
         val kickMsg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
 
@@ -85,6 +85,34 @@ class ArgusCoreIntegrationTest {
         assertTrue(kickMsg.contains("Access revoked"))
         val updated = CacheStore.get(playerId)
         assertEquals(false, updated?.hasAccess)
+    }
+
+    @Test
+    fun `join refresh kicks when user left guild`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 10L, hasAccess = true, mcName = "mc"))
+        ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
+
+        val kickMsg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
+
+        assertNotNull(kickMsg)
+        assertTrue(kickMsg.contains("left Discord guild"))
+        val updated = CacheStore.get(playerId)
+        assertEquals(false, updated?.hasAccess)
+        assertTrue(auditLogs.any { it.contains("left Discord guild") })
+    }
+
+    @Test
+    fun `transient discord failure leaves cache unchanged`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 10L, hasAccess = true, mcName = "mc"))
+        ArgusCore.setRoleCheckOverride { RoleStatus.Indeterminate }
+
+        val msg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
+
+        assertEquals(null, msg)
+        val updated = CacheStore.get(playerId)
+        assertEquals(true, updated?.hasAccess)
     }
 
     @Test

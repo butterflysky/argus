@@ -25,7 +25,7 @@ object ArgusCore {
 
     @Volatile private var discordStartedOverride: Boolean? = null
 
-    @Volatile private var roleCheckOverride: ((Long) -> Boolean?)? = null
+    @Volatile private var roleCheckOverride: ((Long) -> RoleStatus?)? = null
 
     @Volatile private var messenger: ((UUID, String) -> Unit)? = null
     private val httpClient =
@@ -104,18 +104,26 @@ object ArgusCore {
         }
 
         // Only pay the live Discord check cost if cache would block them and we have a Discord link.
-        val liveAccess =
+        val liveStatus =
             if (pdata?.discordId != null && pdata.hasAccess != true) {
-                checkWhitelistRole(pdata.discordId)
+                checkWhitelistStatus(pdata.discordId)
             } else {
                 null
             }
 
-        if (liveAccess != null && pdata != null) {
-            CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
+        if (liveStatus != null && liveStatus != RoleStatus.Indeterminate && pdata != null) {
+            val updatedAccess = liveStatus == RoleStatus.HasRole
+            CacheStore.upsert(uuid, pdata.copy(hasAccess = updatedAccess))
             CacheStore.save(ArgusConfig.cachePath)
+            if (liveStatus == RoleStatus.NotInGuild) {
+                AuditLogger.log("Access revoked: left Discord guild discord=${discordLabel(pdata.discordName ?: \"unknown\", pdata.discordId)} mc=${mcLabel(name, uuid)}")
+            }
         }
-        val hasAccess = liveAccess ?: pdata?.hasAccess
+        val hasAccess = when (liveStatus) {
+            RoleStatus.HasRole -> true
+            RoleStatus.MissingRole, RoleStatus.NotInGuild -> false
+            RoleStatus.Indeterminate, null -> pdata?.hasAccess
+        }
 
         // Active ban check
         if (pdata?.banUntilEpochMillis != null) {
@@ -140,10 +148,10 @@ object ArgusCore {
 
         if (hasAccess == false) {
             val message =
-                if (pdata?.hasAccess == true && liveAccess == false) {
-                    prefix("Access revoked: missing Discord whitelist role")
-                } else {
-                    prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
+                when {
+                    liveStatus == RoleStatus.NotInGuild -> prefix("Access revoked: not in Discord guild")
+                    liveStatus == RoleStatus.MissingRole || (pdata?.hasAccess == true && liveStatus == RoleStatus.MissingRole) -> prefix("Access revoked: missing Discord whitelist role")
+                    else -> prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
                 }
             return LoginResult.Deny(message)
         }
@@ -195,15 +203,21 @@ object ArgusCore {
     private fun refreshAccessOnJoin(uuid: UUID): LoginResult? {
         val pdata = CacheStore.get(uuid) ?: return null
         val discordId = pdata.discordId ?: return null
-        val liveAccess = checkWhitelistRole(discordId)
-        if (liveAccess == null) return null
+        val liveStatus = checkWhitelistStatus(discordId)
+        if (liveStatus == RoleStatus.Indeterminate) return null
+        val liveAccess = liveStatus == RoleStatus.HasRole
         CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
         CacheStore.save(ArgusConfig.cachePath)
-        return if (liveAccess) null else LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
+        return when {
+            liveStatus == RoleStatus.NotInGuild ->
+                LoginResult.Deny(prefix(withInviteSuffix("Access revoked: left Discord guild")))
+            liveAccess -> null
+            else -> LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
+        }
     }
 
-    private fun checkWhitelistRole(discordId: Long): Boolean? =
-        roleCheckOverride?.invoke(discordId) ?: DiscordBridge.checkWhitelistRole(discordId)
+    private fun checkWhitelistStatus(discordId: Long): RoleStatus? =
+        roleCheckOverride?.invoke(discordId) ?: DiscordBridge.checkWhitelistStatus(discordId)
 
     private fun withInviteSuffix(message: String): String {
         val invite = ArgusConfig.current().discordInviteUrl
@@ -238,7 +252,7 @@ object ArgusCore {
     }
 
     /** Testing hook to override whitelist role checks (for headless tests). */
-    fun setRoleCheckOverride(checker: ((Long) -> Boolean?)?) {
+    fun setRoleCheckOverride(checker: ((Long) -> RoleStatus?)?) {
         roleCheckOverride = checker
     }
 

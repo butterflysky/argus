@@ -623,23 +623,34 @@ object DiscordBridge {
     }
 
     /**
-     * Live-check whether a Discord user currently has the whitelist role. Returns:
-     *  - true  -> has role
-     *  - false -> does not have role
-     *  - null  -> could not determine (api/server unavailable or timed out)
+     * Live-check whether a Discord user currently has the whitelist role.
+     *  - HasRole: member is in guild and has role
+     *  - MissingRole: member is in guild but missing role
+     *  - NotInGuild: member not in guild
+     *  - Indeterminate: timeout or API unavailable
      */
-    fun checkWhitelistRole(
+    fun checkWhitelistStatus(
         discordId: Long,
         timeoutMillis: Long = 2000,
-    ): Boolean? {
-        val api = api ?: return null
-        val server = serverRef ?: return null
-        val roleId = whitelistRoleId ?: return null
-        return runCatching {
-            val member = server.requestMember(discordId).orTimeout(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS).join()
+    ): RoleStatus {
+        val api = api ?: return RoleStatus.Indeterminate
+        val server = serverRef ?: return RoleStatus.Indeterminate
+        val roleId = whitelistRoleId ?: return RoleStatus.Indeterminate
+        return try {
+            val member =
+                server.requestMember(discordId).orTimeout(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS).join()
             val roles = member.getRoles(server)
-            roles.any { it.id == roleId }
-        }.getOrNull()
+            if (roles.any { it.id == roleId }) RoleStatus.HasRole else RoleStatus.MissingRole
+        } catch (ex: Exception) {
+            val cause = (ex as? java.util.concurrent.CompletionException)?.cause ?: ex
+            val msg = cause.message ?: ""
+            return when {
+                cause is java.util.concurrent.TimeoutException -> RoleStatus.Indeterminate
+                cause.javaClass.simpleName.contains("Unknown") && msg.contains("Member", true) -> RoleStatus.NotInGuild
+                msg.contains("Unknown Member", true) || msg.contains("Unknown user", true) -> RoleStatus.NotInGuild
+                else -> RoleStatus.Indeterminate
+            }
+        }
     }
 
     private fun discordLabel(

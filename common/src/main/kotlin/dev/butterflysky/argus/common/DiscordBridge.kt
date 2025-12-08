@@ -756,7 +756,14 @@ object DiscordBridge {
                 )}",
             )
         }
-        AuditLogger.log("Role update: ${discordLabel(discordName, discordId)} -> access=$hasAccess admin=$isAdmin")
+        val whitelistedLabel = if (hasAccess) "whitelisted=true" else "whitelisted=false"
+        val adminPart =
+            when {
+                isAdmin && player.isAdmin != true -> " admin=true"
+                !isAdmin && player.isAdmin == true -> " admin=false"
+                else -> ""
+            }
+        AuditLogger.log("Role update: ${discordLabel(discordName, discordId)} -> $whitelistedLabel$adminPart")
         CacheStore.save(ArgusConfig.cachePath)
     }
 

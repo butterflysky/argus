@@ -74,7 +74,17 @@ All notable changes to this project will be documented in this file.
 ## 0.2.3 - 2025-12-07
 - Fixed NeoForge mods.toml expansion and command registration bus.
 
-[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.13...HEAD
+
+## [1.0.13] - 2025-12-08
+- Prefix everywhere: All Argus messages in Minecraft now start with “[argus]”.
+- `/argus config set` now echoes key and value.
+- `/argus tokens` lists active link tokens; tokens have a 30-minute TTL with auto-cleanup.
+- Whitelist method-name fallbacks retained for compatibility across loader/mapping variants.
+
+## [1.0.14] - 2025-12-08
+- Role update audit log now reports “whitelisted=true/false” and only includes admin flag when it changes or is true.
+
 [1.0.7]: https://github.com/butterflysky/argus/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/butterflysky/argus/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/butterflysky/argus/compare/v1.0.4...v1.0.5

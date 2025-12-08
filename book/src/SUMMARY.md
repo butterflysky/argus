@@ -1,8 +1,8 @@
 # Summary
 
 ## User Guide
-- [Argus](overview.md)
-- [Setup](setup.md)
+ - [Argus](overview.md){numbered=false}
+ - [Setup](setup.md)
   - [Installation](setup-installation.md)
   - [Discord Application](discord-setup.md)
   - [Whitelist Behavior & Safety](setup-behavior.md)

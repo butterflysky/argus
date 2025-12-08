@@ -23,6 +23,22 @@ runs {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// Expand mod metadata placeholders
+tasks.named("processResources") {
+    inputs.properties(
+            "mod_version": rootProject.mod_version,
+            "minecraft_version": rootProject.ext.minecraft_version,
+            "neo_version": rootProject.ext.neo_version
+    )
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(
+                mod_version: rootProject.mod_version,
+                minecraft_version: rootProject.ext.minecraft_version,
+                neo_version: rootProject.ext.neo_version
+        )
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 21

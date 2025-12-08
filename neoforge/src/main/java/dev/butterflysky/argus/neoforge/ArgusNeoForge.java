@@ -26,8 +26,8 @@ public class ArgusNeoForge {
 
     public ArgusNeoForge(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
-        modEventBus.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {

@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -36,13 +37,13 @@ jobs:
         id: artifacts
         run: |
           echo "fabric_jars=$(ls fabric/build/libs/*fabric*.jar | tr '\n' ' ')" >> $GITHUB_OUTPUT
-          echo "neoforge_jars=$(ls neoforge/build/neoforge/*.jar | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          echo "neoforge_jars=$(ls neoforge/build/neoforge/**/*.jar | tr '\n' ' ')" >> $GITHUB_OUTPUT
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             fabric/build/libs/*fabric*.jar
-            neoforge/build/neoforge/*.jar
+            neoforge/build/neoforge/**/*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to Modrinth (if configured)

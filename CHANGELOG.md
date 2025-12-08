@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2025-12-08
+- Fixed Fabric version placeholder expansion so Loader sees the real mod version (no more `${version}` warning).
+- Made Fabric smoke depend on launch config generation and use isolated workdir; verified successful smoke with `fabric-api 0.135.0+1.21.10`.
+- Kept declared minimums (`fabric-api >= 0.135.0`, `fabric-language-kotlin >= 1.13.6`) while defaulting to current tested set.
+
 ## [1.0.2] - 2025-12-08
 - Declared Fabric dependency floors: `fabric-api >= 0.135.0`, `fabric-language-kotlin >= 1.13.6`.
 - Hardened Fabric smoke run: isolated temp run dir, forced headless/`--nogui`, fixed port binding to 25765 to avoid collisions, and auto-writes config/eula/server.properties for CI.
@@ -29,7 +34,8 @@ All notable changes to this project will be documented in this file.
 ## [0.2.3] - 2025-12-07
 - Fixed NeoForge mods.toml expansion and command registration bus.
 
-[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/butterflysky/argus/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/butterflysky/argus/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/butterflysky/argus/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/butterflysky/argus/compare/v0.2.6...v1.0.0

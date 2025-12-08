@@ -54,6 +54,14 @@ tasks.named("remapJar") {
 // Disable sources jar in release outputs
 tasks.matching { it.name in ["sourcesJar", "remapSourcesJar"] }.configureEach { enabled = false }
 
+// Fill in version placeholder in fabric.mod.json
+tasks.named("processResources") {
+    inputs.property("version", project.version)
+    filesMatching("fabric.mod.json") {
+        expand(version: project.version)
+    }
+}
+
 // Headless runtime smoke for Fabric: ensure EULA, boot, and stop immediately
 tasks.register("fabricRunSmoke", JavaExec) {
     group = "verification"
@@ -100,6 +108,6 @@ server-port=25765
         }
     }
     standardInput = new java.io.ByteArrayInputStream(new byte[0])
-    dependsOn("classes")
+    dependsOn("classes", "configureLaunch")
     timeout.set(java.time.Duration.ofMinutes(2))
 }

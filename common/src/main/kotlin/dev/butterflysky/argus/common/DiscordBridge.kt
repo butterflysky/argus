@@ -40,7 +40,6 @@ object DiscordBridge {
         } catch (t: Throwable) {
             logger.warn("Error while shutting down Discord", t)
         } finally {
-            AuditLogger.configure(null)
             api = null
             serverRef = null
             whitelistRoleId = null

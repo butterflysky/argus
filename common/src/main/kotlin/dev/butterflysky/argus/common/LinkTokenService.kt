@@ -65,5 +65,6 @@ object LinkTokenService {
     }
 
     data class TokenEntry(val token: String, val uuid: UUID, val issuedAt: Long)
+
     data class TokenStatus(val token: String, val uuid: UUID, val issuedAt: Long, val expiresInMillis: Long)
 }

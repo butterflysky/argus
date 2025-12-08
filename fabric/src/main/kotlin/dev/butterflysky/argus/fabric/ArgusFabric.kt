@@ -102,9 +102,11 @@ class ArgusFabric : ModInitializer {
     }
 
     init {
-        ServerLifecycleEvents.SERVER_STOPPING.register(ServerLifecycleEvents.ServerStopping { _ ->
-            ArgusCore.stopDiscord()
-        })
+        ServerLifecycleEvents.SERVER_STOPPING.register(
+            ServerLifecycleEvents.ServerStopping { _ ->
+                ArgusCore.stopDiscord()
+            },
+        )
     }
 
     private fun setConfig(ctx: CommandContext<ServerCommandSource>): Int {
@@ -281,7 +283,11 @@ class ArgusFabric : ModInitializer {
         }.getOrNull()
     }
 
-    private fun reflectBool(target: Any, methodNames: List<String>, arg: Any): Boolean =
+    private fun reflectBool(
+        target: Any,
+        methodNames: List<String>,
+        arg: Any,
+    ): Boolean =
         methodNames.firstNotNullOfOrNull { name ->
             runCatching {
                 val m = target.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 1 }

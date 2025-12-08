@@ -42,6 +42,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           overwrite: true
+          body_path: CHANGELOG.md
           files: |
             fabric/build/libs/*fabric*.jar
             neoforge/build/neoforge/**/*.jar

@@ -4,6 +4,8 @@
 
 Cache-first Discord-linked whitelist for Minecraft 1.21.10 (Fabric & NeoForge). Argus ties each Minecraft player to a Discord user with a whitelist role, handles applications, and logs every decision.
 
+Changelog: see [CHANGELOG.md](CHANGELOG.md).
+
 **Features**
 - Discord-linked access: `/whitelist apply` queue, Mojang-validated names, approvals/denials, and token-based linking.
 - Enforcement: cache-first login, one-off Discord refresh on borderline cases, legacy vanilla-whitelist kicks with link tokens, live role check after join.

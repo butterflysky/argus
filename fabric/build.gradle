@@ -50,6 +50,7 @@ tasks.named("jar") {
     archiveVersion.set(desiredVersion)
     archiveClassifier.set("")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.EC")
     from(project(":common").sourceSets.main.output.classesDirs)
     from {
         configurations.javacordBundle.collect { it.isDirectory() ? it : zipTree(it) }

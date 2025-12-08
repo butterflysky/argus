@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - 2025-12-08
+- Strip signature files when bundling Javacord to prevent “Invalid signature file digest” on Fabric/NeoForge.
+- Packaging-only change; logic unchanged.
+
 ## [1.0.8] - 2025-12-08
 - Embedded Javacord (and its deps) inside the Fabric jar so Discord starts even on servers without external libs.
 - Retained bundled common classes; NeoForge packaging unchanged.

@@ -3,30 +3,50 @@ package dev.butterflysky.argus.common
 import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Very small, in-memory token service. Future work can persist tokens or send via Discord.
  */
 object LinkTokenService {
     private val random = SecureRandom()
-    private val tokens: MutableMap<String, UUID> = ConcurrentHashMap()
-    private val reverse: MutableMap<UUID, String> = ConcurrentHashMap()
+    private val tokens: MutableMap<String, TokenEntry> = ConcurrentHashMap()
+    private val reverse: MutableMap<UUID, TokenEntry> = ConcurrentHashMap()
+    private val ttlMillis = 30.minutes.inWholeMilliseconds
 
     fun issueToken(
         uuid: UUID,
         mcName: String,
     ): String {
-        reverse[uuid]?.let { existing -> return existing }
+        cleanupExpired()
+        reverse[uuid]?.let { existing ->
+            return existing.token
+        }
         val token = generateToken()
-        tokens[token] = uuid
-        reverse[uuid] = token
+        val entry = TokenEntry(token, uuid, System.currentTimeMillis())
+        tokens[token] = entry
+        reverse[uuid] = entry
         return token
     }
 
     fun consume(token: String): UUID? {
-        val uuid = tokens.remove(token)
-        if (uuid != null) reverse.remove(uuid)
-        return uuid
+        cleanupExpired()
+        val entry = tokens.remove(token) ?: return null
+        reverse.remove(entry.uuid)
+        return entry.uuid
+    }
+
+    fun listActive(): List<TokenStatus> {
+        cleanupExpired()
+        val now = System.currentTimeMillis()
+        return tokens.values.map {
+            TokenStatus(
+                token = it.token,
+                uuid = it.uuid,
+                issuedAt = it.issuedAt,
+                expiresInMillis = (it.issuedAt + ttlMillis - now).coerceAtLeast(0),
+            )
+        }.sortedBy { it.expiresInMillis }
     }
 
     private fun generateToken(): String {
@@ -34,4 +54,16 @@ object LinkTokenService {
         random.nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
     }
+
+    private fun cleanupExpired() {
+        val cutoff = System.currentTimeMillis() - ttlMillis
+        val expired = tokens.values.filter { it.issuedAt < cutoff }
+        expired.forEach {
+            tokens.remove(it.token)
+            reverse.remove(it.uuid)
+        }
+    }
+
+    data class TokenEntry(val token: String, val uuid: UUID, val issuedAt: Long)
+    data class TokenStatus(val token: String, val uuid: UUID, val issuedAt: Long, val expiresInMillis: Long)
 }

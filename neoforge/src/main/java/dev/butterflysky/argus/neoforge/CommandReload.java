@@ -16,12 +16,13 @@ import java.util.concurrent.CompletableFuture;
 /** Implements /argus reload and /argus config set for NeoForge. */
 public class CommandReload {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        final String prefix = "[argus] ";
         dispatcher.register(Commands.literal("argus")
             .requires(stack -> stack.hasPermission(3))
             .then(Commands.literal("reload")
                 .executes(ctx -> {
                     ArgusCore.reloadConfigJvm();
-                    ctx.getSource().sendSuccess(() -> Component.literal("Argus config reloaded"), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal(prefix + "Argus config reloaded"), false);
                     return 1;
                 })
             )
@@ -33,10 +34,10 @@ public class CommandReload {
                             String field = StringArgumentType.getString(ctx, "field");
                             String value = ArgusConfig.getValue(field);
                             if (value != null) {
-                                ctx.getSource().sendSuccess(() -> Component.literal(field + " = " + value), false);
+                                ctx.getSource().sendSuccess(() -> Component.literal(prefix + field + " = " + value), false);
                                 return 1;
                             }
-                            ctx.getSource().sendFailure(Component.literal("Unknown field: " + field));
+                            ctx.getSource().sendFailure(Component.literal(prefix + "Unknown field: " + field));
                             return 0;
                         })
                     )
@@ -52,10 +53,10 @@ public class CommandReload {
                                 boolean ok = ArgusConfig.updateFromJava(field, value);
                                 if (ok) {
                                     ArgusCore.reloadConfigJvm();
-                                    ctx.getSource().sendSuccess(() -> Component.literal("Set " + field), false);
+                                    ctx.getSource().sendSuccess(() -> Component.literal(prefix + "Set " + field + " = " + value), false);
                                     return 1;
                                 } else {
-                                    ctx.getSource().sendFailure(Component.literal("Failed to update config field (see server log)"));
+                                    ctx.getSource().sendFailure(Component.literal(prefix + "Failed to update config field (see server log)"));
                                     return 0;
                                 }
                             })
@@ -63,9 +64,13 @@ public class CommandReload {
                     )
                 )
             )
+            .then(Commands.literal("tokens")
+                .requires(stack -> stack.hasPermission(3))
+                .executes(ctx -> listTokens(ctx, prefix))
+            )
             .then(Commands.literal("help")
                 .executes(ctx -> {
-                    ctx.getSource().sendSuccess(() -> Component.literal(helpText()), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal(prefix + helpText()), false);
                     return 1;
                 })
             )
@@ -85,11 +90,26 @@ public class CommandReload {
 
     private static String helpText() {
         return String.join("\n",
-            "/argus reload - reload config and restart Discord (if configured)",
-            "/argus config get <field> - show current value",
-            "/argus help - this help",
-            "/argus config set <field> <value> - update argus.json",
-            "Discord-side: /whitelist (add/remove/status/apply/list/approve/deny/warn/ban/unban/comment/review/my/help)"
+            "[argus] /argus reload - reload config and restart Discord (if configured)",
+            "[argus] /argus config get <field> - show current value",
+            "[argus] /argus help - this help",
+            "[argus] /argus config set <field> <value> - update argus.json",
+            "[argus] /argus tokens - list active link tokens",
+            "[argus] Discord-side: /whitelist (add/remove/status/apply/list/approve/deny/warn/ban/unban/comment/review/my/help)"
         );
+    }
+
+    private static int listTokens(CommandContext<CommandSourceStack> ctx, String prefix) {
+        var tokens = dev.butterflysky.argus.common.LinkTokenService.INSTANCE.listActive();
+        if (tokens.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal(prefix + "No active link tokens"), false);
+            return 1;
+        }
+        tokens.forEach(t -> {
+            var secs = t.getExpiresInMillis() / 1000;
+            ctx.getSource().sendSuccess(() ->
+                Component.literal(prefix + "token=" + t.getToken() + " uuid=" + t.getUuid() + " expires_in=" + secs + "s"), false);
+        });
+        return 1;
     }
 }

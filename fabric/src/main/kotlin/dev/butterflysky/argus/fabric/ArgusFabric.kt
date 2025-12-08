@@ -21,6 +21,7 @@ import java.util.UUID
 
 class ArgusFabric : ModInitializer {
     private val logger = LoggerFactory.getLogger("argus-fabric")
+    private val prefix = "[argus] "
     private var currentServer: MinecraftServer? = null
 
     override fun onInitialize() {
@@ -50,7 +51,7 @@ class ArgusFabric : ModInitializer {
                     .then(
                         literal("help")
                             .executes { ctx ->
-                                ctx.source.sendFeedback({ Text.literal(helpText()) }, false)
+                                ctx.source.sendFeedback({ Text.literal("$prefix${helpText()}") }, false)
                                 1
                             },
                     )
@@ -90,6 +91,11 @@ class ArgusFabric : ModInitializer {
                                 )
                                     .executes { ctx -> issueToken(ctx) },
                             ),
+                    )
+                    .then(
+                        literal("tokens")
+                            .requires { it.hasPermissionLevel(3) }
+                            .executes { ctx -> listTokens(ctx) },
                     ),
             )
         }
@@ -109,11 +115,11 @@ class ArgusFabric : ModInitializer {
                 .onSuccess { ArgusCore.reloadConfig() }
         return result.fold(
             onSuccess = {
-                ctx.source.sendFeedback({ Text.literal("Set $field") }, false)
+                ctx.source.sendFeedback({ Text.literal("${prefix}Set $field = $value") }, false)
                 1
             },
             onFailure = {
-                ctx.source.sendError(Text.literal("Failed: ${it.message}"))
+                ctx.source.sendError(Text.literal("${prefix}Failed: ${it.message}"))
                 0
             },
         )
@@ -124,11 +130,11 @@ class ArgusFabric : ModInitializer {
         val result = ArgusConfig.get(field)
         return result.fold(
             onSuccess = {
-                ctx.source.sendFeedback({ Text.literal("$field = $it") }, false)
+                ctx.source.sendFeedback({ Text.literal("${prefix}$field = $it") }, false)
                 1
             },
             onFailure = {
-                ctx.source.sendError(Text.literal("Unknown or invalid field: ${it.message}"))
+                ctx.source.sendError(Text.literal("${prefix}Unknown or invalid field: ${it.message}"))
                 0
             },
         )
@@ -138,11 +144,11 @@ class ArgusFabric : ModInitializer {
         val result = ArgusCore.reloadConfig()
         return result.fold(
             onSuccess = {
-                ctx.source.sendFeedback({ Text.literal("Argus config reloaded") }, false)
+                ctx.source.sendFeedback({ Text.literal("${prefix}Argus config reloaded") }, false)
                 1
             },
             onFailure = {
-                ctx.source.sendError(Text.literal("Argus reload failed: ${it.message}"))
+                ctx.source.sendError(Text.literal("${prefix}Argus reload failed: ${it.message}"))
                 0
             },
         )
@@ -152,7 +158,23 @@ class ArgusFabric : ModInitializer {
         val profiles = net.minecraft.command.argument.GameProfileArgumentType.getProfileArgument(ctx, "player")
         val profile = profiles.firstOrNull() ?: return 0
         val token = dev.butterflysky.argus.common.LinkTokenService.issueToken(profile.id, profile.name)
-        ctx.source.sendFeedback({ Text.literal("Argus link token for ${profile.name}: $token") }, false)
+        ctx.source.sendFeedback({ Text.literal("${prefix}Link token for ${profile.name}: $token") }, false)
+        return 1
+    }
+
+    private fun listTokens(ctx: CommandContext<ServerCommandSource>): Int {
+        val tokens = dev.butterflysky.argus.common.LinkTokenService.listActive()
+        if (tokens.isEmpty()) {
+            ctx.source.sendFeedback({ Text.literal("${prefix}No active link tokens") }, false)
+            return 1
+        }
+        tokens.forEach {
+            val secs = it.expiresInMillis / 1000
+            ctx.source.sendFeedback(
+                { Text.literal("${prefix}token=${it.token} uuid=${it.uuid} expires_in=${secs}s") },
+                false,
+            )
+        }
         return 1
     }
 

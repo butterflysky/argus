@@ -53,3 +53,24 @@ tasks.named("jar") {
 
 // Disable sources jar in release outputs
 tasks.matching { it.name == "sourcesJar" }.configureEach { enabled = false }
+
+afterEvaluate {
+    tasks.matching { it.name == "runServer" && it instanceof JavaExec }.configureEach { run ->
+        tasks.register("neoforgeSmokeRun", JavaExec) {
+            group = "verification"
+            description = "Launch NeoForge server headless, then stop immediately (smoke test)."
+            classpath = run.classpath
+            mainClass.set(run.mainClass.get())
+            args = run.args
+            jvmArgs = (run.jvmArgs ?: []) + ["-Dargus.smoke=true"]
+            workingDir = run.workingDir
+            environment run.environment
+            standardInput = new java.io.ByteArrayInputStream(new byte[0])
+            dependsOn("classes")
+            timeout.set(java.time.Duration.ofMinutes(2))
+        }
+
+        // Put a hard ceiling on runServer in case smoke flag doesn't stop it
+        run.timeout.set(java.time.Duration.ofMinutes(5))
+    }
+}

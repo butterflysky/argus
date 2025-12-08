@@ -83,5 +83,9 @@ public class ArgusNeoForge {
     public void onServerStarted(ServerStartedEvent event) {
         serverRef = event.getServer();
         LOGGER.info("Argus NeoForge hooks registered on server start");
+        if (Boolean.getBoolean("argus.smoke")) {
+            LOGGER.info("Argus NeoForge smoke flag set; stopping server after startup");
+            serverRef.halt(false);
+        }
     }
 }

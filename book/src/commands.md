@@ -1,7 +1,6 @@
 # Commands
 
-(Admin commands are Discord slash commands; responses are ephemeral to the caller.)
-
+**Discord slash commands** (responses are ephemeral to the caller)
 - `/whitelist add player:<mc|uuid> [discord:user] [mcname]` – grant access (+ optional link)
 - `/whitelist remove player:<mc|uuid> [discord:user]` – revoke access
 - `/whitelist status player:<mc|uuid>` – show access/ban state
@@ -15,6 +14,10 @@
 - `/whitelist review player:<...>` – history view (comments hidden from users)
 - `/whitelist my` – user sees their own warnings/ban
 - `/whitelist help` – quick reference
-
-Linking
 - `/link <token>` – users consume tokens issued by the server/login flow.
+
+**Minecraft server commands** (run in-game by OPs/admins)
+- `/argus config get <field>`
+- `/argus config set <field> <value>` (tab-complete fields and constrained values)
+- `/argus reload` – reload config and reconnect the bot
+- `/token` – shows a fresh link token to the logged-in player if unlinked

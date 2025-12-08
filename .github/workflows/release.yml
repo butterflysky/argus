@@ -30,7 +30,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Spotless + tests + smoke
-        run: ./gradlew spotlessCheck test fabricSmoke neoforgeSmoke
+        run: ./gradlew spotlessCheck test fabricSmoke neoforgeJarSmoke :neoforge:neoforgeRunSmoke
       - name: Build jars
         run: ./gradlew build
       - name: Collect artifacts

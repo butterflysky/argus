@@ -55,8 +55,8 @@ tasks.named("jar") {
 // Disable sources jar in release outputs
 tasks.matching { it.name == "sourcesJar" }.configureEach { enabled = false }
 
-// Headless smoke: clone runServer setup with a stop flag
-tasks.register("neoforgeSmokeRun", JavaExec) {
+// Headless runtime smoke: clone runServer setup with a stop flag
+tasks.register("neoforgeRunSmoke", JavaExec) {
     group = "verification"
     description = "Launch NeoForge server headless, then stop immediately (smoke test)."
     doFirst {

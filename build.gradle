@@ -140,7 +140,7 @@ tasks.named("build") {
 }
 
 tasks.named("check") {
-    dependsOn("spotlessCheck", "fabricSmoke", "neoforgeSmoke")
+    dependsOn("spotlessCheck", "fabricSmoke", "neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
 }
 
 // --- Local dev scenarios (non-versioned, uses scratch/scenarios) ---
@@ -285,7 +285,7 @@ tasks.register("fabricSmoke") {
     }
 }
 
-tasks.register("neoforgeSmoke") {
+tasks.register("neoforgeJarSmoke") {
     group = "verification"
     description = "Headless smoke: neoforge jar contains metadata and classes"
     def neoProject = project(":neoforge")

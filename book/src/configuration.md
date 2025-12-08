@@ -5,7 +5,8 @@
 **Key fields**
 - `botToken`, `guildId`, `whitelistRoleId`, `adminRoleId` — required for Discord enforcement.
 - `logChannelId` — optional audit channel.
-- `applicationMessage` — text shown to strangers/denied users (invite link is appended if `discordInviteUrl` is set).
+- `applicationMessage` — optional; defaults to `Access Denied: Please apply in Discord.` (invite link appended if `discordInviteUrl` is set).
+- `enforcementEnabled` — `false` by default (dry-run). When `false`, Argus logs what it would do but never kicks/denies.
 - `cacheFile` — leave default unless you have a custom path.
 
 ## Discord field reference (what to set)

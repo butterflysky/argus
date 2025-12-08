@@ -23,6 +23,7 @@ class ArgusModerationTest {
                 guildId = 1L,
                 whitelistRoleId = 2L,
                 adminRoleId = 3L,
+                enforcementEnabled = true,
                 cacheFile = cache.toString(),
             )
         val cfgPath = tempDir.resolve("argus.json")

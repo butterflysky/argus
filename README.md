@@ -10,6 +10,7 @@ Changelog: see [CHANGELOG.md](CHANGELOG.md).
 - Discord-linked access: `/whitelist apply` queue, Mojang-validated names, approvals/denials, and token-based linking.
 - Enforcement: cache-first login, one-off Discord refresh only when cache would deny; legacy vanilla-whitelist kicks with link tokens; live check after join. If a player leaves the Discord guild or loses the whitelist role, access is revoked and logged.
 - Audit & history: logs for links, approvals/denials, warnings/bans, comments, first-seen, legacy kicks, role loss, guild departure, name/nick changes—console plus optional Discord audit channel.
+- Dry-run first: `enforcementEnabled=false` by default—Argus logs what it would do without kicking/denying until you flip it on.
 - Resilient: falls back to cache on Discord timeouts/unavailability; never blocks server startup; keeps `.bak` of the cache file.
 - Multi-loader: Fabric and NeoForge builds from one codebase.
 

@@ -32,6 +32,7 @@ class ArgusCoreIntegrationTest {
                 guildId = 1L,
                 whitelistRoleId = 2L,
                 adminRoleId = 3L,
+                enforcementEnabled = true,
                 cacheFile = cachePath.toString(),
             )
         Files.writeString(cfgPath, kotlinx.serialization.json.Json.encodeToString(ArgusSettings.serializer(), cfg))

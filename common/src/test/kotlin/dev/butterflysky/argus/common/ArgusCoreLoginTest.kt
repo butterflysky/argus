@@ -1,5 +1,6 @@
 package dev.butterflysky.argus.common
 
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -11,10 +12,14 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ArgusCoreLoginTest {
+    private val auditLogs = mutableListOf<String>()
+
     @BeforeEach
     fun resetCache(
         @TempDir tempDir: Path,
     ) {
+        auditLogs.clear()
+        AuditLogger.configure { auditLogs += it }
         val cachePath = tempDir.resolve("argus_db.json")
         val cfgPath = tempDir.resolve("argus.json")
         val cfg =
@@ -23,12 +28,18 @@ class ArgusCoreLoginTest {
                 guildId = 1L,
                 whitelistRoleId = 2L,
                 adminRoleId = 3L,
+                enforcementEnabled = true,
                 cacheFile = cachePath.toString(),
             )
         Files.writeString(cfgPath, kotlinx.serialization.json.Json.encodeToString(ArgusSettings.serializer(), cfg))
         ArgusConfig.load(cfgPath)
         CacheStore.load(cachePath)
         ArgusCore.setDiscordStartedOverride(true)
+    }
+
+    @AfterEach
+    fun tearDown() {
+        AuditLogger.configure(null)
     }
 
     @Test
@@ -54,6 +65,21 @@ class ArgusCoreLoginTest {
         val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         val deny = assertIs<LoginResult.Deny>(result)
         assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+    }
+
+    @Test
+    fun `dry-run allows but logs missing role`() {
+        ArgusConfig.update("enforcementEnabled", "false")
+        ArgusCore.reloadConfig()
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 42L, hasAccess = true, mcName = "mc"))
+        ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
+
+        val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
+
+        assertIs<LoginResult.Allow>(result)
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN] Would deny login") })
+        assertEquals(true, CacheStore.get(playerId)?.hasAccess)
     }
 
     @Test

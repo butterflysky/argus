@@ -113,10 +113,12 @@ object ArgusCore {
 
         if (liveStatus != null && liveStatus != RoleStatus.Indeterminate && pdata != null) {
             val updatedAccess = liveStatus == RoleStatus.HasRole
-            CacheStore.upsert(uuid, pdata.copy(hasAccess = updatedAccess))
-            CacheStore.save(ArgusConfig.cachePath)
+            if (enforcement) {
+                CacheStore.upsert(uuid, pdata.copy(hasAccess = updatedAccess))
+                CacheStore.save(ArgusConfig.cachePath)
+            }
             if (liveStatus == RoleStatus.NotInGuild) {
-                AuditLogger.log("Access revoked: left Discord guild discord=${discordLabel(pdata.discordName ?: \"unknown\", pdata.discordId)} mc=${mcLabel(name, uuid)}")
+                AuditLogger.log("${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(pdata.discordName ?: "unknown", pdata.discordId)} mc=${mcLabel(name, uuid)}")
             }
         }
         val hasAccess = when (liveStatus) {
@@ -134,6 +136,8 @@ object ArgusCore {
                 return LoginResult.Deny(prefix("$reason ($remaining)"))
             }
         }
+
+        val enforcement = ArgusConfig.current().enforcementEnabled
 
         if (hasAccess == true) {
             val seen = CacheStore.eventsSnapshot().any { it.type == "first_allow" && it.targetUuid == uuid.toString() }
@@ -153,6 +157,10 @@ object ArgusCore {
                     liveStatus == RoleStatus.MissingRole || (pdata?.hasAccess == true && liveStatus == RoleStatus.MissingRole) -> prefix("Access revoked: missing Discord whitelist role")
                     else -> prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
                 }
+            if (!enforcement) {
+                AuditLogger.log("[DRY-RUN] Would deny login: mc=${mcLabel(name, uuid)} reason=$message")
+                return LoginResult.Allow
+            }
             return LoginResult.Deny(message)
         }
 
@@ -166,10 +174,20 @@ object ArgusCore {
                 )
                 CacheStore.save(ArgusConfig.cachePath)
             }
-            return LoginResult.Deny(prefix(withInviteSuffix("Verification Required: /link $token in Discord")))
+            val msg = prefix(withInviteSuffix("Verification Required: /link $token in Discord"))
+            if (!enforcement) {
+                AuditLogger.log("[DRY-RUN] Would deny legacy-unlinked: mc=${mcLabel(name, uuid)} reason=$msg")
+                return LoginResult.Allow
+            }
+            return LoginResult.Deny(msg)
         }
 
-        return LoginResult.Deny(prefix(withInviteSuffix(ArgusConfig.current().applicationMessage)))
+        val denyMsg = prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
+        if (!enforcement) {
+            AuditLogger.log("[DRY-RUN] Would deny stranger: mc=${mcLabel(name, uuid)} reason=$denyMsg")
+            return LoginResult.Allow
+        }
+        return LoginResult.Deny(denyMsg)
     }
 
     fun onPlayerJoin(
@@ -203,16 +221,26 @@ object ArgusCore {
     private fun refreshAccessOnJoin(uuid: UUID): LoginResult? {
         val pdata = CacheStore.get(uuid) ?: return null
         val discordId = pdata.discordId ?: return null
+        val enforcement = ArgusConfig.current().enforcementEnabled
         val liveStatus = checkWhitelistStatus(discordId)
         if (liveStatus == RoleStatus.Indeterminate) return null
         val liveAccess = liveStatus == RoleStatus.HasRole
-        CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
-        CacheStore.save(ArgusConfig.cachePath)
+        if (enforcement) {
+            CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
+            CacheStore.save(ArgusConfig.cachePath)
+        }
         return when {
-            liveStatus == RoleStatus.NotInGuild ->
-                LoginResult.Deny(prefix(withInviteSuffix("Access revoked: left Discord guild")))
+            liveStatus == RoleStatus.NotInGuild -> {
+                AuditLogger.log("${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(pdata.discordName ?: "unknown", pdata.discordId)} mc=${mcLabel(pdata.mcName, uuid)}")
+                if (enforcement) LoginResult.Deny(prefix(withInviteSuffix("Access revoked: left Discord guild"))) else null
+            }
             liveAccess -> null
-            else -> LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
+            else -> {
+                if (!enforcement) {
+                    AuditLogger.log("[DRY-RUN] Would revoke: missing Discord whitelist role discord=${discordLabel(pdata.discordName ?: \"unknown\", pdata.discordId)} mc=${mcLabel(pdata.mcName, uuid)}")
+                    null
+                } else LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
+            }
         }
     }
 

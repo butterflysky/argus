@@ -15,6 +15,7 @@ data class ArgusSettings(
     val adminRoleId: Long? = null,
     val logChannelId: Long? = null,
     val applicationMessage: String = "Access Denied: Please apply in Discord.",
+    val enforcementEnabled: Boolean = false,
     val cacheFile: String = "config/argus_db.json",
     val discordInviteUrl: String? = null,
 )
@@ -50,6 +51,12 @@ object ArgusConfig {
                 FieldType.STRING,
                 "Access Denied: Please apply in Discord.",
                 "Login denial message",
+            ),
+            FieldMeta(
+                "enforcementEnabled",
+                FieldType.STRING,
+                "false",
+                "Whether Argus enforces decisions (false = dry-run, log only)",
             ),
             FieldMeta("cacheFile", FieldType.PATH, "config/argus_db.json", "Cache persistence path"),
             FieldMeta(
@@ -102,6 +109,7 @@ object ArgusConfig {
                     "adminroleid" -> settings.copy(adminRoleId = value.toLongOrNull() ?: error("adminRoleId must be a number"))
                     "logchannelid" -> settings.copy(logChannelId = value.toLongOrNull() ?: error("logChannelId must be a number"))
                     "applicationmessage" -> settings.copy(applicationMessage = value)
+                    "enforcementenabled" -> settings.copy(enforcementEnabled = value.equals("true", ignoreCase = true))
                     "cachefile" -> settings.copy(cacheFile = value)
                     "discordinviteurl" -> settings.copy(discordInviteUrl = value.ifBlank { null })
                     else -> error("Unknown config field: $field")
@@ -137,6 +145,7 @@ object ArgusConfig {
                 "adminroleid" -> settings.adminRoleId?.toString() ?: ""
                 "logchannelid" -> settings.logChannelId?.toString() ?: ""
                 "applicationmessage" -> settings.applicationMessage
+                "enforcementenabled" -> settings.enforcementEnabled.toString()
                 "cachefile" -> settings.cacheFile
                 "discordinviteurl" -> settings.discordInviteUrl ?: ""
                 else -> error("Unknown config field: $field")

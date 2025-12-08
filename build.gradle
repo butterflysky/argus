@@ -140,7 +140,7 @@ tasks.named("build") {
 }
 
 tasks.named("check") {
-    dependsOn("spotlessCheck", "fabricSmoke", ":fabric:fabricRunSmoke", "neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
+    dependsOn("spotlessCheck", "fabricSmoke", ":fabric:fabricRunSmoke", ":fabric:fabricJarSmoke", "neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
 }
 
 // --- Local dev scenarios (non-versioned, uses scratch/scenarios) ---

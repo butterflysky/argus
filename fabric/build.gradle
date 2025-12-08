@@ -24,7 +24,10 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
     modImplementation "org.javacord:javacord:${rootProject.ext.javacordVersion}"
-    javacordBundle "org.javacord:javacord:${rootProject.ext.javacordVersion}"
+    javacordBundle("org.javacord:javacord:${rootProject.ext.javacordVersion}") {
+        exclude group: "org.jetbrains.kotlin"
+        exclude group: "org.jetbrains.kotlinx"
+    }
 
     implementation project(":common")
 }
@@ -122,4 +125,20 @@ server-port=25765
     standardInput = new java.io.ByteArrayInputStream(new byte[0])
     dependsOn("classes", "configureLaunch")
     timeout.set(java.time.Duration.ofMinutes(2))
+}
+
+// Jar-level smoke: run a tiny main from the remapped jar only (no dev classpath)
+tasks.register("fabricJarSmoke", JavaExec) {
+    group = "verification"
+    description = "Verify remapped production jar can load ArgusCore without dev classpath"
+    dependsOn(tasks.named("remapJar"))
+    def langKotlinCfg = configurations.detachedConfiguration(
+            dependencies.create("net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}")
+    )
+    def slf4jCfg = configurations.detachedConfiguration(
+            dependencies.create("org.slf4j:slf4j-simple:${rootProject.ext.slf4jVersion}")
+    )
+    classpath = files(tasks.named("remapJar").flatMap { it.archiveFile }) + langKotlinCfg + slf4jCfg
+    mainClass.set("dev.butterflysky.argus.common.SmokeEntry")
+    jvmArgs = ["-Xmx512m", "-Djava.awt.headless=true"]
 }

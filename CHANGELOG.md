@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 - Strip signature files when bundling Javacord to prevent “Invalid signature file digest” on Fabric/NeoForge.
 - Packaging-only change; logic unchanged.
 
+## [1.0.10] - 2025-12-08
+- Stop shading Kotlin stdlib into the jars (it’s provided by fabric-language-kotlin / NeoForge runtime); fixes `NoSuchMethodError: DurationKt.toDuration`.
+- Added jar-level smoke test that boots ArgusCore from the remapped jar with only production deps (catches packaging slips).
+- Packaging-only; logic unchanged.
+
 ## [1.0.8] - 2025-12-08
 - Embedded Javacord (and its deps) inside the Fabric jar so Discord starts even on servers without external libs.
 - Retained bundled common classes; NeoForge packaging unchanged.

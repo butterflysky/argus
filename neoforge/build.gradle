@@ -19,7 +19,10 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 dependencies {
     implementation project(":common")
     implementation "net.neoforged:neoforge:${rootProject.ext.neo_version}"
-    shade "org.javacord:javacord:${rootProject.ext.javacordVersion}"
+    shade("org.javacord:javacord:${rootProject.ext.javacordVersion}") {
+        exclude group: "org.jetbrains.kotlin"
+        exclude group: "org.jetbrains.kotlinx"
+    }
 }
 
 runs {

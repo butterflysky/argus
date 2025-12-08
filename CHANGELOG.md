@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2025-12-08
+- Corrected jar stamping: fabric/neoforge artifacts now carry version 1.0.4 (placeholder now expands during resource processing).
+- Fabric smoke regenerated launch config after cache wipes and still supports fabric-api 0.135.0.
+
 ## [1.0.3] - 2025-12-08
 - Fixed Fabric version placeholder expansion so Loader sees the real mod version (no more `${version}` warning).
 - Made Fabric smoke depend on launch config generation and use isolated workdir; verified successful smoke with `fabric-api 0.135.0+1.21.10`.
@@ -34,7 +38,8 @@ All notable changes to this project will be documented in this file.
 ## [0.2.3] - 2025-12-07
 - Fixed NeoForge mods.toml expansion and command registration bus.
 
-[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/butterflysky/argus/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/butterflysky/argus/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/butterflysky/argus/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/butterflysky/argus/compare/v1.0.0...v1.0.1

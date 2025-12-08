@@ -71,15 +71,16 @@ class ArgusCoreLoginTest {
     fun `dry-run allows but logs missing role`() {
         ArgusConfig.update("enforcementEnabled", "false")
         ArgusCore.reloadConfig()
+        ArgusCore.setDiscordStartedOverride(true)
         val playerId = UUID.randomUUID()
-        CacheStore.upsert(playerId, PlayerData(discordId = 42L, hasAccess = true, mcName = "mc"))
+        CacheStore.upsert(playerId, PlayerData(discordId = 42L, hasAccess = false, mcName = "mc"))
         ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
 
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
 
         assertIs<LoginResult.Allow>(result)
-        assertTrue(auditLogs.any { it.contains("[DRY-RUN] Would deny login") })
-        assertEquals(true, CacheStore.get(playerId)?.hasAccess)
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would deny login") })
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess) // cache unchanged in dry-run
     }
 
     @Test

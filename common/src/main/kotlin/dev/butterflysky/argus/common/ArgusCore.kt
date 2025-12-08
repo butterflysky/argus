@@ -92,6 +92,7 @@ object ArgusCore {
             }
         }
         val pdata = CacheStore.get(uuid)
+        val enforcement = ArgusConfig.current().enforcementEnabled
 
         // Track Minecraft name changes when we have existing cache data.
         if (pdata != null && pdata.mcName != null && pdata.mcName != name) {
@@ -118,14 +119,20 @@ object ArgusCore {
                 CacheStore.save(ArgusConfig.cachePath)
             }
             if (liveStatus == RoleStatus.NotInGuild) {
-                AuditLogger.log("${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(pdata.discordName ?: "unknown", pdata.discordId)} mc=${mcLabel(name, uuid)}")
+                AuditLogger.log(
+                    "${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(
+                        pdata.discordName ?: "unknown",
+                        pdata.discordId,
+                    )} mc=${mcLabel(name, uuid)}",
+                )
             }
         }
-        val hasAccess = when (liveStatus) {
-            RoleStatus.HasRole -> true
-            RoleStatus.MissingRole, RoleStatus.NotInGuild -> false
-            RoleStatus.Indeterminate, null -> pdata?.hasAccess
-        }
+        val hasAccess =
+            when (liveStatus) {
+                RoleStatus.HasRole -> true
+                RoleStatus.MissingRole, RoleStatus.NotInGuild -> false
+                RoleStatus.Indeterminate, null -> pdata?.hasAccess
+            }
 
         // Active ban check
         if (pdata?.banUntilEpochMillis != null) {
@@ -136,8 +143,6 @@ object ArgusCore {
                 return LoginResult.Deny(prefix("$reason ($remaining)"))
             }
         }
-
-        val enforcement = ArgusConfig.current().enforcementEnabled
 
         if (hasAccess == true) {
             val seen = CacheStore.eventsSnapshot().any { it.type == "first_allow" && it.targetUuid == uuid.toString() }
@@ -154,7 +159,10 @@ object ArgusCore {
             val message =
                 when {
                     liveStatus == RoleStatus.NotInGuild -> prefix("Access revoked: not in Discord guild")
-                    liveStatus == RoleStatus.MissingRole || (pdata?.hasAccess == true && liveStatus == RoleStatus.MissingRole) -> prefix("Access revoked: missing Discord whitelist role")
+                    liveStatus == RoleStatus.MissingRole || (pdata?.hasAccess == true && liveStatus == RoleStatus.MissingRole) ->
+                        prefix(
+                            "Access revoked: missing Discord whitelist role",
+                        )
                     else -> prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
                 }
             if (!enforcement) {
@@ -231,15 +239,27 @@ object ArgusCore {
         }
         return when {
             liveStatus == RoleStatus.NotInGuild -> {
-                AuditLogger.log("${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(pdata.discordName ?: "unknown", pdata.discordId)} mc=${mcLabel(pdata.mcName, uuid)}")
+                AuditLogger.log(
+                    "${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(
+                        pdata.discordName ?: "unknown",
+                        pdata.discordId,
+                    )} mc=${mcLabel(pdata.mcName, uuid)}",
+                )
                 if (enforcement) LoginResult.Deny(prefix(withInviteSuffix("Access revoked: left Discord guild"))) else null
             }
             liveAccess -> null
             else -> {
                 if (!enforcement) {
-                    AuditLogger.log("[DRY-RUN] Would revoke: missing Discord whitelist role discord=${discordLabel(pdata.discordName ?: \"unknown\", pdata.discordId)} mc=${mcLabel(pdata.mcName, uuid)}")
+                    AuditLogger.log(
+                        "[DRY-RUN] Would revoke: missing Discord whitelist role discord=${discordLabel(
+                            pdata.discordName ?: "unknown",
+                            pdata.discordId,
+                        )} mc=${mcLabel(pdata.mcName, uuid)}",
+                    )
                     null
-                } else LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
+                } else {
+                    LoginResult.Deny(prefix(withInviteSuffix("Access revoked: missing Discord whitelist role")))
+                }
             }
         }
     }

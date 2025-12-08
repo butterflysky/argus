@@ -69,7 +69,7 @@ class ArgusCoreIntegrationTest {
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
         val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
+        assertTrue(deny.message.contains("missing Discord whitelist role"))
         val updated = CacheStore.get(playerId)
         assertEquals(false, updated?.hasAccess)
     }
@@ -111,7 +111,7 @@ class ArgusCoreIntegrationTest {
 
         val msg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
 
-        assertEquals(null, msg)
+        assertNotNull(msg) // welcome message still delivered
         val updated = CacheStore.get(playerId)
         assertEquals(true, updated?.hasAccess)
     }

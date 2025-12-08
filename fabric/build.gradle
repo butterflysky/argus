@@ -65,7 +65,7 @@ tasks.register("fabricRunSmoke", JavaExec) {
         def baseArgs = run.args ?: []
         args = baseArgs.contains("--nogui") ? baseArgs : baseArgs + ["--nogui"]
         jvmArgs = (run.jvmArgs ?: []) + ["-Dargus.smoke=true", "-Djava.awt.headless=true"]
-        workingDir = file("${project.projectDir}/run")
+        workingDir = file("${buildDir}/smoke/fabric")
         workingDir.mkdirs()
         environment run.environment
 
@@ -74,8 +74,29 @@ tasks.register("fabricRunSmoke", JavaExec) {
         eulaFile.text = "eula=true\n"
 
         def serverProps = new File(workingDir, "server.properties")
-        if (!serverProps.exists()) {
-            serverProps.text = "motd=Argus smoke\\nonline-mode=false\\nenforce-whitelist=false\\nlevel-name=world\\n"
+        serverProps.text = """motd=Argus smoke
+online-mode=false
+enforce-whitelist=false
+level-name=world
+server-port=25765
+"""
+
+        def cfgDir = new File(workingDir, "config")
+        cfgDir.mkdirs()
+        def cfgFile = new File(cfgDir, "argus.json")
+        if (!cfgFile.exists()) {
+            cfgFile.text = """{
+  "botToken": "",
+  "guildId": null,
+  "whitelistRoleId": null,
+  "adminRoleId": null,
+  "logChannelId": null,
+  "applicationMessage": "Access Denied: Please apply in Discord.",
+  "enforcementEnabled": false,
+  "cacheFile": "config/argus_db.json",
+  "discordInviteUrl": null
+}
+"""
         }
     }
     standardInput = new java.io.ByteArrayInputStream(new byte[0])

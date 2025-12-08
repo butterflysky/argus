@@ -184,7 +184,6 @@ class ArgusFabric : ModInitializer {
 
             when (val result = ArgusCore.onPlayerLogin(uuid, name, isOp, isWhitelisted, whitelistEnabled)) {
                 LoginResult.Allow -> Unit
-                is LoginResult.AllowWithKick -> handler.disconnect(Text.literal(result.message))
                 is LoginResult.Deny -> handler.disconnect(Text.literal(result.message))
             }
         }

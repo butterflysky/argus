@@ -57,9 +57,7 @@ public class ArgusNeoForge {
 
         LoginResult result = ArgusCore.INSTANCE.onPlayerLogin(player.getUUID(), player.getScoreboardName(), isOp, isWhitelisted, whitelistEnabled);
         if (result instanceof LoginResult.Allow) return;
-        if (result instanceof LoginResult.AllowWithKick allow) {
-            player.connection.disconnect(Component.literal(allow.getMessage()));
-        } else if (result instanceof LoginResult.Deny deny) {
+        if (result instanceof LoginResult.Deny deny) {
             player.connection.disconnect(Component.literal(deny.getMessage()));
         }
     }

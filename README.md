@@ -2,61 +2,37 @@
 
 [![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml) [![Docs](https://github.com/butterflysky/argus/actions/workflows/pages.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/pages.yml) [![Release](https://img.shields.io/github/v/release/butterflysky/argus?logo=github&label=release)](https://github.com/butterflysky/argus/releases)
 
-Docs (mdBook): https://butterflysky.github.io/argus/  
-Generate locally with `~/.local/bin/mdbook build book` (output in `docs-book/`; ignored by git).
+Cache-first Discord-linked whitelist for Minecraft 1.21.10 (Fabric & NeoForge). Argus ties each Minecraft player to a Discord user with a whitelist role, handles applications, and logs every decision.
 
-Kotlin-based, cache-first access control for Minecraft 1.21.10 with Discord identity linking. Argus uses a multi-loader layout (`common`, `fabric`, `neoforge`) and Javacord for Discord integration.
+**Features**
+- Discord-linked access: `/whitelist apply` queue, Mojang-validated names, approvals/denials, and token-based linking.
+- Enforcement: cache-first login, one-off Discord refresh on borderline cases, legacy vanilla-whitelist kicks with link tokens, live role check after join.
+- Audit & history: logs for links, approvals/denials, warnings/bans, comments, first-seen, role loss, name/nick changes—console plus optional Discord audit channel.
+- Resilient: falls back to cache if Discord is unreachable; never blocks server startup; keeps `.bak` of the cache file.
+- Multi-loader: Fabric and NeoForge builds from one codebase.
 
-## Status
-- Core cache, config loader, login gate, and Discord slash-command link flow are implemented in `:common` and wired to Fabric.
-- NeoForge entrypoint now compiles against NeoGradle (21.10.64) and forwards login/join to shared logic.
-- Multi-loader builds pass for 1.21.10; further version-matrix support is planned.
+**Compatibility & downloads**
+- Minecraft: 1.21.10
+- Loaders: Fabric, NeoForge
+- Releases: `argus-1.21.10-<version>-fabric.jar` and `argus-1.21.10-<version>-neoforge.jar` on the [Releases](https://github.com/butterflysky/argus/releases) page.
 
-## Architecture
-- `:common` — platform-agnostic logic: JSON cache (`config/argus_db.json` + `.bak`), permission gate, config loader, Javacord bot, and token service.
-- `:fabric` — Fabric entrypoint; hooks login/join events and exposes `/argus`/`/token` commands.
-- `:neoforge` — entrypoint compiled with NeoGradle userdev; forwards login/join to `ArgusCore`.
+**Setup (quick)**
+- Drop the jar for your loader into `mods/`.
+- Start once to generate `config/argus.json`.
+- Fill `botToken`, `guildId`, `whitelistRoleId`, `adminRoleId`, and optional `logChannelId` / `discordInviteUrl`.
+- In-game: `/argus config set <field> <value>`, `/argus reload`; players get link tokens via `/token`, complete with `/link` in Discord.
 
-## Login Rules (spec)
-- OPs bypass checks.
-- Linked users must have `hasAccess` in the cache; if cache would deny, Argus does a one-off Discord role refresh (short timeout) before final decision.
-- Legacy vanilla-whitelisted users are kicked immediately with a link token (they never fully log in).
-- Strangers are denied with `applicationMessage` from config (optionally with an invite link).
-- Join hook performs a live Discord role check (short timeout, falls back to cache); if whitelist role is missing the player is kicked and cache/audit are updated.
-- If Discord/config are unavailable, Argus stays cache-only; server startup is never blocked.
+**Docs**
+- User & admin guide: https://butterflysky.github.io/argus/
+- Build locally: `mdbook build book` (outputs to `docs-book/`).
 
-## Build & Run
+**Build & test (dev)**
 ```bash
-./gradlew build              # build all modules
-./gradlew :fabric:runServer  # dev server (Fabric)
-# NeoForge run target can be added via NeoGradle run configs when needed
-
-# Full verification bundle
-./gradlew check   # runs spotlessCheck + tests + Fabric/NeoForge smoke jars
+./gradlew check                # spotlessCheck + unit tests + Fabric/NeoForge smoke
+./gradlew :fabric:runServer    # dev server (Fabric)
+./gradlew :neoforge:runServer  # dev server (NeoForge)
 ```
 
-## Documentation
-Static docs (HTML) live in `docs/` and can be served as a simple static site. Start at `docs/index.html` for setup, commands, and playtest checklist.
-
-## Configuration
-`config/argus.json` is created on first run (or via `ArgusCore.initialize()`):
-```json
-{
-  "botToken": "",
-  "guildId": null,
-  "whitelistRoleId": null,
-  "adminRoleId": null,
-  "logChannelId": null,
-  "applicationMessage": "Access Denied: Please apply in Discord.",
-  "cacheFile": "config/argus_db.json"
-}
-```
-
-## Cache Safety
-- Reads are from `cacheFile` only.
-- Saves rename the previous file to `.bak`; loads fall back to `.bak` if the primary fails.
-
-## Contributing
-- Use `bd` for issue tracking (see `AGENTS.md`).
-- Prefer Kotlin; target Java/Kotlin 21.
-- Keep dependency versions pinned in `gradle.properties` (update intentionally).
+**Contributing**
+- Issue tracking via `bd` (see `AGENTS.md`).
+- Kotlin preferred; target Java/Kotlin 21; keep dependency versions pinned in `gradle.properties`.

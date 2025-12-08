@@ -29,9 +29,7 @@ jobs:
           cache: gradle
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Spotless + tests + smoke
-        run: ./gradlew spotlessCheck test fabricSmoke neoforgeJarSmoke :neoforge:neoforgeRunSmoke
-      - name: Build jars
+      - name: Build (checks + jars + smokes)
         run: ./gradlew build
       - name: Collect artifacts
         id: artifacts
@@ -41,11 +39,11 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          overwrite: true
           body_path: CHANGELOG.md
           files: |
             fabric/build/libs/*fabric*.jar
             neoforge/build/neoforge/**/*.jar
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to Modrinth (if configured)

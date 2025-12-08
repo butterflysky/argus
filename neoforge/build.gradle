@@ -30,6 +30,7 @@ tasks.named("processResources") {
             "minecraft_version": rootProject.ext.minecraft_version,
             "neo_version": rootProject.ext.neo_version
     )
+    from(project(":common").sourceSets.main.resources)
     filesMatching("META-INF/neoforge.mods.toml") {
         expand(
                 mod_version: rootProject.mod_version,

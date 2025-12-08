@@ -23,6 +23,10 @@ dependencies {
     implementation project(":common")
 }
 
+tasks.named("processResources") {
+    from(project(":common").sourceSets.main.resources)
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }

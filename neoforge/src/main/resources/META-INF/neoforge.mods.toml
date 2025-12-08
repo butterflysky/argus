@@ -8,6 +8,7 @@ version="${mod_version}"
 displayName="Argus"
 authors="Lina Edwards (butterflysky)"
 description="Cache-first access control with Discord identity linking"
+logoFile="assets/argus/icon.png"
 
 [[dependencies.argus]]
 modId="neoforge"

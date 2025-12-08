@@ -19,4 +19,6 @@ java {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    // Keep generated configs out of source tree during tests
+    systemProperty "argus.config.path", "${buildDir}/tmp/test-config/argus.json"
 }

@@ -23,7 +23,12 @@ data class ArgusSettings(
 object ArgusConfig {
     private val logger = LoggerFactory.getLogger("argus-config")
     private val json = Json { prettyPrint = true }
-    private val defaultPath: Path = Paths.get("config/argus.json")
+    private val defaultPath: Path =
+        Paths.get(
+            System.getProperty("argus.config.path")
+                ?: System.getenv("ARGUS_CONFIG_PATH")
+                ?: "config/argus.json",
+        )
 
     @Volatile private var loadedPath: Path = defaultPath
 

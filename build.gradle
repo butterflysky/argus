@@ -140,7 +140,7 @@ tasks.named("build") {
 }
 
 tasks.named("check") {
-    dependsOn("spotlessCheck", "fabricSmoke", "neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
+    dependsOn("spotlessCheck", "fabricSmoke", ":fabric:fabricRunSmoke", "neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
 }
 
 // --- Local dev scenarios (non-versioned, uses scratch/scenarios) ---
@@ -299,3 +299,5 @@ tasks.register("neoforgeJarSmoke") {
         assert entries.any { it.contains("argus") } : "Argus classes missing in ${jarFile}"
     }
 }
+
+// Fabric runtime smoke: start server headless, auto-stop; ensure EULA accepted

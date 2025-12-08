@@ -209,6 +209,10 @@ class ArgusFabric : ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register { server: MinecraftServer ->
             currentServer = server
             logger.info("Argus login guards registered on server {}", server.name)
+            if (java.lang.Boolean.getBoolean("argus.smoke")) {
+                logger.info("Argus Fabric smoke flag set; stopping server after startup")
+                server.stop(false)
+            }
         }
         ServerLifecycleEvents.SERVER_STOPPED.register { currentServer = null }
     }

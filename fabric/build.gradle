@@ -53,3 +53,32 @@ tasks.named("remapJar") {
 
 // Disable sources jar in release outputs
 tasks.matching { it.name in ["sourcesJar", "remapSourcesJar"] }.configureEach { enabled = false }
+
+// Headless runtime smoke for Fabric: ensure EULA, boot, and stop immediately
+tasks.register("fabricRunSmoke", JavaExec) {
+    group = "verification"
+    description = "Launch Fabric server headless, then stop immediately (smoke test)."
+    doFirst {
+        def run = tasks.named("runServer", JavaExec).get()
+        classpath = run.classpath
+        mainClass.set(run.mainClass.get())
+        def baseArgs = run.args ?: []
+        args = baseArgs.contains("--nogui") ? baseArgs : baseArgs + ["--nogui"]
+        jvmArgs = (run.jvmArgs ?: []) + ["-Dargus.smoke=true", "-Djava.awt.headless=true"]
+        workingDir = file("${project.projectDir}/run")
+        workingDir.mkdirs()
+        environment run.environment
+
+        def eulaFile = new File(workingDir, "eula.txt")
+        eulaFile.parentFile.mkdirs()
+        eulaFile.text = "eula=true\n"
+
+        def serverProps = new File(workingDir, "server.properties")
+        if (!serverProps.exists()) {
+            serverProps.text = "motd=Argus smoke\\nonline-mode=false\\nenforce-whitelist=false\\nlevel-name=world\\n"
+        }
+    }
+    standardInput = new java.io.ByteArrayInputStream(new byte[0])
+    dependsOn("classes")
+    timeout.set(java.time.Duration.ofMinutes(2))
+}

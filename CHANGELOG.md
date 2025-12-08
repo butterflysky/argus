@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file.
 - `/argus reload` now fully restarts Discord (stop + start) instead of only reloading config.
 - No functional gameplay changes.
 
+## [1.0.12] - 2025-12-08
+- Fix whitelist detection via reflection (handles method name variants) so legacy-whitelisted players are recognized.
+- When whitelist is enabled and a player is unlinked, always surface the link token on join (even in dry-run) instead of silently allowing.
+- Packaging unchanged.
+
 ## [1.0.8] - 2025-12-08
 - Embedded Javacord (and its deps) inside the Fabric jar so Discord starts even on servers without external libs.
 - Retained bundled common classes; NeoForge packaging unchanged.

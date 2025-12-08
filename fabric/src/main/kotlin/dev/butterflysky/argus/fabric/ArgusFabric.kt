@@ -184,9 +184,22 @@ class ArgusFabric : ModInitializer {
             val profile = extractProfile(handler) ?: return@register
             val uuid: UUID = profile.id
             val name = profile.name
-            val isOp = reflectBool(server.playerManager, "isOperator", profile)
-            val isWhitelisted = reflectBool(server.playerManager, "isWhitelisted", profile)
-            val whitelistEnabled = reflectServerBool(server, listOf("isEnforceWhitelist"))
+            val isOp = reflectBool(server.playerManager, listOf("isOperator"), profile)
+            val isWhitelisted =
+                reflectBool(
+                    server.playerManager,
+                    listOf("isWhitelisted", "isWhiteListed", "isAllowed"),
+                    profile,
+                )
+            val whitelistEnabled =
+                reflectServerBool(
+                    server,
+                    listOf(
+                        "isEnforceWhitelist",
+                        "isWhitelistEnabled",
+                        "isUsingWhitelist",
+                    ),
+                )
 
             when (val result = ArgusCore.onPlayerLogin(uuid, name, isOp, isWhitelisted, whitelistEnabled)) {
                 LoginResult.Allow -> Unit
@@ -246,20 +259,14 @@ class ArgusFabric : ModInitializer {
         }.getOrNull()
     }
 
-    private fun reflectBool(
-        target: Any,
-        methodName: String,
-        arg: Any,
-    ): Boolean {
-        return runCatching {
-            val method =
-                target.javaClass.methods.firstOrNull {
-                    it.name == methodName && it.parameterCount == 1
-                } ?: return@runCatching false
-            method.isAccessible = true
-            (method.invoke(target, arg) as? Boolean) ?: false
-        }.getOrDefault(false)
-    }
+    private fun reflectBool(target: Any, methodNames: List<String>, arg: Any): Boolean =
+        methodNames.firstNotNullOfOrNull { name ->
+            runCatching {
+                val m = target.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 1 }
+                m?.isAccessible = true
+                m?.invoke(target, arg) as? Boolean
+            }.getOrNull()
+        } ?: false
 
     private fun reflectServerBool(
         server: MinecraftServer,

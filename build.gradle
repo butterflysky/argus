@@ -93,7 +93,7 @@ subprojects {
 
     // Place main jars under build/<project>/<mc_target> for clarity when switching targets
     tasks.withType(Jar).configureEach {
-        if (name in ["jar", "remapJar"]) {
+        if (project.name != "common" && name in ["jar", "remapJar"]) {
             destinationDirectory = layout.buildDirectory.dir("${project.name}/${rootProject.ext.activeMcTarget}")
             archiveClassifier = rootProject.ext.activeMcTarget
         }

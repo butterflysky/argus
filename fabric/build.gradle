@@ -43,6 +43,8 @@ tasks.named("jar") {
     archiveBaseName.set(desiredBase)
     archiveVersion.set(desiredVersion)
     archiveClassifier.set("")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(project(":common").sourceSets.main.output.classesDirs)
 }
 
 tasks.named("remapJar") {

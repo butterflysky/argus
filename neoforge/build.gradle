@@ -5,6 +5,10 @@ plugins {
     id 'java'
 }
 
+configurations {
+    shade
+}
+
 repositories {
     mavenCentral()
     maven { url = 'https://maven.neoforged.net/releases' }
@@ -15,6 +19,7 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 dependencies {
     implementation project(":common")
     implementation "net.neoforged:neoforge:${rootProject.ext.neo_version}"
+    shade "org.javacord:javacord:${rootProject.ext.javacordVersion}"
 }
 
 runs {
@@ -54,6 +59,9 @@ tasks.named("jar") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(project(":common").sourceSets.main.output.classesDirs)
     from(project(":common").sourceSets.main.output.resourcesDir)
+    from {
+        configurations.shade.collect { it.isDirectory() ? it : zipTree(it) }
+    }
 }
 
 // Disable sources jar in release outputs

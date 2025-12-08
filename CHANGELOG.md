@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.7] - 2025-12-08
+- Bundle Javacord into both Fabric and NeoForge jars (fixes Discord startup NoClassDefFoundError on prod).
+- No behavior changes; packaging only.
+
 ## [1.0.6] - 2025-12-08
 - Included common classes in both Fabric and NeoForge jars (validated contents) to avoid NoClassDefFoundError on prod.
 - No code logic changes; packaging fix only.
@@ -46,7 +50,8 @@ All notable changes to this project will be documented in this file.
 ## 0.2.3 - 2025-12-07
 - Fixed NeoForge mods.toml expansion and command registration bus.
 
-[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/butterflysky/argus/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/butterflysky/argus/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/butterflysky/argus/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/butterflysky/argus/releases/tag/v1.0.4

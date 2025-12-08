@@ -7,6 +7,3 @@ src = "src"
 [build]
 build-dir = "../docs-book"
 create-missing = true
-
-[output.html]
-additional-js = ["theme/renumber.js"]

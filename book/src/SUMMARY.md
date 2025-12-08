@@ -1,6 +1,6 @@
 # Summary
 
- - [Argus](overview.md){numbered=false}
+ [Argus](overview.md)
 
 ## User Guide
 - [Setup](setup.md)

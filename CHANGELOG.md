@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.6] - 2025-12-08
+- Included common classes in both Fabric and NeoForge jars (validated contents) to avoid NoClassDefFoundError on prod.
+- No code logic changes; packaging fix only.
+
 ## [1.0.5] - 2025-12-08
 - Bundle shared common classes into the Fabric jar (fixes NoClassDefFoundError for ArgusCore on prod).
 - Prevent duplicate resources in Fabric jar; keep headless smokes passing on fabric-api 0.135.0.
@@ -42,7 +46,8 @@ All notable changes to this project will be documented in this file.
 ## 0.2.3 - 2025-12-07
 - Fixed NeoForge mods.toml expansion and command registration bus.
 
-[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/butterflysky/argus/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/butterflysky/argus/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/butterflysky/argus/releases/tag/v1.0.4
 [1.0.3]: https://github.com/butterflysky/argus/releases/tag/v1.0.3

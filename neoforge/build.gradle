@@ -2,6 +2,7 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'net.neoforged.gradle.userdev' version '7.1.6'
+    id 'java'
 }
 
 repositories {
@@ -50,6 +51,9 @@ tasks.named("jar") {
     archiveBaseName.set("${rootProject.archives_base_name}-${rootProject.ext.minecraft_version}")
     archiveVersion.set("${project.version}-neoforge")
     archiveClassifier.set("")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(project(":common").sourceSets.main.output.classesDirs)
+    from(project(":common").sourceSets.main.output.resourcesDir)
 }
 
 // Disable sources jar in release outputs

@@ -394,21 +394,23 @@ object ArgusCore {
         discordName: String,
         discordNick: String?,
     ): Result<String> {
-        val uuid = LinkTokenService.consume(token) ?: return Result.failure(IllegalArgumentException("Invalid or expired token"))
-        val existing = CacheStore.get(uuid) ?: PlayerData()
+        val tokenData = LinkTokenService.consume(token) ?: return Result.failure(IllegalArgumentException("Invalid or expired token"))
+        val uuid = tokenData.uuid
+        val existing = CacheStore.get(uuid) ?: PlayerData(mcName = tokenData.mcName)
         val updated =
             existing.copy(
                 discordId = discordId,
                 discordName = discordName,
                 discordNick = discordNick,
                 hasAccess = true,
+                mcName = existing.mcName ?: tokenData.mcName,
             )
         CacheStore.upsert(uuid, updated)
         scheduleSave()
         CacheStore.appendEvent(
             EventEntry(type = "link", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Linked via token"),
         )
-        val mcLabel = existing.mcName ?: "minecraft user"
+        val mcLabel = updated.mcName ?: tokenData.mcName ?: "minecraft user"
         AuditLogger.log("Linked minecraft user $mcLabel ($uuid) to discord user ${discordLabel(discordName, discordId)}")
         messenger?.invoke(uuid, prefix("Linked Discord user: $discordName"))
         return Result.success("Linked successfully.")

@@ -23,17 +23,17 @@ object LinkTokenService {
             return existing.token
         }
         val token = generateToken()
-        val entry = TokenEntry(token, uuid, System.currentTimeMillis())
+        val entry = TokenEntry(token, uuid, mcName.ifBlank { null }, System.currentTimeMillis())
         tokens[token] = entry
         reverse[uuid] = entry
         return token
     }
 
-    fun consume(token: String): UUID? {
+    fun consume(token: String): TokenEntry? {
         cleanupExpired()
         val entry = tokens.remove(token) ?: return null
         reverse.remove(entry.uuid)
-        return entry.uuid
+        return entry
     }
 
     fun listActive(): List<TokenStatus> {
@@ -43,6 +43,7 @@ object LinkTokenService {
             TokenStatus(
                 token = it.token,
                 uuid = it.uuid,
+                mcName = it.mcName,
                 issuedAt = it.issuedAt,
                 expiresInMillis = (it.issuedAt + ttlMillis - now).coerceAtLeast(0),
             )
@@ -64,7 +65,7 @@ object LinkTokenService {
         }
     }
 
-    data class TokenEntry(val token: String, val uuid: UUID, val issuedAt: Long)
+    data class TokenEntry(val token: String, val uuid: UUID, val mcName: String?, val issuedAt: Long)
 
-    data class TokenStatus(val token: String, val uuid: UUID, val issuedAt: Long, val expiresInMillis: Long)
+    data class TokenStatus(val token: String, val uuid: UUID, val mcName: String?, val issuedAt: Long, val expiresInMillis: Long)
 }

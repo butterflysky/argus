@@ -177,7 +177,10 @@ class ArgusFabric : ModInitializer {
         tokens.forEach {
             val secs = it.expiresInMillis / 1000
             ctx.source.sendFeedback(
-                { Text.literal("${prefix}token=${it.token} uuid=${it.uuid} expires_in=${secs}s") },
+                {
+                    val namePart = it.mcName?.let { n -> " mcName=$n" } ?: ""
+                    Text.literal("${prefix}token=${it.token} uuid=${it.uuid}$namePart expires_in=${secs}s")
+                },
                 false,
             )
         }

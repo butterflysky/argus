@@ -31,5 +31,13 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Test and smoke
         run: ./gradlew test fabricSmoke neoforgeJarSmoke :neoforge:neoforgeRunSmoke :fabric:runGameTest -PargusRunGameTests
+      - name: Coverage report
+        run: ./gradlew jacocoRootReport
+      - name: Upload coverage html
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: |
+            **/build/reports/jacoco/test/html
       - name: Build mdBook
         run: mdbook build book

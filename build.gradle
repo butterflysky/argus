@@ -54,6 +54,7 @@ subprojects {
     apply plugin: 'org.jetbrains.kotlin.jvm'
     apply plugin: 'org.jetbrains.kotlin.plugin.serialization'
     apply plugin: 'com.diffplug.spotless'
+    apply plugin: 'jacoco'
     apply plugin: 'idea'
     apply plugin: 'eclipse'
 
@@ -85,6 +86,20 @@ subprojects {
 
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
+        finalizedBy(tasks.named("jacocoTestReport"))
+    }
+
+    jacoco {
+        toolVersion = "0.8.12"
+    }
+
+    tasks.named("jacocoTestReport") {
+        dependsOn(tasks.named("test"))
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+            csv.required.set(false)
+        }
     }
 
     spotless {
@@ -150,6 +165,12 @@ tasks.named("build") {
 
 tasks.named("check") {
     dependsOn("spotlessCheck", "fabricSmoke", ":fabric:fabricRunSmoke", ":fabric:fabricJarSmoke", "neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
+}
+
+tasks.register("jacocoRootReport") {
+    group = "verification"
+    description = "Aggregate jacocoTestReport across all subprojects"
+    dependsOn(subprojects.collect { it.tasks.matching { it.name == "jacocoTestReport" } })
 }
 
 tasks.register("fabricSmokeAll") {

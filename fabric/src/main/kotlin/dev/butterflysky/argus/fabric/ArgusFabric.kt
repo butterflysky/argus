@@ -309,6 +309,5 @@ class ArgusFabric : ModInitializer {
         } ?: false
     }
 
-    private fun clickableIfLink(message: String): Text =
-        Text.literal(message) // placeholder; click-to-copy not supported in this mapping yet
+    private fun clickableIfLink(message: String): Text = Text.literal(message)
 }

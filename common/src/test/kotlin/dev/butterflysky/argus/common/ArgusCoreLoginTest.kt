@@ -228,6 +228,56 @@ class ArgusCoreLoginTest {
     }
 
     @Test
+    fun `discord unavailable falls back to vanilla whitelist`() {
+        ArgusCore.setDiscordStartedOverride(false)
+        val allow =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "legacy",
+                isOp = false,
+                isLegacyWhitelisted = true,
+                whitelistEnabled = true,
+            )
+        assertIs<LoginResult.Allow>(allow)
+
+        val deny =
+            assertIs<LoginResult.Deny>(
+                ArgusCore.onPlayerLogin(
+                    UUID.randomUUID(),
+                    "stranger",
+                    isOp = false,
+                    isLegacyWhitelisted = false,
+                    whitelistEnabled = true,
+                ),
+            )
+        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+        assertEquals(false, deny.revokeWhitelist)
+    }
+
+    @Test
+    fun `op bypasses even if banned`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(
+            playerId,
+            PlayerData(
+                hasAccess = true,
+                banUntilEpochMillis = System.currentTimeMillis() + 10_000,
+                banReason = "ban",
+            ),
+        )
+
+        val result =
+            ArgusCore.onPlayerLogin(
+                playerId,
+                "op",
+                isOp = true,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
+            )
+        assertIs<LoginResult.Allow>(result)
+    }
+
+    @Test
     fun `banned player is denied even with access`() {
         val playerId = UUID.randomUUID()
         val future = System.currentTimeMillis() + 5_000
@@ -312,6 +362,7 @@ class ArgusCoreLoginTest {
                 ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true),
             )
         assertTrue(deny.revokeWhitelist)
+        assertTrue(deny.message.contains("missing Discord whitelist role"))
     }
 
     @Test

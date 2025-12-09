@@ -8,7 +8,6 @@ import dev.butterflysky.argus.common.LoginResult
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
-import net.fabricmc.fabric.api.networking.v1.ServerLoginConnectionEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.minecraft.command.CommandSource
 import net.minecraft.server.MinecraftServer
@@ -204,11 +203,12 @@ class ArgusFabric : ModInitializer {
     }
 
     private fun registerLoginGuard() {
-        ServerLoginConnectionEvents.QUERY_START.register { handler, server, _, _ ->
-            val profile = extractProfile(handler) ?: return@register
+        // Run at PLAY init to avoid protocol-state mismatch (login/configuration vs play) when kicking.
+        ServerPlayConnectionEvents.INIT.register { handler, server ->
+            val profile = handler.player.gameProfile
             val uuid: UUID = profile.id
             val name = profile.name
-            val isOp = reflectBool(server.playerManager, listOf("isOperator"), profile)
+            val isOp = handler.player.hasPermissionLevel(4)
             val isWhitelisted =
                 reflectBool(
                     server.playerManager,

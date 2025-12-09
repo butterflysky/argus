@@ -35,42 +35,28 @@ object ArgusConfig {
     @Volatile
     private var settings: ArgusSettings = ArgusSettings()
 
-    private enum class FieldType { STRING, LONG, PATH }
-
-    private data class FieldMeta(
+    private data class ConfigField(
         val key: String,
-        val type: FieldType,
         val sample: String,
         val description: String,
+        val setter: (ArgusSettings, String) -> ArgusSettings,
+        val getter: (ArgusSettings) -> String,
     )
 
-    private val fields: List<FieldMeta> =
+    private val fields: List<ConfigField> =
         listOf(
-            FieldMeta("botToken", FieldType.STRING, "abcdef.bot.token", "Discord bot token"),
-            FieldMeta("guildId", FieldType.LONG, "123456789012345678", "Discord guild id"),
-            FieldMeta("whitelistRoleId", FieldType.LONG, "234567890123456789", "Role that grants access"),
-            FieldMeta("adminRoleId", FieldType.LONG, "345678901234567890", "Admins allowed to manage whitelist"),
-            FieldMeta("logChannelId", FieldType.LONG, "456789012345678901", "Channel for audit messages"),
-            FieldMeta(
-                "applicationMessage",
-                FieldType.STRING,
-                "Access Denied: Please apply in Discord.",
-                "Login denial message",
-            ),
-            FieldMeta(
-                "enforcementEnabled",
-                FieldType.STRING,
-                "false",
-                "Whether Argus enforces decisions (false = dry-run, log only)",
-            ),
-            FieldMeta("cacheFile", FieldType.PATH, "config/argus_db.json", "Cache persistence path"),
-            FieldMeta(
-                "discordInviteUrl",
-                FieldType.STRING,
-                "https://discord.gg/yourserver",
-                "Invite link shown in denial messages (optional)",
-            ),
+            ConfigField("botToken", "abcdef.bot.token", "Discord bot token", { s, v -> s.copy(botToken = v) }, { it.botToken }),
+            ConfigField("guildId", "123456789012345678", "Discord guild id", { s, v -> s.copy(guildId = v.toLongOrNull() ?: error("guildId must be a number")) }, { it.guildId?.toString() ?: "" }),
+            ConfigField("whitelistRoleId", "234567890123456789", "Role that grants access", { s, v -> s.copy(whitelistRoleId = v.toLongOrNull() ?: error("whitelistRoleId must be a number")) }, { it.whitelistRoleId?.toString() ?: "" }),
+            ConfigField("adminRoleId", "345678901234567890", "Admins allowed to manage whitelist", { s, v -> s.copy(adminRoleId = v.toLongOrNull() ?: error("adminRoleId must be a number")) }, { it.adminRoleId?.toString() ?: "" }),
+            ConfigField("logChannelId", "456789012345678901", "Channel for audit messages", { s, v -> s.copy(logChannelId = v.toLongOrNull() ?: error("logChannelId must be a number")) }, { it.logChannelId?.toString() ?: "" }),
+            ConfigField("applicationMessage", "Access Denied: Please apply in Discord.", "Login denial message", { s, v -> s.copy(applicationMessage = v) }, { it.applicationMessage }),
+            ConfigField("enforcementEnabled", "false", "Whether Argus enforces decisions (false = dry-run, log only)", { s, v -> s.copy(enforcementEnabled = v.equals("true", ignoreCase = true)) }, { it.enforcementEnabled.toString() }),
+            ConfigField("cacheFile", "config/argus_db.json", "Cache persistence path", { s, v -> s.copy(cacheFile = v) }, { it.cacheFile }),
+            ConfigField("discordInviteUrl", "https://discord.gg/yourserver", "Invite link shown in denial messages (optional)", { s, v -> s.copy(discordInviteUrl = v.ifBlank { null }) }, { it.discordInviteUrl ?: "" }),
         )
+
+    private val fieldsMap = fields.associateBy { it.key.lowercase() }
 
     val cachePath: Path
         get() = Paths.get(settings.cacheFile)
@@ -106,19 +92,7 @@ object ArgusConfig {
     ): Result<ArgusSettings> =
         runCatching {
             val meta = findField(field) ?: error("Unknown config field: $field")
-            val updated =
-                when (meta.key.lowercase()) {
-                    "bottoken" -> settings.copy(botToken = value)
-                    "guildid" -> settings.copy(guildId = value.toLongOrNull() ?: error("guildId must be a number"))
-                    "whitelistroleid" -> settings.copy(whitelistRoleId = value.toLongOrNull() ?: error("whitelistRoleId must be a number"))
-                    "adminroleid" -> settings.copy(adminRoleId = value.toLongOrNull() ?: error("adminRoleId must be a number"))
-                    "logchannelid" -> settings.copy(logChannelId = value.toLongOrNull() ?: error("logChannelId must be a number"))
-                    "applicationmessage" -> settings.copy(applicationMessage = value)
-                    "enforcementenabled" -> settings.copy(enforcementEnabled = value.equals("true", ignoreCase = true))
-                    "cachefile" -> settings.copy(cacheFile = value)
-                    "discordinviteurl" -> settings.copy(discordInviteUrl = value.ifBlank { null })
-                    else -> error("Unknown config field: $field")
-                }
+            val updated = meta.setter(settings, value)
             val path = loadedPath
             Files.createDirectories(path.parent)
             Files.writeString(path, json.encodeToString(ArgusSettings.serializer(), updated))
@@ -143,25 +117,14 @@ object ArgusConfig {
     fun get(field: String): Result<String> =
         runCatching {
             val meta = findField(field) ?: error("Unknown config field: $field")
-            when (meta.key.lowercase()) {
-                "bottoken" -> settings.botToken
-                "guildid" -> settings.guildId?.toString() ?: ""
-                "whitelistroleid" -> settings.whitelistRoleId?.toString() ?: ""
-                "adminroleid" -> settings.adminRoleId?.toString() ?: ""
-                "logchannelid" -> settings.logChannelId?.toString() ?: ""
-                "applicationmessage" -> settings.applicationMessage
-                "enforcementenabled" -> settings.enforcementEnabled.toString()
-                "cachefile" -> settings.cacheFile
-                "discordinviteurl" -> settings.discordInviteUrl ?: ""
-                else -> error("Unknown config field: $field")
-            }
+            meta.getter(settings)
         }
 
     fun fieldNames(): List<String> = fields.map { it.key }
 
     fun sampleValue(field: String): String? = findField(field)?.sample
 
-    private fun findField(field: String): FieldMeta? = fields.firstOrNull { it.key.equals(field, ignoreCase = true) }
+    private fun findField(field: String): ConfigField? = fieldsMap[field.lowercase()]
 
     @JvmStatic
     fun fieldNamesJvm(): List<String> = fieldNames()

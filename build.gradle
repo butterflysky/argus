@@ -78,6 +78,15 @@ subprojects {
         kotlinOptions.jvmTarget = "21"
     }
 
+    dependencies {
+        testImplementation "org.jetbrains.kotlin:kotlin-test"
+        testImplementation "org.junit.jupiter:junit-jupiter:${rootProject.ext.junitVersion}"
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+
     spotless {
         kotlin {
             ktlint("1.2.1")

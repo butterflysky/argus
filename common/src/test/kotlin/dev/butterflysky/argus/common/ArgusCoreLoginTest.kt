@@ -226,4 +226,61 @@ class ArgusCoreLoginTest {
         assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
         assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
+
+    @Test
+    fun `revoke flag set when role missing`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 101L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
+
+        val deny =
+            assertIs<LoginResult.Deny>(
+                ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true),
+            )
+        assertTrue(deny.revokeWhitelist)
+    }
+
+    @Test
+    fun `revoke flag set when not in guild`() {
+        val playerId = UUID.randomUUID()
+        CacheStore.upsert(playerId, PlayerData(discordId = 102L, hasAccess = false))
+        ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
+
+        val deny =
+            assertIs<LoginResult.Deny>(
+                ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true),
+            )
+        assertTrue(deny.revokeWhitelist)
+    }
+
+    @Test
+    fun `revoke flag set for legacy-unlinked`() {
+        val deny =
+            assertIs<LoginResult.Deny>(
+                ArgusCore.onPlayerLogin(UUID.randomUUID(), "legacy", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true),
+            )
+        assertTrue(deny.revokeWhitelist)
+    }
+
+    @Test
+    fun `stranger deny does not request whitelist revoke`() {
+        val deny =
+            assertIs<LoginResult.Deny>(
+                ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true),
+            )
+        assertEquals(false, deny.revokeWhitelist)
+    }
+
+    @Test
+    fun `whitelist disabled allows even when unlinked`() {
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "mc",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = false,
+            )
+        assertIs<LoginResult.Allow>(result)
+    }
 }

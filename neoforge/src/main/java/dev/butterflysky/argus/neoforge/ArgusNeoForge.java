@@ -66,7 +66,7 @@ public class ArgusNeoForge {
         boolean whitelistEnabled = server != null && server.isEnforceWhitelist();
         String message = ArgusCore.INSTANCE.onPlayerJoin(player.getUUID(), player.hasPermissions(4), whitelistEnabled);
         if (message != null) {
-            if (message.contains("Access revoked")) {
+            if (message.contains("Access revoked") || message.contains("Link required")) {
                 player.connection.disconnect(Component.literal(message));
             } else {
                 player.sendSystemMessage(Component.literal(message));

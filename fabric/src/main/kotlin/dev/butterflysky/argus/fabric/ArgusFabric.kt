@@ -219,7 +219,7 @@ class ArgusFabric : ModInitializer {
 
             ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled)?.let { message ->
                 // If message is a kick, disconnect; otherwise send chat message.
-                if (message.contains("Access revoked")) {
+                if (message.contains("Access revoked") || message.contains("Link required")) {
                     player.networkHandler.disconnect(Text.literal(message))
                 } else {
                     player.sendMessage(clickableIfLink(message), false)

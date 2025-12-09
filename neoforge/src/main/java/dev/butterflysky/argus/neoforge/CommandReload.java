@@ -7,11 +7,14 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.butterflysky.argus.common.ArgusCore;
 import dev.butterflysky.argus.common.ArgusConfig;
+import dev.butterflysky.argus.common.LinkTokenService;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import java.util.concurrent.CompletableFuture;
+import java.util.UUID;
 
 /** Implements /argus reload and /argus config set for NeoForge. */
 public class CommandReload {
@@ -68,6 +71,12 @@ public class CommandReload {
                 .requires(stack -> stack.hasPermission(3))
                 .executes(ctx -> listTokens(ctx, prefix))
             )
+            .then(Commands.literal("token")
+                .requires(stack -> stack.hasPermission(3))
+                .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                    .executes(ctx -> issueToken(ctx, prefix))
+                )
+            )
             .then(Commands.literal("help")
                 .executes(ctx -> {
                     ctx.getSource().sendSuccess(() -> Component.literal(prefix + helpText()), false);
@@ -100,16 +109,28 @@ public class CommandReload {
     }
 
     private static int listTokens(CommandContext<CommandSourceStack> ctx, String prefix) {
-        var tokens = dev.butterflysky.argus.common.LinkTokenService.INSTANCE.listActive();
+        var tokens = LinkTokenService.INSTANCE.listActive();
         if (tokens.isEmpty()) {
             ctx.getSource().sendSuccess(() -> Component.literal(prefix + "No active link tokens"), false);
             return 1;
         }
         tokens.forEach(t -> {
             var secs = t.getExpiresInMillis() / 1000;
+            var namePart = t.getMcName() != null ? " mcName=" + t.getMcName() : "";
             ctx.getSource().sendSuccess(() ->
-                Component.literal(prefix + "token=" + t.getToken() + " uuid=" + t.getUuid() + " expires_in=" + secs + "s"), false);
+                Component.literal(prefix + "token=" + t.getToken() + " uuid=" + t.getUuid() + namePart + " expires_in=" + secs + "s"), false);
         });
+        return 1;
+    }
+
+    private static int issueToken(CommandContext<CommandSourceStack> ctx, String prefix) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        var profiles = GameProfileArgument.getGameProfiles(ctx, "player");
+        var profile = profiles.stream().findFirst().orElse(null);
+        if (profile == null) return 0;
+        UUID uuid = profile.id();
+        String name = profile.name();
+        String token = LinkTokenService.INSTANCE.issueToken(uuid, name);
+        ctx.getSource().sendSuccess(() -> Component.literal(prefix + "Link token for " + name + ": " + token), false);
         return 1;
     }
 }

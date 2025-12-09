@@ -9,6 +9,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 /**
  * Local cache of player data plus append-only audit streams (events, applications).
@@ -20,6 +23,7 @@ object CacheStore {
     private val data: MutableMap<UUID, PlayerData> = ConcurrentHashMap()
     private val events: MutableList<EventEntry> = mutableListOf()
     private val applications: MutableList<WhitelistApplication> = mutableListOf()
+    private val saver = SaveScheduler()
 
     fun snapshot(): Map<UUID, PlayerData> = data.toMap()
 
@@ -106,6 +110,35 @@ object CacheStore {
             logger.info("Saved argus cache (${data.size} entries) to ${primary.toAbsolutePath()}")
         }.onFailure { ex ->
             logger.error("Failed to save argus cache: ${ex.message}", ex)
+        }
+    }
+
+    /** Schedule a save on a background executor, coalescing bursty callers. */
+    fun enqueueSave(cachePath: Path) {
+        saver.request { save(cachePath) }
+    }
+
+    /** Testing/maintenance hook to flush pending saves synchronously. */
+    internal fun flushSaves(timeoutMillis: Long = 2000): Boolean = saver.flush(timeoutMillis)
+
+    private class SaveScheduler {
+        private val executor = Executors.newSingleThreadScheduledExecutor { r ->
+            Thread(r, "argus-cache-save").apply { isDaemon = true }
+        }
+        private val lock = Any()
+        private var pending: ScheduledFuture<*>? = null
+
+        fun request(task: () -> Result<Unit>) {
+            synchronized(lock) {
+                if (pending?.isDone == false) return
+                pending = executor.schedule({ task.invoke() }, 200, TimeUnit.MILLISECONDS)
+            }
+        }
+
+        fun flush(timeoutMillis: Long): Boolean {
+            val future = synchronized(lock) { pending }
+            future?.get(timeoutMillis, TimeUnit.MILLISECONDS)
+            return future?.isDone ?: true
         }
     }
 

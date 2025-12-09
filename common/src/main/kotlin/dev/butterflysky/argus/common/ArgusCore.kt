@@ -227,6 +227,10 @@ object ArgusCore {
 
         if (whitelistEnabled && ArgusConfig.isConfigured()) {
             val pdata = CacheStore.get(uuid)
+            if (pdata == null) {
+                val token = LinkTokenService.issueToken(uuid, "player")
+                return prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
+            }
             if (pdata?.discordId == null) {
                 val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
                 return prefix(withInviteSuffix("Please link your account in Discord with /link $token"))

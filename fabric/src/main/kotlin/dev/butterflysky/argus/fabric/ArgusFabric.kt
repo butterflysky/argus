@@ -244,7 +244,7 @@ class ArgusFabric : ModInitializer {
                 if (message.contains("Access revoked")) {
                     player.networkHandler.disconnect(Text.literal(message))
                 } else {
-                    player.sendMessage(Text.literal(message), false)
+                    player.sendMessage(clickableIfLink(message), false)
                 }
             }
         }
@@ -308,4 +308,7 @@ class ArgusFabric : ModInitializer {
             }.getOrNull()
         } ?: false
     }
+
+    private fun clickableIfLink(message: String): Text =
+        Text.literal(message) // placeholder; click-to-copy not supported in this mapping yet
 }

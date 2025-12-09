@@ -5,12 +5,12 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.nio.file.Path
+import java.util.UUID
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import java.nio.file.Path
-import java.util.UUID
 
 class ArgusCoreLoginAdditionalTest {
     private lateinit var cachePath: Path

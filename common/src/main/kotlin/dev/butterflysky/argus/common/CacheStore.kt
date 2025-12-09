@@ -122,9 +122,10 @@ object CacheStore {
     internal fun flushSaves(timeoutMillis: Long = 2000): Boolean = saver.flush(timeoutMillis)
 
     private class SaveScheduler {
-        private val executor = Executors.newSingleThreadScheduledExecutor { r ->
-            Thread(r, "argus-cache-save").apply { isDaemon = true }
-        }
+        private val executor =
+            Executors.newSingleThreadScheduledExecutor { r ->
+                Thread(r, "argus-cache-save").apply { isDaemon = true }
+            }
         private val lock = Any()
         private var pending: ScheduledFuture<*>? = null
 

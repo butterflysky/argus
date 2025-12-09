@@ -46,14 +46,62 @@ object ArgusConfig {
     private val fields: List<ConfigField> =
         listOf(
             ConfigField("botToken", "abcdef.bot.token", "Discord bot token", { s, v -> s.copy(botToken = v) }, { it.botToken }),
-            ConfigField("guildId", "123456789012345678", "Discord guild id", { s, v -> s.copy(guildId = v.toLongOrNull() ?: error("guildId must be a number")) }, { it.guildId?.toString() ?: "" }),
-            ConfigField("whitelistRoleId", "234567890123456789", "Role that grants access", { s, v -> s.copy(whitelistRoleId = v.toLongOrNull() ?: error("whitelistRoleId must be a number")) }, { it.whitelistRoleId?.toString() ?: "" }),
-            ConfigField("adminRoleId", "345678901234567890", "Admins allowed to manage whitelist", { s, v -> s.copy(adminRoleId = v.toLongOrNull() ?: error("adminRoleId must be a number")) }, { it.adminRoleId?.toString() ?: "" }),
-            ConfigField("logChannelId", "456789012345678901", "Channel for audit messages", { s, v -> s.copy(logChannelId = v.toLongOrNull() ?: error("logChannelId must be a number")) }, { it.logChannelId?.toString() ?: "" }),
-            ConfigField("applicationMessage", "Access Denied: Please apply in Discord.", "Login denial message", { s, v -> s.copy(applicationMessage = v) }, { it.applicationMessage }),
-            ConfigField("enforcementEnabled", "false", "Whether Argus enforces decisions (false = dry-run, log only)", { s, v -> s.copy(enforcementEnabled = v.equals("true", ignoreCase = true)) }, { it.enforcementEnabled.toString() }),
-            ConfigField("cacheFile", "config/argus_db.json", "Cache persistence path", { s, v -> s.copy(cacheFile = v) }, { it.cacheFile }),
-            ConfigField("discordInviteUrl", "https://discord.gg/yourserver", "Invite link shown in denial messages (optional)", { s, v -> s.copy(discordInviteUrl = v.ifBlank { null }) }, { it.discordInviteUrl ?: "" }),
+            ConfigField(
+                "guildId",
+                "123456789012345678",
+                "Discord guild id",
+                { s, v -> s.copy(guildId = v.toLongOrNull() ?: error("guildId must be a number")) },
+                { it.guildId?.toString() ?: "" },
+            ),
+            ConfigField(
+                "whitelistRoleId",
+                "234567890123456789",
+                "Role that grants access",
+                { s, v -> s.copy(whitelistRoleId = v.toLongOrNull() ?: error("whitelistRoleId must be a number")) },
+                { it.whitelistRoleId?.toString() ?: "" },
+            ),
+            ConfigField(
+                "adminRoleId",
+                "345678901234567890",
+                "Admins allowed to manage whitelist",
+                { s, v -> s.copy(adminRoleId = v.toLongOrNull() ?: error("adminRoleId must be a number")) },
+                { it.adminRoleId?.toString() ?: "" },
+            ),
+            ConfigField(
+                "logChannelId",
+                "456789012345678901",
+                "Channel for audit messages",
+                { s, v -> s.copy(logChannelId = v.toLongOrNull() ?: error("logChannelId must be a number")) },
+                { it.logChannelId?.toString() ?: "" },
+            ),
+            ConfigField("applicationMessage", "Access Denied: Please apply in Discord.", "Login denial message", { s, v ->
+                s.copy(
+                    applicationMessage = v,
+                )
+            }, {
+                it.applicationMessage
+            }),
+            ConfigField(
+                "enforcementEnabled",
+                "false",
+                "Whether Argus enforces decisions (false = dry-run, log only)",
+                { s, v -> s.copy(enforcementEnabled = v.equals("true", ignoreCase = true)) },
+                { it.enforcementEnabled.toString() },
+            ),
+            ConfigField(
+                "cacheFile",
+                "config/argus_db.json",
+                "Cache persistence path",
+                { s, v -> s.copy(cacheFile = v) },
+                { it.cacheFile },
+            ),
+            ConfigField(
+                "discordInviteUrl",
+                "https://discord.gg/yourserver",
+                "Invite link shown in denial messages (optional)",
+                { s, v -> s.copy(discordInviteUrl = v.ifBlank { null }) },
+                { it.discordInviteUrl ?: "" },
+            ),
         )
 
     private val fieldsMap = fields.associateBy { it.key.lowercase() }

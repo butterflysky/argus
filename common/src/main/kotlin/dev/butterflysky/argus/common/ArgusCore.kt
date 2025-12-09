@@ -34,6 +34,7 @@ object ArgusCore {
     @Volatile private var messenger: ((UUID, String) -> Unit)? = null
 
     @Volatile private var banMirror: ((UUID, String?, String, Long?) -> Unit)? = null
+
     @Volatile private var unbanMirror: ((UUID) -> Unit)? = null
     private val httpClient =
         HttpClient.newBuilder()
@@ -677,13 +678,14 @@ object ArgusCore {
             val profile = json.decodeFromString(MojangProfile.serializer(), resp.body())
             val id = profile.id
             require(id.length == 32) { "Bad response" }
-            val dashed = listOf(
-                id.substring(0, 8),
-                id.substring(8, 12),
-                id.substring(12, 16),
-                id.substring(16, 20),
-                id.substring(20),
-            ).joinToString("-")
+            val dashed =
+                listOf(
+                    id.substring(0, 8),
+                    id.substring(8, 12),
+                    id.substring(12, 16),
+                    id.substring(16, 20),
+                    id.substring(20),
+                ).joinToString("-")
             UUID.fromString(dashed) to profile.name
         }
 

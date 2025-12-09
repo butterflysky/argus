@@ -152,6 +152,18 @@ tasks.named("check") {
     dependsOn("spotlessCheck", "fabricSmoke", ":fabric:fabricRunSmoke", ":fabric:fabricJarSmoke", "neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
 }
 
+tasks.register("fabricSmokeAll") {
+    group = "verification"
+    description = "Run all Fabric smoke checks (metadata, jar load, headless run)"
+    dependsOn("fabricSmoke", ":fabric:fabricJarSmoke", ":fabric:fabricRunSmoke")
+}
+
+tasks.register("neoforgeSmokeAll") {
+    group = "verification"
+    description = "Run all NeoForge smoke checks (metadata, jar load, headless run)"
+    dependsOn("neoforgeJarSmoke", ":neoforge:neoforgeRunSmoke")
+}
+
 // --- Local dev scenarios (non-versioned, uses scratch/scenarios) ---
 def scenarioDir = layout.projectDirectory.dir("scratch/scenarios")
 def runDir = layout.projectDirectory.dir("fabric/run")

@@ -151,7 +151,7 @@ object ArgusCore {
             if (pdata == null) {
                 val token = LinkTokenService.issueToken(uuid, "player")
                 return if (ArgusConfig.current().enforcementEnabled) {
-                    prefix(withInviteSuffix("Access revoked: linking required. Use /link $token in Discord"))
+                    prefix(withInviteSuffix("Link required to join: use /link $token in Discord"))
                 } else {
                     prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
                 }
@@ -159,7 +159,7 @@ object ArgusCore {
             if (pdata?.discordId == null) {
                 val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
                 return if (ArgusConfig.current().enforcementEnabled) {
-                    prefix(withInviteSuffix("Access revoked: linking required. Use /link $token in Discord"))
+                    prefix(withInviteSuffix("Link required to join: use /link $token in Discord"))
                 } else {
                     prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
                 }

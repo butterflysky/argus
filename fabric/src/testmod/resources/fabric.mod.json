@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "argus-testmod",
+  "version": "1.0.0",
+  "name": "Argus Testmod",
+  "entrypoints": {
+    "fabric-gametest": ["dev.butterflysky.argus.testmod.ArgusLoginGameTests"]
+  },
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "fabric-gametest-api-v1": "*",
+    "minecraft": "1.21.10",
+    "java": ">=21"
+  }
+}

@@ -228,6 +228,80 @@ class ArgusCoreLoginTest {
     }
 
     @Test
+    fun `banned player is denied even with access`() {
+        val playerId = UUID.randomUUID()
+        val future = System.currentTimeMillis() + 5_000
+        CacheStore.upsert(
+            playerId,
+            PlayerData(
+                discordId = 77L,
+                hasAccess = true,
+                banUntilEpochMillis = future,
+                banReason = "Banned",
+            ),
+        )
+
+        val deny =
+            assertIs<LoginResult.Deny>(
+                ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true),
+            )
+        assertTrue(deny.message.contains("Banned"))
+        assertEquals(false, deny.revokeWhitelist)
+    }
+
+    @Test
+    fun `expired ban allows when access granted`() {
+        val playerId = UUID.randomUUID()
+        val past = System.currentTimeMillis() - 1_000
+        CacheStore.upsert(
+            playerId,
+            PlayerData(
+                discordId = 78L,
+                hasAccess = true,
+                banUntilEpochMillis = past,
+            ),
+        )
+
+        val result =
+            ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
+        assertIs<LoginResult.Allow>(result)
+    }
+
+    @Test
+    fun `unconfigured but vanilla-whitelisted is allowed`() {
+        ArgusConfig.update("botToken", "")
+        ArgusCore.reloadConfig()
+
+        val result =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "mc",
+                isOp = false,
+                isLegacyWhitelisted = true,
+                whitelistEnabled = true,
+            )
+        assertIs<LoginResult.Allow>(result)
+    }
+
+    @Test
+    fun `unconfigured and not vanilla-whitelisted is denied with application message`() {
+        ArgusConfig.update("botToken", "")
+        ArgusCore.reloadConfig()
+
+        val deny =
+            assertIs<LoginResult.Deny>(
+                ArgusCore.onPlayerLogin(
+                    UUID.randomUUID(),
+                    "mc",
+                    isOp = false,
+                    isLegacyWhitelisted = false,
+                    whitelistEnabled = true,
+                ),
+            )
+        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+    }
+
+    @Test
     fun `revoke flag set when role missing`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 101L, hasAccess = false))

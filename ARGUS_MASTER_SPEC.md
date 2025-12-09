@@ -10,10 +10,10 @@ Act as a Senior Minecraft Mod Developer. I need you to scaffold a comprehensive 
 
 ## **Technical Constraints**
 
-1. **Multi-Loader Structure:** Use a Gradle multi-project setup with three modules:  
+1. **Multi-Loader Structure:** Use a Gradle multi-project setup with three modules, **Fabric and NeoForge treated as first-class and kept behaviorally in lockstep**:  
    * :common (Platform Agnostic Logic, Config, Discord Bot, Database).  
-   * :fabric (Fabric Implementation).  
-   * :neoforge (Scaffold only).  
+   * :fabric (Fabric implementation).  
+   * :neoforge (NeoForge implementation).  
 2. **Decompilation:** Configure Fabric Loom to use **Vineflower** explicitly. Ensure Gradle tasks are generated so VS Code's Java Language Server (Red Hat) can read the sources and javadocs natively.  
 3. **Dependencies:** Use the latest stable versions for Minecraft 1.21.10, Yarn Mappings, and Fabric Loader.
 
@@ -95,9 +95,15 @@ Please generate the following file structure and contents:
 
 ### **STEP 4: The NeoForge Module (/neoforge)**
 
+**Parity rule:** Every Fabric feature/hook must have a NeoForge equivalent; keep mixins, commands, and cache/Discord wiring aligned. When adding/altering logic, update both loaders in the same change.
+
 **File:** neoforge/build.gradle
 
-* Basic setup only.
+* Depend on :common; mirror Fabric configuration (version targets, Java/Kotlin level).
+
+**File:** neoforge/src/main/java/dev/butterflysky/argus/neoforge/ArgusNeoForge.java
+
+* Wire shared hooks to NeoForge events (login, join, commands) matching Fabric behavior.
 
 ### **STEP 5: Resources**
 

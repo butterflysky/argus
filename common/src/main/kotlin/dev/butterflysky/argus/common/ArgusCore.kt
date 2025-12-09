@@ -1,5 +1,8 @@
 package dev.butterflysky.argus.common
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.http.HttpClient
@@ -20,6 +23,7 @@ import kotlin.time.toJavaDuration
  */
 object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")
+    private val json = Json { ignoreUnknownKeys = true }
 
     @Volatile private var discordStarted = false
 
@@ -85,120 +89,40 @@ object ArgusCore {
         isLegacyWhitelisted: Boolean,
         whitelistEnabled: Boolean,
     ): LoginResult {
-        if (isOp) return LoginResult.Allow
+        if (isOp || !whitelistEnabled) return LoginResult.Allow
 
         val discordUp = discordStartedOverride ?: discordStarted
+        val configured = ArgusConfig.isConfigured()
+        val pdata = if (configured) CacheStore.get(uuid) else null
 
-        if (!whitelistEnabled) {
+        if (!configured || !discordUp) {
+            // Fall back to vanilla whitelist when Discord/config is unavailable; still honor Argus bans.
+            checkActiveBan(pdata)?.let { return it }
             return LoginResult.Allow
         }
 
-        // Fallback to vanilla whitelist if Argus/Discord not available
-        if (!ArgusConfig.isConfigured() || !discordUp) {
-            return if (isLegacyWhitelisted) {
-                LoginResult.Allow
-            } else {
-                LoginResult.Deny(prefix(ArgusConfig.current().applicationMessage))
-            }
-        }
-        val pdata = CacheStore.get(uuid)
         val enforcement = ArgusConfig.current().enforcementEnabled
+        val synced = syncMinecraftName(uuid, name, pdata)
+        val liveStatus = computeLiveStatus(synced)
+        val hasAccess = reconcileAccess(uuid, name, synced, liveStatus, enforcement)
 
-        // Track Minecraft name changes when we have existing cache data.
-        if (pdata != null && pdata.mcName != null && pdata.mcName != name) {
-            AuditLogger.log("MC name changed: ${pdata.mcName} -> $name ($uuid)")
-            CacheStore.upsert(uuid, pdata.copy(mcName = name))
-            CacheStore.save(ArgusConfig.cachePath)
-        } else if (pdata != null && pdata.mcName == null) {
-            CacheStore.upsert(uuid, pdata.copy(mcName = name))
-            CacheStore.save(ArgusConfig.cachePath)
-        }
+        checkActiveBan(synced)?.let { return it }
 
-        // Only pay the live Discord check cost if cache would block them and we have a Discord link.
-        val liveStatus =
-            if (pdata?.discordId != null && pdata.hasAccess != true) {
-                checkWhitelistStatus(pdata.discordId)
-            } else {
-                null
-            }
-
-        if (liveStatus != null && liveStatus != RoleStatus.Indeterminate && pdata != null) {
-            val updatedAccess = liveStatus == RoleStatus.HasRole
-            if (enforcement) {
-                CacheStore.upsert(uuid, pdata.copy(hasAccess = updatedAccess))
-                CacheStore.save(ArgusConfig.cachePath)
-            }
-            if (liveStatus == RoleStatus.NotInGuild) {
-                AuditLogger.log(
-                    "${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(
-                        pdata.discordName ?: "unknown",
-                        pdata.discordId,
-                    )} mc=${mcLabel(name, uuid)}",
-                )
-            }
-        }
-        val hasAccess =
-            when (liveStatus) {
-                RoleStatus.HasRole -> true
-                RoleStatus.MissingRole, RoleStatus.NotInGuild -> false
-                RoleStatus.Indeterminate, null -> pdata?.hasAccess
-            }
-
-        // Active ban check
-        if (pdata?.banUntilEpochMillis != null) {
-            val until = pdata.banUntilEpochMillis
-            val reason = pdata.banReason ?: "Banned"
-            if (until > System.currentTimeMillis()) {
-                val remaining = "${(until - System.currentTimeMillis()) / 1000}s remaining"
-                return LoginResult.Deny(prefix("$reason ($remaining)"))
-            }
+        if (isLegacyWhitelisted && (synced?.discordId == null)) {
+            return handleLegacyKick(uuid, name, synced, enforcement)
         }
 
         if (hasAccess == true) {
-            val seen = CacheStore.eventsSnapshot().any { it.type == "first_allow" && it.targetUuid == uuid.toString() }
-            if (!seen) {
-                val discordLabel = discordLabel(pdata?.discordName ?: "unlinked", pdata?.discordId)
-                AuditLogger.log("First login seen (allow): mc=${mcLabel(name, uuid)} discord=$discordLabel")
-                CacheStore.appendEvent(EventEntry(type = "first_allow", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
-                CacheStore.save(ArgusConfig.cachePath)
-            }
+            auditFirstAllow(uuid, name, synced)
             return LoginResult.Allow
         }
 
         if (hasAccess == false) {
-            val message =
-                when {
-                    liveStatus == RoleStatus.NotInGuild -> prefix("Access revoked: not in Discord guild")
-                    liveStatus == RoleStatus.MissingRole || (pdata?.hasAccess == true && liveStatus == RoleStatus.MissingRole) ->
-                        prefix(
-                            "Access revoked: missing Discord whitelist role",
-                        )
-                    else -> prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
-                }
-            if (!enforcement) {
-                AuditLogger.log("[DRY-RUN] Would deny login: mc=${mcLabel(name, uuid)} reason=$message")
-                return LoginResult.Allow
-            }
-            val revoke = liveStatus == RoleStatus.NotInGuild || liveStatus == RoleStatus.MissingRole
-            return LoginResult.Deny(message, revokeWhitelist = revoke)
+            return denialForMissingAccess(uuid, name, synced, liveStatus, enforcement)
         }
 
         if (isLegacyWhitelisted) {
-            val token = LinkTokenService.issueToken(uuid, name)
-            val seenLegacy = CacheStore.eventsSnapshot().any { it.type == "first_legacy_kick" && it.targetUuid == uuid.toString() }
-            if (!seenLegacy) {
-                AuditLogger.log("Previously whitelisted but unlinked: mc=${mcLabel(name, uuid)} — kicked with link token")
-                CacheStore.appendEvent(
-                    EventEntry(type = "first_legacy_kick", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId),
-                )
-                CacheStore.save(ArgusConfig.cachePath)
-            }
-            val msg = prefix(withInviteSuffix("Verification Required: /link $token in Discord"))
-            if (!enforcement) {
-                AuditLogger.log("[DRY-RUN] Would deny legacy-unlinked: mc=${mcLabel(name, uuid)} reason=$msg")
-                return LoginResult.Allow
-            }
-            return LoginResult.Deny(msg, revokeWhitelist = true)
+            return handleLegacyKick(uuid, name, synced, enforcement)
         }
 
         val denyMsg = prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
@@ -241,8 +165,136 @@ object ArgusCore {
         }
 
         val data = CacheStore.get(uuid) ?: return null
+        if (data.hasAccess == false) return null
         val name = data.discordName ?: data.mcName ?: "player"
         return prefix("Welcome $name")
+    }
+
+    private fun syncMinecraftName(
+        uuid: UUID,
+        name: String,
+        pdata: PlayerData?,
+    ): PlayerData? {
+        if (pdata == null) return null
+        if (pdata.mcName == null) {
+            val updated = pdata.copy(mcName = name)
+            CacheStore.upsert(uuid, updated)
+            scheduleSave()
+            return updated
+        }
+        if (pdata.mcName != name) {
+            AuditLogger.log("MC name changed: ${pdata.mcName} -> $name ($uuid)")
+            val updated = pdata.copy(mcName = name)
+            CacheStore.upsert(uuid, updated)
+            scheduleSave()
+            return updated
+        }
+        return pdata
+    }
+
+    private fun computeLiveStatus(pdata: PlayerData?): RoleStatus? =
+        if (pdata?.discordId != null && pdata.hasAccess != true) {
+            checkWhitelistStatus(pdata.discordId)
+        } else {
+            null
+        }
+
+    private fun reconcileAccess(
+        uuid: UUID,
+        name: String,
+        pdata: PlayerData?,
+        liveStatus: RoleStatus?,
+        enforcement: Boolean,
+    ): Boolean? {
+        if (liveStatus != null && liveStatus != RoleStatus.Indeterminate && pdata != null) {
+            val updatedAccess = liveStatus == RoleStatus.HasRole
+            if (enforcement) {
+                CacheStore.upsert(uuid, pdata.copy(hasAccess = updatedAccess))
+                scheduleSave()
+            }
+            if (liveStatus == RoleStatus.NotInGuild) {
+                AuditLogger.log(
+                    "${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(
+                        pdata.discordName ?: "unknown",
+                        pdata.discordId,
+                    )} mc=${mcLabel(name, uuid)}",
+                )
+            }
+        }
+        return when (liveStatus) {
+            RoleStatus.HasRole -> true
+            RoleStatus.MissingRole, RoleStatus.NotInGuild -> false
+            RoleStatus.Indeterminate, null -> pdata?.hasAccess
+        }
+    }
+
+    private fun checkActiveBan(pdata: PlayerData?): LoginResult? {
+        val until = pdata?.banUntilEpochMillis ?: return null
+        if (until > System.currentTimeMillis()) {
+            val reason = pdata.banReason ?: "Banned"
+            val remaining = "${(until - System.currentTimeMillis()) / 1000}s remaining"
+            return LoginResult.Deny(prefix("$reason ($remaining)"))
+        }
+        return null
+    }
+
+    private fun auditFirstAllow(
+        uuid: UUID,
+        name: String,
+        pdata: PlayerData?,
+    ) {
+        val seen = CacheStore.eventsSnapshot().any { it.type == "first_allow" && it.targetUuid == uuid.toString() }
+        if (!seen) {
+            val discordLabel = discordLabel(pdata?.discordName ?: "unlinked", pdata?.discordId)
+            AuditLogger.log("First login seen (allow): mc=${mcLabel(name, uuid)} discord=$discordLabel")
+            CacheStore.appendEvent(EventEntry(type = "first_allow", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
+            scheduleSave()
+        }
+    }
+
+    private fun denialForMissingAccess(
+        uuid: UUID,
+        name: String,
+        pdata: PlayerData?,
+        liveStatus: RoleStatus?,
+        enforcement: Boolean,
+    ): LoginResult {
+        val message =
+            when {
+                liveStatus == RoleStatus.NotInGuild -> prefix("Access revoked: not in Discord guild")
+                liveStatus == RoleStatus.MissingRole || (pdata?.hasAccess == true && liveStatus == RoleStatus.MissingRole) ->
+                    prefix("Access revoked: missing Discord whitelist role")
+                else -> prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
+            }
+        if (!enforcement) {
+            AuditLogger.log("[DRY-RUN] Would deny login: mc=${mcLabel(name, uuid)} reason=$message")
+            return LoginResult.Allow
+        }
+        val revoke = liveStatus == RoleStatus.NotInGuild || liveStatus == RoleStatus.MissingRole
+        return LoginResult.Deny(message, revokeWhitelist = revoke)
+    }
+
+    private fun handleLegacyKick(
+        uuid: UUID,
+        name: String,
+        pdata: PlayerData?,
+        enforcement: Boolean,
+    ): LoginResult {
+        val token = LinkTokenService.issueToken(uuid, name)
+        val seenLegacy = CacheStore.eventsSnapshot().any { it.type == "first_legacy_kick" && it.targetUuid == uuid.toString() }
+        if (!seenLegacy) {
+            AuditLogger.log("Previously whitelisted but unlinked: mc=${mcLabel(name, uuid)} — kicked with link token")
+            CacheStore.appendEvent(
+                EventEntry(type = "first_legacy_kick", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId),
+            )
+            scheduleSave()
+        }
+        val msg = prefix(withInviteSuffix("Verification Required: /link $token in Discord"))
+        if (!enforcement) {
+            AuditLogger.log("[DRY-RUN] Would deny legacy-unlinked: mc=${mcLabel(name, uuid)} reason=$msg")
+            return LoginResult.Allow
+        }
+        return LoginResult.Deny(msg, revokeWhitelist = true)
     }
 
     /** Live role check on join; returns Deny to kick if role missing. */
@@ -253,10 +305,8 @@ object ArgusCore {
         val liveStatus = checkWhitelistStatus(discordId)
         if (liveStatus == RoleStatus.Indeterminate) return null
         val liveAccess = liveStatus == RoleStatus.HasRole
-        if (enforcement) {
-            CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
-            CacheStore.save(ArgusConfig.cachePath)
-        }
+        CacheStore.upsert(uuid, pdata.copy(hasAccess = liveAccess))
+        scheduleSave()
         return when {
             liveStatus == RoleStatus.NotInGuild -> {
                 AuditLogger.log(
@@ -293,6 +343,8 @@ object ArgusCore {
     }
 
     private fun prefix(message: String): String = "[argus] $message"
+
+    private fun scheduleSave() = CacheStore.enqueueSave(ArgusConfig.cachePath)
 
     private fun mcLabel(
         name: String?,
@@ -344,7 +396,7 @@ object ArgusCore {
                 hasAccess = true,
             )
         CacheStore.upsert(uuid, updated)
-        CacheStore.save(ArgusConfig.cachePath)
+        scheduleSave()
         CacheStore.appendEvent(
             EventEntry(type = "link", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Linked via token"),
         )
@@ -372,7 +424,7 @@ object ArgusCore {
                     message = "by $actor",
                 ),
             )
-            CacheStore.save(ArgusConfig.cachePath)
+            scheduleSave()
             AuditLogger.log("Whitelist add: ${mcLabel(mcName ?: target.toString(), target)} by $actor")
             "Whitelisted ${mcName ?: target}"
         }
@@ -393,7 +445,7 @@ object ArgusCore {
                     message = "by $actor",
                 ),
             )
-            CacheStore.save(ArgusConfig.cachePath)
+            scheduleSave()
             AuditLogger.log("Whitelist remove: ${mcLabel(current.mcName ?: target.toString(), target)} by $actor")
             "Removed ${current.mcName ?: target} from whitelist"
         }
@@ -428,7 +480,7 @@ object ArgusCore {
         CacheStore.appendEvent(
             EventEntry(type = "apply_submit", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Applied as $canonical"),
         )
-        CacheStore.save(ArgusConfig.cachePath)
+        scheduleSave()
         AuditLogger.log("Application submitted: ${mcLabel(canonical, uuid)} by ${discordLabel(discordId)} id=$appId")
         return Result.success(appId)
     }
@@ -468,7 +520,7 @@ object ArgusCore {
                 message = reason,
             ),
         )
-        CacheStore.save(ArgusConfig.cachePath)
+        scheduleSave()
         AuditLogger.log("Application approved: ${mcLabel(app.mcName, uuid)} by ${discordLabel(actorDiscordId)}")
         return Result.success("Approved $mcName")
     }
@@ -497,7 +549,7 @@ object ArgusCore {
                 message = reason,
             ),
         )
-        CacheStore.save(ArgusConfig.cachePath)
+        scheduleSave()
         val targetUuid = app.resolvedUuid?.let { UUID.fromString(it) }
         val label = targetUuid?.let { mcLabel(app.mcName, it) } ?: app.mcName
         AuditLogger.log("Application denied: $label id=$id by ${discordLabel(actorDiscordId)} reason=${reason ?: ""}")
@@ -522,7 +574,7 @@ object ArgusCore {
                     message = reason,
                 ),
             )
-            CacheStore.save(ArgusConfig.cachePath)
+            scheduleSave()
             AuditLogger.log("Warn: ${mcLabel(current.mcName ?: uuid.toString(), uuid)} by ${discordLabel(actor)} reason=$reason")
             "Warned ${current.mcName ?: uuid}"
         }
@@ -547,7 +599,7 @@ object ArgusCore {
                     untilEpochMillis = untilEpochMillis,
                 ),
             )
-            CacheStore.save(ArgusConfig.cachePath)
+            scheduleSave()
             AuditLogger.log(
                 "Ban: ${mcLabel(
                     current.mcName ?: uuid.toString(),
@@ -575,7 +627,7 @@ object ArgusCore {
                     message = reason,
                 ),
             )
-            CacheStore.save(ArgusConfig.cachePath)
+            scheduleSave()
             AuditLogger.log("Unban: ${mcLabel(current.mcName ?: uuid.toString(), uuid)} by ${discordLabel(actor)} reason=${reason ?: ""}")
             "Unbanned ${current.mcName ?: uuid}"
         }
@@ -587,7 +639,7 @@ object ArgusCore {
     ): Result<String> =
         runCatching {
             CacheStore.appendEvent(EventEntry(type = "comment", targetUuid = uuid.toString(), actorDiscordId = actor, message = note))
-            CacheStore.save(ArgusConfig.cachePath)
+            scheduleSave()
             AuditLogger.log("Comment on ${mcLabel(uuid.toString(), uuid)} by ${discordLabel(actor)}: $note")
             "Comment recorded"
         }
@@ -610,18 +662,19 @@ object ArgusCore {
                     .build()
             val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
             if (resp.statusCode() != 200) error("Player not found")
-            val body = resp.body()
-            // Simple parse without pulling a JSON lib here
-            val idKey = "\"id\":\""
-            val nameKey = "\"name\":\""
-            val idStart = body.indexOf(idKey).takeIf { it >= 0 } ?: error("Bad response")
-            val nameStart = body.indexOf(nameKey).takeIf { it >= 0 } ?: error("Bad response")
-            val idStr = body.substring(idStart + idKey.length).takeWhile { it != '\"' }
-            val resolvedName = body.substring(nameStart + nameKey.length).takeWhile { it != '\"' }
-            val dashed = "${idStr.substring(
-                0,
-                8,
-            )}-${idStr.substring(8,12)}-${idStr.substring(12,16)}-${idStr.substring(16,20)}-${idStr.substring(20)}"
-            UUID.fromString(dashed) to resolvedName
+            val profile = json.decodeFromString(MojangProfile.serializer(), resp.body())
+            val id = profile.id
+            require(id.length == 32) { "Bad response" }
+            val dashed = listOf(
+                id.substring(0, 8),
+                id.substring(8, 12),
+                id.substring(12, 16),
+                id.substring(16, 20),
+                id.substring(20),
+            ).joinToString("-")
+            UUID.fromString(dashed) to profile.name
         }
+
+    @Serializable
+    private data class MojangProfile(val id: String, val name: String)
 }

@@ -104,7 +104,7 @@ class ArgusModerationTest {
     }
 
     @Test
-    fun `unconfigured Argus fails open`() {
+    fun `unconfigured Argus falls back to vanilla`() {
         // Leave config with default blank botToken/guildId
         val cache = tempDir.resolve("argus_db.json")
         val cfg = ArgusSettings(cacheFile = cache.toString(), botToken = "", guildId = null, whitelistRoleId = null, adminRoleId = null)
@@ -114,7 +114,6 @@ class ArgusModerationTest {
         CacheStore.load(cache)
 
         val result = ArgusCore.onPlayerLogin(UUID.randomUUID(), "noop", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+        assertIs<LoginResult.Allow>(result)
     }
 }

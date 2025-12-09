@@ -127,9 +127,8 @@ class ArgusCoreIntegrationTest {
 
         val msg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
 
-        assertNotNull(msg)
-        assertTrue(msg.contains("Welcome"))
-        assertEquals(true, CacheStore.get(playerId)?.hasAccess)
+        assertEquals(null, msg)
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
         assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would revoke") })
     }
 
@@ -144,9 +143,8 @@ class ArgusCoreIntegrationTest {
 
         val msg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true)
 
-        assertNotNull(msg)
-        assertTrue(msg.contains("Welcome"))
-        assertEquals(true, CacheStore.get(playerId)?.hasAccess)
+        assertEquals(null, msg)
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
         assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("left Discord guild") })
     }
 

@@ -25,13 +25,15 @@ Act as a Senior Minecraft Mod Developer. I need you to scaffold a comprehensive 
 * **CRITICAL:** Login checks must **READ ONLY** from this cache. NEVER block the login thread for Discord API calls.  
 * **Data Safety:** Before saving, rename existing argus\_db.json \-\> .bak. On load, if main file fails, try .bak.
 
-### **B. The Permission Gate**
+### **B. Whitelist Ownership (Vanilla decides access)**
 
-1. **OP Bypass:** OPs always allowed.  
-2. **Linked User:** Check PlayerData.hasAccess. If false, Kick ("Access Denied: Missing Discord Role").  
-3. **Unlinked User:**  
-   * **Legacy (In Vanilla Whitelist):** Allow temporarily. Kick with Token ("Verification Required: \!link \<token\>").  
-   * **Stranger:** Kick with application\_message.
+* Vanilla whitelist is the gate; Argus manages that list by adding/removing entries to reflect Discord state. Mixins should avoid cancelling login except for Argus bans **and the unlinked-but-whitelisted flow below**, letting vanilla enforce the result.
+* **OP Bypass:** OPs always allowed.  
+* **Discord-linked users:** If cache/Discord shows the whitelist role, Argus (optionally in dry-run) adds/keeps them on the vanilla whitelist. If the role is missing or they left the guild, Argus removes them (dry-run logs + courtesy messaging, no kick).
+* **Vanilla-whitelisted but not Discord-linked:** Even though vanilla would allow, Argus should block with a kick message that includes `/link <token>` so players must link; in dry-run, allow but still surface the courtesy link message/token.
+* **Dry-run (`enforcementEnabled=false`):** Log what would change and send the "link your Discord" message + token, but do not kick. Whitelist mutations may still be written so vanilla can gate naturally.
+* **Discord unavailable or Argus misconfigured:** Never block a login because Discord is down. Still honor Argus cache bans; otherwise fall back to vanilla whitelist/ban logic.
+* **Bans:** Argus bans live in the cache and must also mirror to the vanilla ban list so vanilla can enforce even if Argus is offline (future work if not implemented).  
 
 ### **C. Identity & Audit**
 

@@ -34,6 +34,25 @@ object DiscordBridge {
 
     @Volatile private var adminRoleId: Long? = null
 
+    private val whitelistHandlers: Map<String, (SlashCommandInteraction) -> Unit> by lazy {
+        mapOf(
+            "add" to ::whitelistAdd,
+            "remove" to ::whitelistRemove,
+            "status" to ::whitelistStatus,
+            "apply" to ::applyForWhitelist,
+            "list-applications" to ::listApplications,
+            "approve" to ::approveApplication,
+            "deny" to ::denyApplication,
+            "comment" to ::comment,
+            "review" to ::review,
+            "warn" to ::warn,
+            "ban" to ::ban,
+            "unban" to ::unban,
+            "my" to ::myStatus,
+            "help" to ::help,
+        )
+    }
+
     fun stop() {
         try {
             api?.disconnect()?.join()
@@ -293,9 +312,7 @@ object DiscordBridge {
                     } else {
                         ArgusCore.denyApplication(appId, interaction.user.id, null)
                     }
-                event.buttonInteraction.replyEphemeral()
-                    .setContent(result.getOrElse { "Failed: ${it.message}" })
-                    .respond()
+                event.buttonInteraction.replyText(result.getOrElse { "Failed: ${it.message}" })
             }
         }
 
@@ -338,9 +355,7 @@ object DiscordBridge {
     private fun handleLinkSlash(interaction: SlashCommandInteraction) {
         val tokenOpt = interaction.getArgumentStringValueByName("token")
         if (!tokenOpt.isPresent) {
-            interaction.replyEphemeral()
-                .setContent("Missing token.")
-                .respond()
+            interaction.replyText("Missing token.")
             return
         }
         val token = tokenOpt.get()
@@ -385,28 +400,10 @@ object DiscordBridge {
         val member = interaction.user
         val hasAdminRole = adminRoleId != null && member.getRoles(server).any { it.id == adminRoleId }
         if (sub !in publicSubs && !hasAdminRole) {
-            interaction.replyEphemeral()
-                .setContent("You need the admin role to run this command.")
-                .respond()
+            interaction.replyText("You need the admin role to run this command.")
             return
         }
-
-        when (sub) {
-            "add" -> whitelistAdd(interaction)
-            "remove" -> whitelistRemove(interaction)
-            "status" -> whitelistStatus(interaction)
-            "apply" -> applyForWhitelist(interaction)
-            "list-applications" -> listApplications(interaction)
-            "approve" -> approveApplication(interaction)
-            "deny" -> denyApplication(interaction)
-            "comment" -> comment(interaction)
-            "review" -> review(interaction)
-            "warn" -> warn(interaction)
-            "ban" -> ban(interaction)
-            "unban" -> unban(interaction)
-            "my" -> myStatus(interaction)
-            "help" -> help(interaction)
-        }
+        whitelistHandlers[sub]?.invoke(interaction)
     }
 
     private fun parseTarget(interaction: SlashCommandInteraction): Pair<UUID, PlayerData?>? {
@@ -415,9 +412,7 @@ object DiscordBridge {
             val discordId = discordOpt.get().id
             val entry = CacheStore.findByDiscordId(discordId)
             if (entry != null) return entry.first to entry.second
-            interaction.replyEphemeral()
-                .setContent("Discord user not linked in cache. Provide a player name/UUID instead.")
-                .respond()
+            interaction.replyText("Discord user not linked in cache. Provide a player name/UUID instead.")
             return null
         }
 
@@ -429,9 +424,7 @@ object DiscordBridge {
         val match = CacheStore.findByName(raw)
         if (match != null) return match.first to match.second
 
-        interaction.replyEphemeral()
-            .setContent("Player not found. Provide a UUID or a known cached name.")
-            .respond()
+        interaction.replyText("Player not found. Provide a UUID or a known cached name.")
         return null
     }
 
@@ -443,9 +436,7 @@ object DiscordBridge {
         val result = ArgusCore.whitelistAdd(uuid, mcName, actor)
         val message = result.getOrElse { "Failed: ${it.message}" }
 
-        interaction.replyEphemeral()
-            .setContent(message)
-            .respond()
+        interaction.replyText(message)
     }
 
     private fun whitelistRemove(interaction: SlashCommandInteraction) {
@@ -455,33 +446,27 @@ object DiscordBridge {
         val result = ArgusCore.whitelistRemove(uuid, actor)
         val message = result.getOrElse { "Failed: ${it.message}" }
 
-        interaction.replyEphemeral()
-            .setContent(message)
-            .respond()
+        interaction.replyText(message)
     }
 
     private fun whitelistStatus(interaction: SlashCommandInteraction) {
         val target = parseTarget(interaction) ?: return
         val uuid = target.first
         val status = ArgusCore.whitelistStatus(uuid)
-        interaction.replyEphemeral()
-            .setContent(status)
-            .respond()
+        interaction.replyText(status)
     }
 
     private fun applyForWhitelist(interaction: SlashCommandInteraction) {
         val mcName = interaction.getArgumentStringValueByName("mcname").orElse(null) ?: return
         val result = ArgusCore.submitApplication(interaction.user.id, mcName)
         val message = result.getOrElse { "Application failed: ${it.message ?: "unknown error"} (try again)" }
-        interaction.replyEphemeral()
-            .setContent(message)
-            .respond()
+        interaction.replyText(message)
     }
 
     private fun listApplications(interaction: SlashCommandInteraction) {
         val pending = ArgusCore.listPendingApplications()
         if (pending.isEmpty()) {
-            interaction.replyEphemeral().setContent("No pending applications").respond()
+            interaction.replyText("No pending applications")
             return
         }
         sendApplicationsPage(interaction, pending, 0)
@@ -500,7 +485,7 @@ object DiscordBridge {
                 .setTitle("Pending applications (${pageData.page + 1}/$totalPages)")
                 .setColor(Color(0x3498db))
                 .setDescription(
-                    slice.joinToString("\\n") {
+                    slice.joinToString("\n") {
                         val ageSeconds = (System.currentTimeMillis() - it.submittedAtEpochMillis) / 1000
                         "- ${it.mcName} (id ${it.id.take(8)}), ${ageSeconds}s ago"
                     },
@@ -521,49 +506,39 @@ object DiscordBridge {
         val id = interaction.getArgumentStringValueByName("application").orElse(null) ?: return
         val reason = interaction.getArgumentStringValueByName("reason").orElse(null)
         val result = ArgusCore.approveApplication(id, interaction.user.id, reason)
-        interaction.replyEphemeral()
-            .setContent(result.getOrElse { "Approve failed: ${it.message}" })
-            .respond()
+        interaction.replyText(result.getOrElse { "Approve failed: ${it.message}" })
     }
 
     private fun denyApplication(interaction: SlashCommandInteraction) {
         val id = interaction.getArgumentStringValueByName("application").orElse(null) ?: return
         val reason = interaction.getArgumentStringValueByName("reason").orElse(null)
         val result = ArgusCore.denyApplication(id, interaction.user.id, reason)
-        interaction.replyEphemeral()
-            .setContent(result.getOrElse { "Deny failed: ${it.message}" })
-            .respond()
+        interaction.replyText(result.getOrElse { "Deny failed: ${it.message}" })
     }
 
     private fun comment(interaction: SlashCommandInteraction) {
         val target = parseTarget(interaction) ?: return
         val note = interaction.getArgumentStringValueByName("note").orElse(null) ?: return
         val result = ArgusCore.commentOnPlayer(target.first, interaction.user.id, note)
-        interaction.replyEphemeral()
-            .setContent(result.getOrElse { "Comment failed: ${it.message}" })
-            .respond()
+        interaction.replyText(result.getOrElse { "Comment failed: ${it.message}" })
     }
 
     private fun review(interaction: SlashCommandInteraction) {
         val target = parseTarget(interaction) ?: return
         val events = ArgusCore.reviewPlayer(target.first).takeLast(10)
         if (events.isEmpty()) {
-            interaction.replyEphemeral().setContent("No history for ${target.first}").respond()
+            interaction.replyText("No history for ${target.first}")
             return
         }
         val lines = events.joinToString("\\n") { "${it.type} at ${it.atEpochMillis} ${it.message ?: ""}" }
-        interaction.replyEphemeral()
-            .setContent(lines)
-            .respond()
+        interaction.replyText(lines)
     }
 
     private fun warn(interaction: SlashCommandInteraction) {
         val target = parseTarget(interaction) ?: return
         val reason = interaction.getArgumentStringValueByName("reason").orElse(null) ?: return
         val result = ArgusCore.warnPlayer(target.first, interaction.user.id, reason)
-        interaction.replyEphemeral()
-            .setContent(result.getOrElse { "Warn failed: ${it.message}" })
-            .respond()
+        interaction.replyText(result.getOrElse { "Warn failed: ${it.message}" })
     }
 
     private fun ban(interaction: SlashCommandInteraction) {
@@ -572,18 +547,14 @@ object DiscordBridge {
         val minutes = interaction.getArgumentLongValueByName("duration_minutes").orElse(null)
         val until = minutes?.let { System.currentTimeMillis() + it * 60_000 }
         val result = ArgusCore.banPlayer(target.first, interaction.user.id, reason, until)
-        interaction.replyEphemeral()
-            .setContent(result.getOrElse { "Ban failed: ${it.message}" })
-            .respond()
+        interaction.replyText(result.getOrElse { "Ban failed: ${it.message}" })
     }
 
     private fun unban(interaction: SlashCommandInteraction) {
         val target = parseTarget(interaction) ?: return
         val reason = interaction.getArgumentStringValueByName("reason").orElse(null)
         val result = ArgusCore.unbanPlayer(target.first, interaction.user.id, reason)
-        interaction.replyEphemeral()
-            .setContent(result.getOrElse { "Unban failed: ${it.message}" })
-            .respond()
+        interaction.replyText(result.getOrElse { "Unban failed: ${it.message}" })
     }
 
     private fun myStatus(interaction: SlashCommandInteraction) {
@@ -599,9 +570,7 @@ object DiscordBridge {
                     append("\\nLast ban: $banMsg")
                 }
             }
-        interaction.replyEphemeral()
-            .setContent(text.ifBlank { "No records." })
-            .respond()
+        interaction.replyText(text.ifBlank { "No records." })
     }
 
     private fun help(interaction: SlashCommandInteraction) {
@@ -617,9 +586,7 @@ object DiscordBridge {
             /whitelist comment|review player:<mc|uuid> [...]
             /whitelist my — see your warnings/bans
             """.trimIndent()
-        interaction.replyEphemeral()
-            .setContent(helpText)
-            .respond()
+        interaction.replyText(helpText)
     }
 
     private fun handleRoleChange(
@@ -644,6 +611,8 @@ object DiscordBridge {
             null
         }
     }
+
+    private fun saveCache() = CacheStore.enqueueSave(ArgusConfig.cachePath)
 
     /**
      * Live-check whether a Discord user currently has the whitelist role.
@@ -711,7 +680,7 @@ object DiscordBridge {
                     )}",
                 )
             }
-            CacheStore.save(ArgusConfig.cachePath)
+            saveCache()
         } else {
             val lbl = discordLabel(newName ?: oldName ?: "unknown", discordId)
             if (oldName != null && newName != null && oldName != newName) {
@@ -759,10 +728,14 @@ object DiscordBridge {
         val adminPart =
             if (isAdmin != (player.isAdmin == true)) " admin=$isAdmin" else ""
         AuditLogger.log("Role update: ${discordLabel(discordName, discordId)} -> $whitelistedLabel$adminPart")
-        CacheStore.save(ArgusConfig.cachePath)
+        saveCache()
     }
 
     private fun SlashCommandInteraction.replyEphemeral() = createImmediateResponder().setFlags(MessageFlag.EPHEMERAL)
 
     private fun ButtonInteraction.replyEphemeral() = createImmediateResponder().setFlags(MessageFlag.EPHEMERAL)
+
+    private fun SlashCommandInteraction.replyText(content: String) = replyEphemeral().setContent(content).respond()
+
+    private fun ButtonInteraction.replyText(content: String) = replyEphemeral().setContent(content).respond()
 }

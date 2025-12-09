@@ -53,7 +53,7 @@ class ArgusCoreLoginTest {
     @Test
     fun `linked player with access is allowed`() {
         val playerId = UUID.randomUUID()
-        CacheStore.upsert(playerId, PlayerData(hasAccess = true))
+        CacheStore.upsert(playerId, PlayerData(discordId = 5L, hasAccess = true, mcName = "linked"))
 
         val result = ArgusCore.onPlayerLogin(playerId, "linked", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
         assertIs<LoginResult.Allow>(result)
@@ -228,7 +228,7 @@ class ArgusCoreLoginTest {
     }
 
     @Test
-    fun `discord unavailable falls back to vanilla whitelist`() {
+    fun `discord unavailable falls back to vanilla whitelist (no custom deny)`() {
         ArgusCore.setDiscordStartedOverride(false)
         val allow =
             ArgusCore.onPlayerLogin(
@@ -240,18 +240,15 @@ class ArgusCoreLoginTest {
             )
         assertIs<LoginResult.Allow>(allow)
 
-        val deny =
-            assertIs<LoginResult.Deny>(
-                ArgusCore.onPlayerLogin(
-                    UUID.randomUUID(),
-                    "stranger",
-                    isOp = false,
-                    isLegacyWhitelisted = false,
-                    whitelistEnabled = true,
-                ),
+        val allowStranger =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "stranger",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
             )
-        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
-        assertEquals(false, deny.revokeWhitelist)
+        assertIs<LoginResult.Allow>(allowStranger)
     }
 
     @Test
@@ -334,21 +331,19 @@ class ArgusCoreLoginTest {
     }
 
     @Test
-    fun `unconfigured and not vanilla-whitelisted is denied with application message`() {
+    fun `unconfigured and not vanilla-whitelisted falls back to vanilla gate`() {
         ArgusConfig.update("botToken", "")
         ArgusCore.reloadConfig()
 
-        val deny =
-            assertIs<LoginResult.Deny>(
-                ArgusCore.onPlayerLogin(
-                    UUID.randomUUID(),
-                    "mc",
-                    isOp = false,
-                    isLegacyWhitelisted = false,
-                    whitelistEnabled = true,
-                ),
+        val allow =
+            ArgusCore.onPlayerLogin(
+                UUID.randomUUID(),
+                "mc",
+                isOp = false,
+                isLegacyWhitelisted = false,
+                whitelistEnabled = true,
             )
-        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+        assertIs<LoginResult.Allow>(allow)
     }
 
     @Test

@@ -59,7 +59,7 @@ class ArgusScenarioIntegrationTest {
     }
 
     @Test
-    fun `misconfigured argus falls back to vanilla deny`() {
+    fun `misconfigured argus falls back to vanilla allow`() {
         // Simulate misconfig
         ArgusCore.setDiscordStartedOverride(false)
         val result =
@@ -70,8 +70,7 @@ class ArgusScenarioIntegrationTest {
                 isLegacyWhitelisted = false,
                 whitelistEnabled = true,
             )
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
+        assertIs<LoginResult.Allow>(result)
     }
 
     @Test

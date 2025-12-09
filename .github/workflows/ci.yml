@@ -30,6 +30,6 @@ jobs:
           mv /tmp/mdbook $HOME/.local/bin/mdbook
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Test and smoke
-        run: ./gradlew test fabricSmoke neoforgeJarSmoke :neoforge:neoforgeRunSmoke
+        run: ./gradlew test fabricSmoke neoforgeJarSmoke :neoforge:neoforgeRunSmoke :fabric:runGameTest -PargusRunGameTests
       - name: Build mdBook
         run: mdbook build book

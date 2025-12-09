@@ -17,12 +17,33 @@ configurations {
     javacordBundle
 }
 
+// Wire Fabric API test tooling (creates gametest source set and run tasks)
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "argus-testmod"
+        eula = true
+    }
+}
+
+configurations.named("gametestImplementation") {
+    extendsFrom(configurations.modImplementation)
+}
+configurations.named("gametestRuntimeOnly") {
+    extendsFrom(configurations.modRuntimeOnly)
+}
+configurations.named("gametestRuntimeClasspath") {
+    exclude group: "net.fabricmc.fabric-api", module: "fabric-api"
+}
+configurations.named("gametestCompileClasspath") {
+    exclude group: "net.fabricmc.fabric-api", module: "fabric-api"
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-gametest-api-v1:${project.fabric_version}"
     modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
     modImplementation "org.javacord:javacord:${rootProject.ext.javacordVersion}"
     javacordBundle("org.javacord:javacord:${rootProject.ext.javacordVersion}") {
@@ -31,6 +52,7 @@ dependencies {
     }
 
     implementation project(":common")
+    gametestImplementation project(":common")
 }
 
 tasks.named("processResources") {
@@ -69,6 +91,36 @@ tasks.named("remapJar") {
 
 // Disable sources jar in release outputs
 tasks.matching { it.name in ["sourcesJar", "remapSourcesJar"] }.configureEach { enabled = false }
+
+loom {
+    mods {
+        "argus" {
+            sourceSet sourceSets.main
+        }
+        "argus-testmod" {
+            sourceSet sourceSets.gametest
+        }
+    }
+
+    runs {
+        gametest {
+            server()
+            configName = "gameTest"
+            name "Game Test"
+            source sourceSets.gametest
+            vmArg "-Dfabric-api.gametest"
+            vmArg "-Dargus.smoke=true"
+            runDir "build/gametest"
+        }
+    }
+}
+
+def enableGameTests = project.hasProperty("argusRunGameTests")
+tasks.withType(net.fabricmc.loom.task.AbstractRunTask).configureEach {
+    if (name.toLowerCase().contains("gametest")) {
+        onlyIf { enableGameTests }
+    }
+}
 
 // Fill in version placeholder in fabric.mod.json
 tasks.named("processResources") {

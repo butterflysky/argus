@@ -29,8 +29,8 @@ jobs:
           cache: gradle
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Build (checks + jars + smokes)
-        run: ./gradlew build
+      - name: Build (checks + jars + smokes + gametests)
+        run: ./gradlew build fabricSmoke neoforgeJarSmoke :neoforge:neoforgeRunSmoke :fabric:runGameTest -PargusRunGameTests
       - name: Collect artifacts
         id: artifacts
         run: |

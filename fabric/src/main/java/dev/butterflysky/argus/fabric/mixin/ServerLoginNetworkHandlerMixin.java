@@ -2,6 +2,7 @@ package dev.butterflysky.argus.fabric.mixin;
 
 import com.mojang.authlib.GameProfile;
 import dev.butterflysky.argus.common.ArgusCore;
+import dev.butterflysky.argus.common.LoginIntrospection;
 import dev.butterflysky.argus.common.LoginResult;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.MinecraftServer;
@@ -24,8 +25,8 @@ public abstract class ServerLoginNetworkHandlerMixin {
     private void argus$gateLogin(GameProfile gameProfile, CallbackInfo ci) {
         if (gameProfile == null || server == null) return;
 
-        boolean isOp = callBool(server.getPlayerManager(), new String[] {"isOperator", "isOp", "canBypassPlayerLimit"}, gameProfile);
-        boolean isWhitelisted = callBool(server.getPlayerManager(), new String[] {"isWhitelisted", "isWhiteListed", "isAllowed"}, gameProfile);
+        boolean isOp = LoginIntrospection.isOp(server.getPlayerManager(), gameProfile);
+        boolean isWhitelisted = LoginIntrospection.isWhitelisted(server.getPlayerManager(), gameProfile);
         boolean whitelistEnabled = server.isEnforceWhitelist();
 
         var uuid = callUuid(gameProfile);
@@ -35,24 +36,11 @@ public abstract class ServerLoginNetworkHandlerMixin {
 
         if (result instanceof LoginResult.Deny deny) {
             if (deny.getRevokeWhitelist()) {
-                removeFromWhitelist(gameProfile);
+                LoginIntrospection.removeFromWhitelist(server.getPlayerManager(), gameProfile);
             }
             connection.disconnect(Text.literal(deny.getMessage()));
             ci.cancel();
         }
-    }
-
-    private boolean callBool(Object target, String[] methods, Object arg) {
-        for (String name : methods) {
-            try {
-                var m = target.getClass().getMethod(name, arg.getClass());
-                m.setAccessible(true);
-                Object result = m.invoke(target, arg);
-                if (result instanceof Boolean b) return b;
-            } catch (Exception ignored) {
-            }
-        }
-        return false;
     }
 
     private java.util.UUID callUuid(GameProfile gameProfile) {
@@ -77,32 +65,5 @@ public abstract class ServerLoginNetworkHandlerMixin {
             }
         }
         return "player";
-    }
-
-    private void removeFromWhitelist(GameProfile gameProfile) {
-        // Try common method names first.
-        try {
-            var pm = server.getPlayerManager();
-            for (String name : new String[] {"removeFromWhitelist", "removePlayerFromWhitelist"}) {
-                try {
-                    var m = pm.getClass().getMethod(name, GameProfile.class);
-                    m.setAccessible(true);
-                    m.invoke(pm, gameProfile);
-                    return;
-                } catch (NoSuchMethodException ignored) {
-                }
-            }
-            // Fallback: remove via whitelist entry wrapper if available.
-            var whitelist = pm.getWhitelist();
-            try {
-                Class<?> entryCls = Class.forName("net.minecraft.server.WhitelistEntry");
-                var ctor = entryCls.getConstructor(GameProfile.class);
-                Object entry = ctor.newInstance(gameProfile);
-                var remove = whitelist.getClass().getMethod("remove", entryCls);
-                remove.invoke(whitelist, entry);
-            } catch (Exception ignored) {
-            }
-        } catch (Exception ignored) {
-        }
     }
 }

@@ -12,7 +12,6 @@ import net.minecraft.command.CommandSource
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.command.CommandManager.literal
 import net.minecraft.server.command.ServerCommandSource
-import net.minecraft.server.network.ServerLoginNetworkHandler
 import net.minecraft.text.Text
 import org.slf4j.LoggerFactory
 
@@ -204,7 +203,7 @@ class ArgusFabric : ModInitializer {
             val player = handler.player
             val profile = player.gameProfile
             val isOp = player.hasPermissionLevel(4)
-            val whitelistEnabled = reflectServerBool(server, listOf("isEnforceWhitelist"))
+            val whitelistEnabled = server.isEnforceWhitelist
 
             ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled)?.let { message ->
                 // If message is a kick, disconnect; otherwise send chat message.
@@ -225,55 +224,6 @@ class ArgusFabric : ModInitializer {
             }
         }
         ServerLifecycleEvents.SERVER_STOPPED.register { currentServer = null }
-    }
-
-    private fun extractProfile(handler: ServerLoginNetworkHandler): com.mojang.authlib.GameProfile? {
-        val candidates = listOf("profile", "gameProfile", "field_14168", "field_14346")
-        for (name in candidates) {
-            runCatching {
-                val field = handler.javaClass.getDeclaredField(name)
-                field.isAccessible = true
-                val value = field.get(handler)
-                if (value is com.mojang.authlib.GameProfile) return value
-            }
-        }
-        return runCatching {
-            val method =
-                handler.javaClass.methods.firstOrNull {
-                    it.name in
-                        listOf(
-                            "getProfile",
-                            "getGameProfile",
-                        ) && it.parameterCount == 0
-                }
-            method?.invoke(handler) as? com.mojang.authlib.GameProfile
-        }.getOrNull()
-    }
-
-    private fun reflectBool(
-        target: Any,
-        methodNames: List<String>,
-        arg: Any,
-    ): Boolean =
-        methodNames.firstNotNullOfOrNull { name ->
-            runCatching {
-                val m = target.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 1 }
-                m?.isAccessible = true
-                m?.invoke(target, arg) as? Boolean
-            }.getOrNull()
-        } ?: false
-
-    private fun reflectServerBool(
-        server: MinecraftServer,
-        names: List<String>,
-    ): Boolean {
-        return names.firstNotNullOfOrNull { name ->
-            runCatching {
-                val method = server.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 0 }
-                method?.isAccessible = true
-                method?.invoke(server) as? Boolean
-            }.getOrNull()
-        } ?: false
     }
 
     private fun clickableIfLink(message: String): Text = Text.literal(message)

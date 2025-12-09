@@ -1,6 +1,6 @@
 # Argus
 
-[![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml) [![Docs](https://github.com/butterflysky/argus/actions/workflows/pages.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/pages.yml) [![Release](https://img.shields.io/github/v/release/butterflysky/argus?logo=github&label=release)](https://github.com/butterflysky/argus/releases) [![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](#coverage)
+[![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml) [![Docs](https://github.com/butterflysky/argus/actions/workflows/pages.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/pages.yml) [![Release](https://img.shields.io/github/v/release/butterflysky/argus?logo=github&label=release)](https://github.com/butterflysky/argus/releases) [![Coverage](https://butterflysky.github.io/argus/coverage.svg)](https://butterflysky.github.io/argus/coverage.svg)
 
 Cache-first Discord-linked whitelist for Minecraft 1.21.10 (Fabric & NeoForge). Argus ties each Minecraft player to a Discord user with a whitelist role, handles applications, and logs every decision.
 
@@ -38,7 +38,7 @@ Changelog: see [CHANGELOG.md](CHANGELOG.md).
 ```
 
 **Coverage**
-- 82% line coverage (JaCoCo, :common; DiscordBridge/SmokeEntry excluded because they require live Discord runtime). Run `./gradlew test jacocoTestReport` and open `common/build/reports/jacoco/test/html/index.html`.
+- Live badge: [coverage.svg](https://butterflysky.github.io/argus/coverage.svg) (JaCoCo, :common; DiscordBridge/SmokeEntry excluded because they require live Discord runtime). Locally: `./gradlew test jacocoTestReport` then open `common/build/reports/jacoco/test/html/index.html`.
 
 **Contributing**
 - Issue tracking via `bd` (see `AGENTS.md`).

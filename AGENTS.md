@@ -42,6 +42,7 @@ Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21
   - Stage: `git add -A`
   - Commit: `git commit -m "<type>(scope): short description"`
   - Push: `git push` (set upstream if needed)
+- Keep the worktree clean: run `git status` frequently and commit small, logically grouped units of work (include `.beads/issues.jsonl` when it changes).
 - Commit message format:
   ```
   <type>(optional scope): <short description>

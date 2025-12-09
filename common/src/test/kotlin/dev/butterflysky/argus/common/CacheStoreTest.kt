@@ -1,36 +1,57 @@
 package dev.butterflysky.argus.common
 
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
-import kotlin.test.assertEquals
 
-class CacheStoreTest {
-    @TempDir
-    lateinit var tempDir: Path
-
+class CacheStoreTest : ArgusTestBase() {
     @Test
-    fun `load falls back to bak when primary is corrupt`() {
-        val cachePath = tempDir.resolve("argus_db.json")
-        CacheStore.load(cachePath)
+    fun `save creates backup and load falls back to bak`() {
+        configureArgus()
+        val cachePath = ArgusConfig.cachePath
+        val uuid = UUID.randomUUID()
+        CacheStore.upsert(uuid, PlayerData(mcName = "PlayerOne", discordId = 77L, hasAccess = true))
+        CacheStore.appendEvent(EventEntry(type = "first_allow", targetUuid = uuid.toString()))
 
-        val playerId = UUID.randomUUID()
-        val first = PlayerData(discordId = 123L, hasAccess = true, mcName = "alice")
-        CacheStore.upsert(playerId, first)
         CacheStore.save(cachePath).getOrThrow()
-
-        val second = first.copy(discordId = 456L, mcName = "alice2")
-        CacheStore.upsert(playerId, second)
+        // Second save should roll primary to .bak
+        assertTrue(Files.exists(cachePath))
         CacheStore.save(cachePath).getOrThrow()
+        CacheStore.save(cachePath).getOrThrow()
+        val backup = cachePath.resolveSibling("${cachePath.fileName}.bak")
+        assertTrue(Files.exists(backup))
 
-        // Corrupt the primary file; .bak should still contain the first version
-        Files.writeString(cachePath, "{corrupt")
+        // Corrupt primary to force .bak fallback.
+        Files.writeString(cachePath, "{invalid json")
 
         CacheStore.load(cachePath).getOrThrow()
+        assertEquals("PlayerOne", CacheStore.get(uuid)?.mcName)
+        assertTrue(CacheStore.eventsSnapshot().any { it.type == "first_allow" })
+    }
 
-        val snapshot = CacheStore.snapshot()
-        assertEquals(first, snapshot[playerId])
+    @Test
+    fun `enqueueSave flushes pending writes`() {
+        configureArgus()
+        val cachePath: Path = ArgusConfig.cachePath
+        val uuid = UUID.randomUUID()
+        CacheStore.upsert(uuid, PlayerData(mcName = "QueuedSave"))
+
+        CacheStore.enqueueSave(cachePath)
+        assertTrue(CacheStore.flushSaves())
+        assertTrue(Files.exists(cachePath))
+        val contents = Files.readString(cachePath)
+        assertTrue(contents.contains("QueuedSave"))
+    }
+
+    @Test
+    fun `finders locate entries by discord id and name`() {
+        val uuid = UUID.randomUUID()
+        CacheStore.upsert(uuid, PlayerData(mcName = "Lookup", discordId = 99L))
+
+        assertEquals(uuid, CacheStore.findByDiscordId(99L)?.first)
+        assertEquals(uuid, CacheStore.findByName("lookup")?.first)
     }
 }

@@ -16,6 +16,10 @@ ext {
     slf4jVersion = "2.0.13"
     junitVersion = project.findProperty("junit_version") ?: "5.11.0"
 
+    modVersionResolved = (project.findProperty("releaseVersion") ?: project.findProperty("mod_version") ?: "0.0.1").toString()
+
+    modVersionResolved = (project.findProperty("releaseVersion") ?: project.findProperty("mod_version") ?: "0.0.1").toString()
+
     mcTargets = [
             "1.21.10": [
                     minecraft_version       : "1.21.10",
@@ -59,7 +63,7 @@ subprojects {
     apply plugin: 'eclipse'
 
     group = project.findProperty("maven_group") ?: "dev.butterflysky"
-    version = project.findProperty("mod_version") ?: "0.0.1"
+    version = rootProject.ext.modVersionResolved
 
     repositories {
         maven {
@@ -183,6 +187,46 @@ tasks.register("jacocoRootReport") {
     group = "verification"
     description = "Aggregate jacocoTestReport across all subprojects"
     dependsOn(subprojects.collect { it.tasks.matching { it.name == "jacocoTestReport" } })
+}
+
+def updateModVersion(String newVersion) {
+    def propsFile = file("gradle.properties")
+    if (!propsFile.exists()) {
+        throw new GradleException("gradle.properties not found")
+    }
+    def content = propsFile.text
+    def updated = content.replaceFirst(/(?m)^mod_version\\s*=.*/, "mod_version=${newVersion}")
+    if (content == updated) {
+        throw new GradleException("Failed to update mod_version in gradle.properties")
+    }
+    propsFile.text = updated
+}
+
+tasks.register("release") {
+    group = "release"
+    description = "Run tests/build, bump mod_version to -PreleaseVersion, commit, and tag."
+    doFirst {
+        if (!project.hasProperty("releaseVersion")) {
+            throw new GradleException("Pass -PreleaseVersion=x.y.z")
+        }
+        def status = new ByteArrayOutputStream()
+        exec {
+            commandLine "git", "status", "--porcelain"
+            standardOutput = status
+        }
+        if (status.toString().trim()) {
+            throw new GradleException("Dirty worktree; please commit or stash before release.")
+        }
+    }
+    dependsOn("check", "build")
+    doLast {
+        def newVer = project.property("releaseVersion").toString()
+        updateModVersion(newVer)
+        exec { commandLine "git", "add", "gradle.properties" }
+        exec { commandLine "git", "commit", "-m", "chore(release): v${newVer}" }
+        exec { commandLine "git", "tag", "v${newVer}" }
+        logger.lifecycle("Release v${newVer} created. Push with: git push && git push --tags")
+    }
 }
 
 tasks.register("fabricSmokeAll") {

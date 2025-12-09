@@ -44,7 +44,6 @@ Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21
   - Push: `git push` (set upstream if needed)
 - Keep the worktree clean: run `git status` frequently and commit small, logically grouped units of work (include `.beads/issues.jsonl` when it changes).
 - Worktree rule: do not commit from the primary worktree. Create a per-task worktree (`git worktree add ../argus-<task> -b <branch>`) and run `git config core.hooksPath .githooks` once so the pre-commit guard is active.
-- Multi-agent launcher: use `scripts/launch_agents.sh [role ...]` (defaults: tests docs ci). It creates per-role worktrees under `../argus-<role>`, sets hooks, and opens a tmux window per agent. Set `CODEX_CMD=/path/to/codex` if the binary name differs; extra flags via `CODEX_OPTS`.
 - Commit message format:
   ```
   <type>(optional scope): <short description>

@@ -32,6 +32,9 @@ object ArgusCore {
     @Volatile private var roleCheckOverride: ((Long) -> RoleStatus?)? = null
 
     @Volatile private var messenger: ((UUID, String) -> Unit)? = null
+
+    @Volatile private var banMirror: ((UUID, String?, String, Long?) -> Unit)? = null
+    @Volatile private var unbanMirror: ((UUID) -> Unit)? = null
     private val httpClient =
         HttpClient.newBuilder()
             .connectTimeout(5.seconds.toJavaDuration())
@@ -118,19 +121,12 @@ object ArgusCore {
         }
 
         if (hasAccess == false) {
-            return denialForMissingAccess(uuid, name, synced, liveStatus, enforcement)
-        }
-
-        if (isLegacyWhitelisted) {
-            return handleLegacyKick(uuid, name, synced, enforcement)
-        }
-
-        val denyMsg = prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
-        if (!enforcement) {
-            AuditLogger.log("[DRY-RUN] Would deny stranger: mc=${mcLabel(name, uuid)} reason=$denyMsg")
+            logAccessLoss(uuid, name, synced, liveStatus, enforcement)
             return LoginResult.Allow
         }
-        return LoginResult.Deny(denyMsg)
+
+        // Stranger/unlinked-but-not-in-whitelist path: allow vanilla to decide. Courtesy handled on join.
+        return LoginResult.Allow
     }
 
     fun onPlayerJoin(
@@ -154,11 +150,19 @@ object ArgusCore {
             val pdata = CacheStore.get(uuid)
             if (pdata == null) {
                 val token = LinkTokenService.issueToken(uuid, "player")
-                return prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
+                return if (ArgusConfig.current().enforcementEnabled) {
+                    prefix(withInviteSuffix("Access revoked: linking required. Use /link $token in Discord"))
+                } else {
+                    prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
+                }
             }
             if (pdata?.discordId == null) {
                 val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
-                return prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
+                return if (ArgusConfig.current().enforcementEnabled) {
+                    prefix(withInviteSuffix("Access revoked: linking required. Use /link $token in Discord"))
+                } else {
+                    prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
+                }
             }
             val kick = refreshAccessOnJoin(uuid)
             if (kick is LoginResult.Deny) return kick.message
@@ -252,26 +256,21 @@ object ArgusCore {
         }
     }
 
-    private fun denialForMissingAccess(
+    private fun logAccessLoss(
         uuid: UUID,
         name: String,
         pdata: PlayerData?,
         liveStatus: RoleStatus?,
         enforcement: Boolean,
-    ): LoginResult {
+    ) {
         val message =
             when {
-                liveStatus == RoleStatus.NotInGuild -> prefix("Access revoked: not in Discord guild")
+                liveStatus == RoleStatus.NotInGuild -> "Access revoked: not in Discord guild"
                 liveStatus == RoleStatus.MissingRole || (pdata?.hasAccess == true && liveStatus == RoleStatus.MissingRole) ->
-                    prefix("Access revoked: missing Discord whitelist role")
-                else -> prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))
+                    "Access revoked: missing Discord whitelist role"
+                else -> withInviteSuffix(ArgusConfig.current().applicationMessage)
             }
-        if (!enforcement) {
-            AuditLogger.log("[DRY-RUN] Would deny login: mc=${mcLabel(name, uuid)} reason=$message")
-            return LoginResult.Allow
-        }
-        val revoke = liveStatus == RoleStatus.NotInGuild || liveStatus == RoleStatus.MissingRole
-        return LoginResult.Deny(message, revokeWhitelist = revoke)
+        AuditLogger.log("${if (!enforcement) "[DRY-RUN] " else ""}$message mc=${mcLabel(name, uuid)}")
     }
 
     private fun handleLegacyKick(
@@ -378,6 +377,15 @@ object ArgusCore {
 
     fun registerMessenger(handler: (UUID, String) -> Unit) {
         messenger = handler
+    }
+
+    /** Register hooks for mirroring Argus bans into the platform ban list. */
+    fun registerBanSync(
+        ban: ((UUID, String?, String, Long?) -> Unit)?,
+        unban: ((UUID) -> Unit)?,
+    ) {
+        banMirror = ban
+        unbanMirror = unban
     }
 
     fun linkDiscordUser(
@@ -589,6 +597,7 @@ object ArgusCore {
             val current = CacheStore.get(uuid) ?: PlayerData(mcName = null)
             val updated = current.copy(banReason = reason, banUntilEpochMillis = untilEpochMillis, hasAccess = false)
             CacheStore.upsert(uuid, updated)
+            banMirror?.invoke(uuid, current.mcName, reason, untilEpochMillis)
             CacheStore.appendEvent(
                 EventEntry(
                     type = "ban",
@@ -618,6 +627,7 @@ object ArgusCore {
             val current = CacheStore.get(uuid) ?: PlayerData(mcName = null)
             val updated = current.copy(banReason = null, banUntilEpochMillis = null)
             CacheStore.upsert(uuid, updated)
+            unbanMirror?.invoke(uuid)
             CacheStore.appendEvent(
                 EventEntry(
                     type = "unban",

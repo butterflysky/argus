@@ -81,7 +81,7 @@ class ArgusScenarioIntegrationTest {
     }
 
     @Test
-    fun `stranger denied with application message`() {
+    fun `stranger allowed and handled by vanilla whitelist`() {
         val result =
             ArgusCore.onPlayerLogin(
                 UUID.randomUUID(),
@@ -90,8 +90,7 @@ class ArgusScenarioIntegrationTest {
                 isLegacyWhitelisted = false,
                 whitelistEnabled = true,
             )
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
+        assertIs<LoginResult.Allow>(result)
     }
 
     @Test

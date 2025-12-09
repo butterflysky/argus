@@ -60,16 +60,15 @@ class ArgusCoreLoginAdditionalTest {
     }
 
     @Test
-    fun deny_and_revoke_when_not_in_guild() {
+    fun allow_when_not_in_guild_but_cache_updates() {
         val uuid = UUID.randomUUID()
         CacheStore.upsert(uuid, PlayerData(discordId = 123L, hasAccess = false, mcName = "Bob"))
         ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
 
         val result = ArgusCore.onPlayerLogin(uuid, "Bob", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.revokeWhitelist)
-        assertTrue(deny.message.contains("Access revoked"))
+        assertIs<LoginResult.Allow>(result)
+        assertTrue(CacheStore.get(uuid)?.hasAccess == false)
     }
 
     @Test

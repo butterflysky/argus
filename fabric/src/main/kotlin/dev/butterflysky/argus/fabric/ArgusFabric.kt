@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import dev.butterflysky.argus.common.ArgusConfig
 import dev.butterflysky.argus.common.ArgusCore
+import dev.butterflysky.argus.common.LoginIntrospection
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -29,6 +30,14 @@ class ArgusFabric : ModInitializer {
         ArgusCore.registerMessenger { uuid, message ->
             currentServer?.playerManager?.getPlayer(uuid)?.sendMessage(Text.literal(message), false)
         }
+        ArgusCore.registerBanSync(
+            ban = { uuid, name, reason, until ->
+                currentServer?.playerManager?.let { LoginIntrospection.ban(it, uuid, name, reason, until) }
+            },
+            unban = { uuid ->
+                currentServer?.playerManager?.let { LoginIntrospection.unban(it, uuid) }
+            },
+        )
 
         registerCommands()
         registerJoinGreeting()

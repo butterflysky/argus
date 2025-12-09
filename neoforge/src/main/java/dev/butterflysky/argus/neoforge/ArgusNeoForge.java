@@ -12,6 +12,7 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +39,20 @@ public class ArgusNeoForge {
             }
             return kotlin.Unit.INSTANCE;
         });
+        ArgusCore.INSTANCE.registerBanSync(
+                (uuid, name, reason, until) -> {
+                    if (serverRef != null) {
+                        dev.butterflysky.argus.common.LoginIntrospection.ban(serverRef.getPlayerList(), uuid, name, reason, until);
+                    }
+                    return kotlin.Unit.INSTANCE;
+                },
+                uuid -> {
+                    if (serverRef != null) {
+                        dev.butterflysky.argus.common.LoginIntrospection.unban(serverRef.getPlayerList(), uuid);
+                    }
+                    return kotlin.Unit.INSTANCE;
+                }
+        );
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event) {

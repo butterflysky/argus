@@ -60,14 +60,13 @@ class ArgusCoreLoginTest {
     }
 
     @Test
-    fun `linked player missing role is denied (enforced)`() {
+    fun `linked player missing role is allowed but cache updated (enforced)`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 42L, hasAccess = false))
         ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
 
         val result = ArgusCore.onPlayerLogin(playerId, "no-role", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains("missing Discord whitelist role"))
+        assertIs<LoginResult.Allow>(result)
         assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
 
@@ -83,20 +82,18 @@ class ArgusCoreLoginTest {
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true)
 
         assertIs<LoginResult.Allow>(result)
-        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would deny login") })
+        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("missing Discord whitelist role") })
         assertEquals(false, CacheStore.get(playerId)?.hasAccess) // cache unchanged in dry-run
     }
 
     @Test
-    fun `linked player not in guild is denied and cache set false`() {
+    fun `linked player not in guild is allowed and cache set false`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 99L, hasAccess = false))
         ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
 
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
-
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains("not in Discord guild"))
+        assertIs<LoginResult.Allow>(result)
         assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
 
@@ -140,7 +137,7 @@ class ArgusCoreLoginTest {
     }
 
     @Test
-    fun `stranger is denied with application message`() {
+    fun `stranger allowed (vanilla handles whitelist)`() {
         val result =
             ArgusCore.onPlayerLogin(
                 UUID.randomUUID(),
@@ -149,8 +146,7 @@ class ArgusCoreLoginTest {
                 isLegacyWhitelisted = false,
                 whitelistEnabled = true,
             )
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertEquals("[argus] ${ArgusConfig.current().applicationMessage}", deny.message)
+        assertIs<LoginResult.Allow>(result)
     }
 
     @Test
@@ -165,9 +161,7 @@ class ArgusCoreLoginTest {
                 isLegacyWhitelisted = false,
                 whitelistEnabled = true,
             )
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains("Access Denied"))
-        assertTrue(deny.message.contains("discord.gg/test"))
+        assertIs<LoginResult.Allow>(result)
     }
 
     @Test
@@ -183,7 +177,7 @@ class ArgusCoreLoginTest {
                 whitelistEnabled = true,
             )
         assertIs<LoginResult.Allow>(result)
-        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would deny stranger") })
+        assertTrue(auditLogs.none { it.contains("Would deny stranger") })
     }
 
     @Test
@@ -222,8 +216,7 @@ class ArgusCoreLoginTest {
 
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains(ArgusConfig.current().applicationMessage))
+        assertIs<LoginResult.Allow>(result)
         assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
 
@@ -347,30 +340,29 @@ class ArgusCoreLoginTest {
     }
 
     @Test
-    fun `revoke flag set when role missing`() {
+    fun `missing role allows but cache revoked`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 101L, hasAccess = false))
         ArgusCore.setRoleCheckOverride { RoleStatus.MissingRole }
 
-        val deny =
-            assertIs<LoginResult.Deny>(
+        val allow =
+            assertIs<LoginResult.Allow>(
                 ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = true, whitelistEnabled = true),
             )
-        assertTrue(deny.revokeWhitelist)
-        assertTrue(deny.message.contains("missing Discord whitelist role"))
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
 
     @Test
-    fun `revoke flag set when not in guild`() {
+    fun `not in guild allows but cache revoked`() {
         val playerId = UUID.randomUUID()
         CacheStore.upsert(playerId, PlayerData(discordId = 102L, hasAccess = false))
         ArgusCore.setRoleCheckOverride { RoleStatus.NotInGuild }
 
-        val deny =
-            assertIs<LoginResult.Deny>(
+        val allow =
+            assertIs<LoginResult.Allow>(
                 ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true),
             )
-        assertTrue(deny.revokeWhitelist)
+        assertEquals(false, CacheStore.get(playerId)?.hasAccess)
     }
 
     @Test
@@ -383,12 +375,10 @@ class ArgusCoreLoginTest {
     }
 
     @Test
-    fun `stranger deny does not request whitelist revoke`() {
-        val deny =
-            assertIs<LoginResult.Deny>(
-                ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true),
-            )
-        assertEquals(false, deny.revokeWhitelist)
+    fun `stranger allowed and no revoke flag needed`() {
+        assertIs<LoginResult.Allow>(
+            ArgusCore.onPlayerLogin(UUID.randomUUID(), "stranger", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true),
+        )
     }
 
     @Test

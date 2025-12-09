@@ -1,5 +1,8 @@
 package dev.butterflysky.argus.common
 
+import java.util.Date
+import java.util.UUID
+
 /** Reflection helpers shared by Fabric/NeoForge mixins to stay in sync. */
 object LoginIntrospection {
     private val opMethods = arrayOf("isOperator", "isOp", "canBypassPlayerLimit")
@@ -55,6 +58,67 @@ object LoginIntrospection {
             remove.invoke(whitelist, entry)
         }
     }
+
+    @JvmStatic
+    fun ban(
+        playerManager: Any,
+        uuid: java.util.UUID,
+        name: String?,
+        reason: String,
+        untilEpochMillis: Long?,
+    ) {
+        val banList = findBanList(playerManager) ?: return
+        val profile = newProfile(uuid, name) ?: return
+        val entry = newBanEntry(profile, reason, untilEpochMillis) ?: return
+        runCatching { banList.javaClass.getMethod("add", Any::class.java).apply { isAccessible = true }.invoke(banList, entry) }
+    }
+
+    @JvmStatic
+    fun unban(
+        playerManager: Any,
+        uuid: java.util.UUID,
+    ) {
+        val banList = findBanList(playerManager) ?: return
+        val profile = newProfile(uuid, null) ?: return
+        runCatching { banList.javaClass.getMethod("remove", Any::class.java).apply { isAccessible = true }.invoke(banList, profile) }
+    }
+
+    private fun findBanList(playerManager: Any): Any? {
+        runCatching { playerManager.javaClass.getMethod("getUserBanList").apply { isAccessible = true }.invoke(playerManager) }
+            .onSuccess { return it }
+        return runCatching { playerManager.javaClass.getDeclaredField("userBanList").apply { isAccessible = true }.get(playerManager) }.getOrNull()
+    }
+
+    private fun newBanEntry(profile: Any, reason: String, untilEpochMillis: Long?): Any? {
+        val now = Date()
+        val expires = untilEpochMillis?.let { Date(it) }
+        val classNames = listOf(
+            "net.minecraft.server.players.UserBanListEntry",
+            "net.minecraft.world.level.storage.UserBanListEntry",
+        )
+        for (name in classNames) {
+            val entry = runCatching {
+                val cls = Class.forName(name)
+                val ctor = cls.getConstructor(
+                    profile.javaClass,
+                    Date::class.java,
+                    String::class.java,
+                    Date::class.java,
+                    String::class.java,
+                )
+                ctor.newInstance(profile, now, "Argus", expires, reason)
+            }.getOrNull()
+            if (entry != null) return entry
+        }
+        return null
+    }
+
+    private fun newProfile(uuid: UUID, name: String?): Any? =
+        runCatching {
+            val cls = Class.forName("com.mojang.authlib.GameProfile")
+            val ctor = cls.getConstructor(UUID::class.java, String::class.java)
+            ctor.newInstance(uuid, name ?: "player")
+        }.getOrNull()
 
     private fun callBool(target: Any, names: Array<String>, arg: Any): Boolean {
         for (name in names) {

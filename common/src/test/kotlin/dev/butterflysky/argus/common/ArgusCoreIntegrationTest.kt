@@ -68,8 +68,7 @@ class ArgusCoreIntegrationTest {
 
         val result = ArgusCore.onPlayerLogin(playerId, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
-        val deny = assertIs<LoginResult.Deny>(result)
-        assertTrue(deny.message.contains("missing Discord whitelist role"))
+        assertIs<LoginResult.Allow>(result)
         val updated = CacheStore.get(playerId)
         assertEquals(false, updated?.hasAccess)
     }

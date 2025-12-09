@@ -1,9 +1,7 @@
 package dev.butterflysky.argus.neoforge;
 
 import dev.butterflysky.argus.common.ArgusCore;
-import dev.butterflysky.argus.common.LoginResult;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
@@ -45,25 +43,6 @@ public class ArgusNeoForge {
 
     private void onRegisterCommands(RegisterCommandsEvent event) {
         CommandReload.register(event.getDispatcher());
-    }
-
-    @SubscribeEvent
-    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        var player = (net.minecraft.server.level.ServerPlayer) event.getEntity();
-        var server = player.level().getServer();
-        boolean isOp = player.hasPermissions(4);
-        var nameAndId = player.nameAndId();
-        boolean isWhitelisted = server != null && server.getPlayerList().isWhiteListed(nameAndId);
-        boolean whitelistEnabled = server != null && server.isEnforceWhitelist();
-
-        LoginResult result = ArgusCore.INSTANCE.onPlayerLogin(player.getUUID(), player.getScoreboardName(), isOp, isWhitelisted, whitelistEnabled);
-        if (result instanceof LoginResult.Allow) return;
-        if (result instanceof LoginResult.Deny deny) {
-            if (deny.getRevokeWhitelist()) {
-                server.getPlayerList().getWhiteList().remove(nameAndId);
-            }
-            player.connection.disconnect(Component.literal(deny.getMessage()));
-        }
     }
 
     @SubscribeEvent

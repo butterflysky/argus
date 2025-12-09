@@ -9,6 +9,7 @@ displayName="Argus"
 authors="Lina Edwards (butterflysky)"
 description="Cache-first access control with Discord identity linking"
 logoFile="assets/argus/icon.png"
+mixinConfigs="argus.neoforge.mixins.json"
 
 [[dependencies.argus]]
 modId="neoforge"

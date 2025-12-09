@@ -4,7 +4,6 @@ import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import dev.butterflysky.argus.common.ArgusConfig
 import dev.butterflysky.argus.common.ArgusCore
-import dev.butterflysky.argus.common.LoginResult
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
@@ -16,7 +15,6 @@ import net.minecraft.server.command.ServerCommandSource
 import net.minecraft.server.network.ServerLoginNetworkHandler
 import net.minecraft.text.Text
 import org.slf4j.LoggerFactory
-import java.util.UUID
 
 class ArgusFabric : ModInitializer {
     private val logger = LoggerFactory.getLogger("argus-fabric")
@@ -34,7 +32,6 @@ class ArgusFabric : ModInitializer {
         }
 
         registerCommands()
-        registerLoginGuard()
         registerJoinGreeting()
     }
 
@@ -200,36 +197,6 @@ class ArgusFabric : ModInitializer {
         val field = runCatching { StringArgumentType.getString(ctx, "field") }.getOrNull()
         field?.let { ArgusConfig.sampleValue(it)?.let { sample -> builder.suggest(sample) } }
         return builder.buildFuture()
-    }
-
-    private fun registerLoginGuard() {
-        // Run at PLAY init to avoid protocol-state mismatch (login/configuration vs play) when kicking.
-        ServerPlayConnectionEvents.INIT.register { handler, server ->
-            val profile = handler.player.gameProfile
-            val uuid: UUID = profile.id
-            val name = profile.name
-            val isOp = handler.player.hasPermissionLevel(4)
-            val isWhitelisted =
-                reflectBool(
-                    server.playerManager,
-                    listOf("isWhitelisted", "isWhiteListed", "isAllowed"),
-                    profile,
-                )
-            val whitelistEnabled =
-                reflectServerBool(
-                    server,
-                    listOf(
-                        "isEnforceWhitelist",
-                        "isWhitelistEnabled",
-                        "isUsingWhitelist",
-                    ),
-                )
-
-            when (val result = ArgusCore.onPlayerLogin(uuid, name, isOp, isWhitelisted, whitelistEnabled)) {
-                LoginResult.Allow -> Unit
-                is LoginResult.Deny -> handler.disconnect(Text.literal(result.message))
-            }
-        }
     }
 
     private fun registerJoinGreeting() {

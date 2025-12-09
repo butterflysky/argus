@@ -59,6 +59,9 @@ public class ArgusNeoForge {
         LoginResult result = ArgusCore.INSTANCE.onPlayerLogin(player.getUUID(), player.getScoreboardName(), isOp, isWhitelisted, whitelistEnabled);
         if (result instanceof LoginResult.Allow) return;
         if (result instanceof LoginResult.Deny deny) {
+            if (deny.getRevokeWhitelist()) {
+                server.getPlayerList().getWhiteList().remove(nameAndId);
+            }
             player.connection.disconnect(Component.literal(deny.getMessage()));
         }
     }

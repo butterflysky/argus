@@ -179,7 +179,8 @@ object ArgusCore {
                 AuditLogger.log("[DRY-RUN] Would deny login: mc=${mcLabel(name, uuid)} reason=$message")
                 return LoginResult.Allow
             }
-            return LoginResult.Deny(message)
+            val revoke = liveStatus == RoleStatus.NotInGuild || liveStatus == RoleStatus.MissingRole
+            return LoginResult.Deny(message, revokeWhitelist = revoke)
         }
 
         if (isLegacyWhitelisted) {
@@ -197,7 +198,7 @@ object ArgusCore {
                 AuditLogger.log("[DRY-RUN] Would deny legacy-unlinked: mc=${mcLabel(name, uuid)} reason=$msg")
                 return LoginResult.Allow
             }
-            return LoginResult.Deny(msg)
+            return LoginResult.Deny(msg, revokeWhitelist = true)
         }
 
         val denyMsg = prefix(withInviteSuffix(ArgusConfig.current().applicationMessage))

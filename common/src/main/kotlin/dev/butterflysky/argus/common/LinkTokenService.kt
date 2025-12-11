@@ -19,11 +19,18 @@ object LinkTokenService {
         mcName: String,
     ): String {
         cleanupExpired()
+        val normalizedName = mcName.ifBlank { null }
         reverse[uuid]?.let { existing ->
+            if (normalizedName != null && existing.mcName != normalizedName) {
+                val updated = existing.copy(mcName = normalizedName)
+                tokens[existing.token] = updated
+                reverse[uuid] = updated
+                return updated.token
+            }
             return existing.token
         }
         val token = generateToken()
-        val entry = TokenEntry(token, uuid, mcName.ifBlank { null }, System.currentTimeMillis())
+        val entry = TokenEntry(token, uuid, normalizedName, System.currentTimeMillis())
         tokens[token] = entry
         reverse[uuid] = entry
         return token

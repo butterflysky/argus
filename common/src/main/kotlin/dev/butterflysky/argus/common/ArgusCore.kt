@@ -134,12 +134,15 @@ object ArgusCore {
         uuid: UUID,
         isOp: Boolean,
         whitelistEnabled: Boolean,
+        mcName: String? = null,
     ): String? {
+        val nameHint = mcName?.takeIf { it.isNotBlank() }
+
         if (isOp) {
             if (ArgusConfig.isConfigured()) {
                 val pdata = CacheStore.get(uuid)
                 if (pdata?.discordId == null) {
-                    val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
+                    val token = LinkTokenService.issueToken(uuid, nameHint ?: pdata?.mcName ?: "player")
                     return prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
                 }
                 if (pdata.discordName != null) return prefix("Welcome ${pdata.discordName}")
@@ -150,15 +153,15 @@ object ArgusCore {
         if (whitelistEnabled && ArgusConfig.isConfigured()) {
             val pdata = CacheStore.get(uuid)
             if (pdata == null) {
-                val token = LinkTokenService.issueToken(uuid, "player")
+                val token = LinkTokenService.issueToken(uuid, nameHint ?: "player")
                 return if (ArgusConfig.current().enforcementEnabled) {
                     prefix(withInviteSuffix("Link required to join: use /link $token in Discord"))
                 } else {
                     prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
                 }
             }
-            if (pdata?.discordId == null) {
-                val token = LinkTokenService.issueToken(uuid, pdata?.mcName ?: "player")
+            if (pdata.discordId == null) {
+                val token = LinkTokenService.issueToken(uuid, nameHint ?: pdata.mcName ?: "player")
                 return if (ArgusConfig.current().enforcementEnabled) {
                     prefix(withInviteSuffix("Link required to join: use /link $token in Discord"))
                 } else {
@@ -171,7 +174,7 @@ object ArgusCore {
 
         val data = CacheStore.get(uuid) ?: return null
         if (data.hasAccess == false) return null
-        val name = data.discordName ?: data.mcName ?: "player"
+        val name = data.discordName ?: data.mcName ?: nameHint ?: "player"
         return prefix("Welcome $name")
     }
 
@@ -365,6 +368,13 @@ object ArgusCore {
         isOp: Boolean,
         whitelistEnabled: Boolean,
     ): String? = onPlayerJoin(uuid, isOp, whitelistEnabled)
+
+    fun onPlayerJoinJvm(
+        uuid: UUID,
+        name: String?,
+        isOp: Boolean,
+        whitelistEnabled: Boolean,
+    ): String? = onPlayerJoin(uuid, isOp, whitelistEnabled, name)
 
     /** Testing hook to emulate Discord availability without real gateway connection. */
     fun setDiscordStartedOverride(value: Boolean?) {

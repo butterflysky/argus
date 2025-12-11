@@ -170,4 +170,21 @@ class ArgusCoreIntegrationTest {
         assertTrue(auditLogs.any { it.contains("Discord name changed: oldName -> newName") })
         assertTrue(auditLogs.any { it.contains("Discord nick changed: oldNick") })
     }
+
+    @Test
+    fun `link audit uses provided minecraft name`() {
+        val playerId = UUID.randomUUID()
+        val mcName = "DanNGan"
+
+        // Player joins unlinked; token should carry MC name
+        val joinMsg = ArgusCore.onPlayerJoin(playerId, isOp = false, whitelistEnabled = true, mcName = mcName)
+        assertNotNull(joinMsg)
+
+        val token = LinkTokenService.listActive().first { it.uuid == playerId }.token
+        ArgusCore.linkDiscordUser(token, 555555555555555555L, "TestDiscordUser", null)
+
+        val cached = CacheStore.get(playerId)
+        assertEquals(mcName, cached?.mcName)
+        assertTrue(auditLogs.any { it.contains("Linked minecraft user $mcName") })
+    }
 }

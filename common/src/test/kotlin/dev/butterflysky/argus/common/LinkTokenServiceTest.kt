@@ -26,4 +26,17 @@ class LinkTokenServiceTest : ArgusTestBase() {
         assertEquals(uuid, consumed?.uuid)
         assertTrue(LinkTokenService.listActive().none { it.token == token })
     }
+
+    @Test
+    fun `reissuing token upgrades stored minecraft name`() {
+        val uuid = UUID.randomUUID()
+        val token = LinkTokenService.issueToken(uuid, "player")
+        assertEquals("player", LinkTokenService.listActive().first { it.token == token }.mcName)
+
+        val sameToken = LinkTokenService.issueToken(uuid, "BetterName")
+        assertEquals(token, sameToken)
+
+        val active = LinkTokenService.listActive().first { it.token == token }
+        assertEquals("BetterName", active.mcName)
+    }
 }

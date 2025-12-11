@@ -1,11 +1,11 @@
 package dev.butterflysky.argus.common
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class CacheStoreTest : ArgusTestBase() {
     @Test

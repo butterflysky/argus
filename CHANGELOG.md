@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.4] - 2025-12-11
+- Finished the Minecraft-name propagation for join flow: all loaders/tests now pass the player's name into `onPlayerJoin`, so link prompts and audit log entries show the correct username.
+
 ## [1.0.9] - 2025-12-08
 - Strip signature files when bundling Javacord to prevent “Invalid signature file digest” on Fabric/NeoForge.
 - Packaging-only change; logic unchanged.

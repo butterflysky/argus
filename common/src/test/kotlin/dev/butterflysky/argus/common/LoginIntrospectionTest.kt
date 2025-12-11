@@ -12,11 +12,14 @@ class LoginIntrospectionTest {
     }
 
     class WhitelistHolder {
-        fun isWhiteListed(@Suppress("UNUSED_PARAMETER") profile: FakeProfile) = true
+        fun isWhiteListed(
+            @Suppress("UNUSED_PARAMETER") profile: FakeProfile,
+        ) = true
     }
 
     class AccessorHolder {
         val backing = mutableListOf<FakeProfile>()
+
         fun getWhitelist(): MutableList<FakeProfile> = backing
     }
 

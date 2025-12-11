@@ -652,7 +652,10 @@ object DiscordBridge {
 
     private data class ResolvedNames(val preferred: String, val nickname: String?)
 
-    private fun resolveDisplayNames(user: User, server: Server?): ResolvedNames {
+    private fun resolveDisplayNames(
+        user: User,
+        server: Server?,
+    ): ResolvedNames {
         val nickname = server?.let { user.getNickname(it).orElse(null) }?.takeIf { it.isNotBlank() }
         val display = server?.let { user.getDisplayName(it) }?.takeIf { it.isNotBlank() }
         val username = user.name

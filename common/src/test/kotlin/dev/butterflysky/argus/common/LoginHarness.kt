@@ -16,7 +16,7 @@ class LoginHarness {
         whitelistEnabled: Boolean = true,
     ): Outcome {
         val login = ArgusCore.onPlayerLogin(uuid, name, isOp, vanillaWhitelisted, whitelistEnabled)
-        val joinMsg = ArgusCore.onPlayerJoin(uuid, isOp, whitelistEnabled)
+        val joinMsg = ArgusCore.onPlayerJoin(uuid, isOp, whitelistEnabled, name)
         return Outcome(login, joinMsg)
     }
 }

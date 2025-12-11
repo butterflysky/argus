@@ -1,9 +1,9 @@
 package dev.butterflysky.argus.common
 
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import java.util.UUID
 
 class ArgusCoreApplicationsTest : ArgusTestBase() {
     @Test
@@ -55,8 +55,22 @@ class ArgusCoreApplicationsTest : ArgusTestBase() {
 
     @Test
     fun `listPendingApplications orders pending only`() {
-        val older = WhitelistApplication(id = "old", discordId = 1L, mcName = "Old", resolvedUuid = UUID.randomUUID().toString(), submittedAtEpochMillis = 1)
-        val newer = WhitelistApplication(id = "new", discordId = 2L, mcName = "New", resolvedUuid = UUID.randomUUID().toString(), submittedAtEpochMillis = 2)
+        val older =
+            WhitelistApplication(
+                id = "old",
+                discordId = 1L,
+                mcName = "Old",
+                resolvedUuid = UUID.randomUUID().toString(),
+                submittedAtEpochMillis = 1,
+            )
+        val newer =
+            WhitelistApplication(
+                id = "new",
+                discordId = 2L,
+                mcName = "New",
+                resolvedUuid = UUID.randomUUID().toString(),
+                submittedAtEpochMillis = 2,
+            )
         CacheStore.addApplication(older)
         CacheStore.addApplication(newer.copy(status = "approved"))
         CacheStore.addApplication(newer)

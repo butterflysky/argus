@@ -83,7 +83,7 @@ public class ArgusLoginGameTests {
                 if (capture.disconnectMessage != null) {
                     throw helper.createError("Login path should not disconnect when role missing; expected join kick");
                 }
-                String msg = ArgusCore.INSTANCE.onPlayerJoin(id, false, true);
+                String msg = ArgusCore.INSTANCE.onPlayerJoinJvm(id, "mc", false, true);
                 if (msg == null || !msg.contains("Access revoked")) {
                     throw helper.createError("Join should revoke with message");
                 }

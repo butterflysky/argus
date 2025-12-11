@@ -64,7 +64,12 @@ public class ArgusNeoForge {
         var player = (net.minecraft.server.level.ServerPlayer) event.getEntity();
         var server = player.level().getServer();
         boolean whitelistEnabled = server != null && server.isEnforceWhitelist();
-        String message = ArgusCore.INSTANCE.onPlayerJoin(player.getUUID(), player.hasPermissions(4), whitelistEnabled);
+        String message =
+                ArgusCore.INSTANCE.onPlayerJoinJvm(
+                        player.getUUID(),
+                        player.getGameProfile().name(),
+                        player.hasPermissions(4),
+                        whitelistEnabled);
         if (message != null) {
             if (message.contains("Access revoked") || message.contains("Link required")) {
                 player.connection.disconnect(Component.literal(message));

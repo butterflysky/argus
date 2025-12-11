@@ -1,9 +1,9 @@
 package dev.butterflysky.argus.common
 
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import java.util.UUID
 
 class ArgusCoreModerationTest : ArgusTestBase() {
     @Test

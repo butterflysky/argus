@@ -1,11 +1,11 @@
 package dev.butterflysky.argus.common
 
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import java.util.UUID
 
 class ArgusCoreLoginTest : ArgusTestBase() {
     @Test

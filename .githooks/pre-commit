@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Reject commits from the primary worktree. Linked worktrees have a .git file; the primary has a .git directory.
-if [[ -d ".git" ]]; then
-  cat <<'EOF'
-✖ Commit aborted: use a dedicated git worktree for each task.
-
-Example:
-  git worktree add ../argus-task-xyz -b feat/xyz
-  cd ../argus-task-xyz
-  git config core.hooksPath .githooks
-
-This keeps the main worktree clean for concurrent contributors.
-EOF
-  exit 1
-fi
+# No enforced checks at this time; hook kept for future use.

@@ -422,8 +422,9 @@ object ArgusCore {
             EventEntry(type = "link", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Linked via token"),
         )
         val mcLabel = updated.mcName ?: tokenData.mcName ?: "minecraft user"
-        AuditLogger.log("Linked minecraft user $mcLabel ($uuid) to discord user ${discordLabel(discordName, discordId)}")
-        messenger?.invoke(uuid, prefix("Linked Discord user: $discordName"))
+        val preferredDiscordName = discordNick?.takeIf { it.isNotBlank() } ?: discordName
+        AuditLogger.log("Linked minecraft user $mcLabel ($uuid) to discord user ${discordLabel(preferredDiscordName, discordId)}")
+        messenger?.invoke(uuid, prefix("Linked Discord user: $preferredDiscordName"))
         return Result.success("Linked successfully.")
     }
 

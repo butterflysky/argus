@@ -361,14 +361,14 @@ object DiscordBridge {
         val token = tokenOpt.get()
         val user = interaction.user
         val server = interaction.server.orElse(null)
-        val displayName = server?.let { user.getDisplayName(it) } ?: user.name
+        val resolved = resolveDisplayNames(user, server)
 
         val result =
             ArgusCore.linkDiscordUser(
                 token = token,
                 discordId = user.id,
-                discordName = displayName,
-                discordNick = server?.let { user.getNickname(it).orElse(null) } ?: displayName,
+                discordName = resolved.preferred,
+                discordNick = resolved.nickname,
             )
 
         val embed =
@@ -650,6 +650,16 @@ object DiscordBridge {
         id: Long,
     ) = "${name ?: "unknown"} ($id)"
 
+    private data class ResolvedNames(val preferred: String, val nickname: String?)
+
+    private fun resolveDisplayNames(user: User, server: Server?): ResolvedNames {
+        val nickname = server?.let { user.getNickname(it).orElse(null) }?.takeIf { it.isNotBlank() }
+        val display = server?.let { user.getDisplayName(it) }?.takeIf { it.isNotBlank() }
+        val username = user.name
+        val preferred = nickname ?: display ?: username
+        return ResolvedNames(preferred, nickname)
+    }
+
     // ---------- Headless/test hooks ----------
     internal fun applyIdentityChange(
         discordId: Long,
@@ -713,13 +723,14 @@ object DiscordBridge {
             )
         CacheStore.upsert(uuid, updated)
 
+        val labelName = discordNick ?: discordName
         if (nameChanged) {
-            AuditLogger.log("Discord name changed: ${player.discordName} -> $discordName ${discordLabel(discordName, discordId)}")
+            AuditLogger.log("Discord name changed: ${player.discordName} -> $discordName ${discordLabel(labelName, discordId)}")
         }
         if (nickChanged) {
             AuditLogger.log(
                 "Discord nick changed: ${player.discordNick ?: "(none)"} -> ${discordNick ?: "(none)"} ${discordLabel(
-                    discordName,
+                    labelName,
                     discordId,
                 )}",
             )
@@ -727,7 +738,7 @@ object DiscordBridge {
         val whitelistedLabel = if (hasAccess) "whitelisted=true" else "whitelisted=false"
         val adminPart =
             if (isAdmin != (player.isAdmin == true)) " admin=$isAdmin" else ""
-        AuditLogger.log("Role update: ${discordLabel(discordName, discordId)} -> $whitelistedLabel$adminPart")
+        AuditLogger.log("Role update: ${discordLabel(labelName, discordId)} -> $whitelistedLabel$adminPart")
         saveCache()
     }
 

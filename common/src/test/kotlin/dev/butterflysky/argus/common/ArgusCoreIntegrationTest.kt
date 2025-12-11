@@ -181,10 +181,12 @@ class ArgusCoreIntegrationTest {
         assertNotNull(joinMsg)
 
         val token = LinkTokenService.listActive().first { it.uuid == playerId }.token
-        ArgusCore.linkDiscordUser(token, 555555555555555555L, "TestDiscordUser", null)
+        ArgusCore.linkDiscordUser(token, 555555555555555555L, "TestDiscordUser", "ServerNick")
 
         val cached = CacheStore.get(playerId)
         assertEquals(mcName, cached?.mcName)
-        assertTrue(auditLogs.any { it.contains("Linked minecraft user $mcName") })
+        assertEquals("ServerNick", cached?.discordNick)
+        assertEquals("TestDiscordUser", cached?.discordName)
+        assertTrue(auditLogs.any { it.contains("Linked minecraft user $mcName") && it.contains("ServerNick") })
     }
 }

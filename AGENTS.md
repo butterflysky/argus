@@ -53,6 +53,7 @@ Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21
   <optional footer>
   ```
   Types: feat, fix, chore, refactor, docs, style, test, perf, ci, build, revert. Use present tense; max 50 chars description; scope is lowercase.
+- Signing note: commits are SSH-signed; if you see `Couldn't get agent socket?` or similar, rerun the commit outside the sandbox / with escalated access so git can reach the signing agent. Do not record local socket paths in docs or logs.
 
 ## Code Style Guidelines
 - Kotlin objects for singletons; Java classes PascalCase, functions camelCase.

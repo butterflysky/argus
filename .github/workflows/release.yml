@@ -13,6 +13,7 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     env:
+      GRADLE_OPTS: "-Dorg.gradle.parallel=true"
       MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
       MODRINTH_PROJECT_FABRIC: ${{ secrets.MODRINTH_PROJECT_FABRIC }}
       MODRINTH_PROJECT_NEOFORGE: ${{ secrets.MODRINTH_PROJECT_NEOFORGE }}

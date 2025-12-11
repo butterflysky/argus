@@ -40,7 +40,7 @@ jobs:
       - name: Build book
         run: mdbook build book
       - name: Generate coverage badge
-        uses: cicirello/jacoco-badge-generator@v4.1.0
+        uses: cicirello/jacoco-badge-generator@v2.9.0
         with:
           jacoco-report-path: common/build/reports/jacoco/test/jacocoTestReport.xml
           coverage-badge-name: coverage.svg

@@ -693,7 +693,10 @@ object ArgusCore {
 @Serializable
 internal data class MojangProfile(val id: String, val name: String)
 
-internal fun parseMojangProfile(body: String, json: Json): Pair<UUID, String> {
+internal fun parseMojangProfile(
+    body: String,
+    json: Json,
+): Pair<UUID, String> {
     val profile = json.decodeFromString(MojangProfile.serializer(), body)
     val uuid = profile.id.toDashedUuid()
     return uuid to profile.name
@@ -701,16 +704,17 @@ internal fun parseMojangProfile(body: String, json: Json): Pair<UUID, String> {
 
 private fun String.toDashedUuid(): UUID {
     require(length == 32) { "Bad response" }
-    val dashed = buildString(36) {
-        append(this@toDashedUuid.substring(0, 8))
-        append('-')
-        append(this@toDashedUuid.substring(8, 12))
-        append('-')
-        append(this@toDashedUuid.substring(12, 16))
-        append('-')
-        append(this@toDashedUuid.substring(16, 20))
-        append('-')
-        append(this@toDashedUuid.substring(20))
-    }
+    val dashed =
+        buildString(36) {
+            append(this@toDashedUuid.substring(0, 8))
+            append('-')
+            append(this@toDashedUuid.substring(8, 12))
+            append('-')
+            append(this@toDashedUuid.substring(12, 16))
+            append('-')
+            append(this@toDashedUuid.substring(16, 20))
+            append('-')
+            append(this@toDashedUuid.substring(20))
+        }
     return UUID.fromString(dashed)
 }

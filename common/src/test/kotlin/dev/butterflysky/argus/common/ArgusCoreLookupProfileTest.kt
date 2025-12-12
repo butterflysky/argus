@@ -1,19 +1,20 @@
 package dev.butterflysky.argus.common
 
 import kotlinx.serialization.json.Json
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import java.util.UUID
 
 class ArgusCoreLookupProfileTest : ArgusTestBase() {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
     fun `parseMojangProfile decodes id and name and ignores extras`() {
-        val body = """
+        val body =
+            """
             {"id":"0123456789abcdef0123456789abcdef","name":"PlayerOne","dummy":"ignore me"}
-        """.trimIndent()
+            """.trimIndent()
 
         val (uuid, name) = parseMojangProfile(body, json)
 

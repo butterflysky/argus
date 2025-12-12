@@ -153,20 +153,10 @@ object ArgusCore {
         if (whitelistEnabled && ArgusConfig.isConfigured()) {
             val pdata = CacheStore.get(uuid)
             if (pdata == null) {
-                val token = LinkTokenService.issueToken(uuid, nameHint ?: "player")
-                return if (ArgusConfig.current().enforcementEnabled) {
-                    prefix(withInviteSuffix("Link required to join: use /link $token in Discord"))
-                } else {
-                    prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
-                }
+                return linkRequiredMessage(uuid, nameHint, null)
             }
             if (pdata.discordId == null) {
-                val token = LinkTokenService.issueToken(uuid, nameHint ?: pdata.mcName ?: "player")
-                return if (ArgusConfig.current().enforcementEnabled) {
-                    prefix(withInviteSuffix("Link required to join: use /link $token in Discord"))
-                } else {
-                    prefix(withInviteSuffix("Please link your account in Discord with /link $token"))
-                }
+                return linkRequiredMessage(uuid, nameHint, pdata)
             }
             val kick = refreshAccessOnJoin(uuid)
             if (kick is LoginResult.Deny) return kick.message
@@ -381,6 +371,23 @@ object ArgusCore {
     private fun withInviteSuffix(message: String): String {
         val invite = ArgusConfig.current().discordInviteUrl
         return if (invite.isNullOrBlank()) message else "$message (Join: $invite)"
+    }
+
+    private fun linkRequiredMessage(
+        uuid: UUID,
+        nameHint: String?,
+        pdata: PlayerData?,
+    ): String {
+        val name = nameHint ?: pdata?.mcName ?: "player"
+        val token = LinkTokenService.issueToken(uuid, name)
+        val enforcement = ArgusConfig.current().enforcementEnabled
+        val base =
+            if (enforcement) {
+                "Link required to join: use /link $token in Discord"
+            } else {
+                "Please link your account in Discord with /link $token"
+            }
+        return prefix(withInviteSuffix(base))
     }
 
     private fun prefix(message: String): String = "[argus] $message"

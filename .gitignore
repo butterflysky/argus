@@ -52,3 +52,5 @@ logs/
 
 # mdBook build output
 /docs-book/
+
+gradle-home/

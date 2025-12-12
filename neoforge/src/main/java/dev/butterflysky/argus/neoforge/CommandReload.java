@@ -8,6 +8,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.butterflysky.argus.common.ArgusCore;
 import dev.butterflysky.argus.common.ArgusConfig;
 import dev.butterflysky.argus.common.LinkTokenService;
+import dev.butterflysky.argus.common.LinkTokenService.TokenStatus;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -115,12 +116,16 @@ public class CommandReload {
             return 1;
         }
         tokens.forEach(t -> {
-            var secs = t.getExpiresInMillis() / 1000;
-            var namePart = t.getMcName() != null ? " mcName=" + t.getMcName() : "";
             ctx.getSource().sendSuccess(() ->
-                Component.literal(prefix + "token=" + t.getToken() + " uuid=" + t.getUuid() + namePart + " expires_in=" + secs + "s"), false);
+                Component.literal(formatTokenStatus(t, prefix)), false);
         });
         return 1;
+    }
+
+    private static String formatTokenStatus(TokenStatus status, String prefix) {
+        var secs = status.getExpiresInMillis() / 1000;
+        var namePart = status.getMcName() != null ? " mcName=" + status.getMcName() : "";
+        return prefix + "token=" + status.getToken() + " uuid=" + status.getUuid() + namePart + " expires_in=" + secs + "s";
     }
 
     private static int issueToken(CommandContext<CommandSourceStack> ctx, String prefix) throws com.mojang.brigadier.exceptions.CommandSyntaxException {

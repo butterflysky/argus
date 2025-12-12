@@ -686,20 +686,31 @@ object ArgusCore {
                     .build()
             val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
             if (resp.statusCode() != 200) error("Player not found")
-            val profile = json.decodeFromString(MojangProfile.serializer(), resp.body())
-            val id = profile.id
-            require(id.length == 32) { "Bad response" }
-            val dashed =
-                listOf(
-                    id.substring(0, 8),
-                    id.substring(8, 12),
-                    id.substring(12, 16),
-                    id.substring(16, 20),
-                    id.substring(20),
-                ).joinToString("-")
-            UUID.fromString(dashed) to profile.name
+            parseMojangProfile(resp.body(), json)
         }
+}
 
-    @Serializable
-    private data class MojangProfile(val id: String, val name: String)
+@Serializable
+internal data class MojangProfile(val id: String, val name: String)
+
+internal fun parseMojangProfile(body: String, json: Json): Pair<UUID, String> {
+    val profile = json.decodeFromString(MojangProfile.serializer(), body)
+    val uuid = profile.id.toDashedUuid()
+    return uuid to profile.name
+}
+
+private fun String.toDashedUuid(): UUID {
+    require(length == 32) { "Bad response" }
+    val dashed = buildString(36) {
+        append(this@toDashedUuid.substring(0, 8))
+        append('-')
+        append(this@toDashedUuid.substring(8, 12))
+        append('-')
+        append(this@toDashedUuid.substring(12, 16))
+        append('-')
+        append(this@toDashedUuid.substring(16, 20))
+        append('-')
+        append(this@toDashedUuid.substring(20))
+    }
+    return UUID.fromString(dashed)
 }

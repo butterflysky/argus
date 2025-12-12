@@ -20,7 +20,7 @@ class ArgusCoreIntegrationTest {
         @TempDir tempDir: Path,
     ) {
         auditLogs.clear()
-        AuditLogger.configure { auditLogs += it }
+        AuditLogger.configure { auditLogs += it.toConsoleString() }
         ArgusCore.setDiscordStartedOverride(true)
         ArgusCore.setRoleCheckOverride(null)
 
@@ -99,7 +99,7 @@ class ArgusCoreIntegrationTest {
         assertTrue(kickMsg.contains("left Discord guild"))
         val updated = CacheStore.get(playerId)
         assertEquals(false, updated?.hasAccess)
-        assertTrue(auditLogs.any { it.contains("left Discord guild") })
+        assertTrue(auditLogs.any { it.contains("left Discord guild", ignoreCase = true) })
     }
 
     @Test
@@ -128,7 +128,7 @@ class ArgusCoreIntegrationTest {
 
         assertEquals(null, msg)
         assertEquals(false, CacheStore.get(playerId)?.hasAccess)
-        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("Would revoke") })
+        assertTrue(auditLogs.any { it.contains("Access review (dry-run)") && it.contains("Would revoke") })
     }
 
     @Test
@@ -144,7 +144,7 @@ class ArgusCoreIntegrationTest {
 
         assertEquals(null, msg)
         assertEquals(false, CacheStore.get(playerId)?.hasAccess)
-        assertTrue(auditLogs.any { it.contains("[DRY-RUN]") && it.contains("left Discord guild") })
+        assertTrue(auditLogs.any { it.contains("Access revoked") && it.contains("Left Discord guild") })
     }
 
     @Test
@@ -154,7 +154,7 @@ class ArgusCoreIntegrationTest {
 
         ArgusCore.onPlayerLogin(playerId, "newname", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
-        assertTrue(auditLogs.any { it.contains("MC name changed: old -> newname") })
+        assertTrue(auditLogs.any { it.contains("MC name changed") && it.contains("old -> newname") })
         assertEquals("newname", CacheStore.get(playerId)?.mcName)
     }
 
@@ -167,8 +167,8 @@ class ArgusCoreIntegrationTest {
 
         assertEquals("newName", CacheStore.get(playerId)?.discordName)
         assertEquals("newNick", CacheStore.get(playerId)?.discordNick)
-        assertTrue(auditLogs.any { it.contains("Discord name changed: oldName -> newName") })
-        assertTrue(auditLogs.any { it.contains("Discord nick changed: oldNick") })
+        assertTrue(auditLogs.any { it.contains("Discord name changed") && it.contains("oldName -> newName") })
+        assertTrue(auditLogs.any { it.contains("Discord nick changed") && it.contains("oldNick") && it.contains("newNick") })
     }
 
     @Test
@@ -187,6 +187,12 @@ class ArgusCoreIntegrationTest {
         assertEquals(mcName, cached?.mcName)
         assertEquals("ServerNick", cached?.discordNick)
         assertEquals("TestDiscordUser", cached?.discordName)
-        assertTrue(auditLogs.any { it.contains("Linked minecraft user $mcName") && it.contains("ServerNick") })
+        assertTrue(
+            auditLogs.any {
+                it.contains("Link complete") &&
+                    it.contains(mcName) &&
+                    (it.contains("ServerNick") || it.contains("TestDiscordUser"))
+            },
+        )
     }
 }

@@ -191,7 +191,12 @@ object ArgusCore {
             return updated
         }
         if (pdata.mcName != name) {
-            AuditLogger.log("MC name changed: ${pdata.mcName} -> $name ($uuid)")
+            AuditLogger.log(
+                action = "MC name changed",
+                subject = mcLabel(pdata.mcName, uuid),
+                description = "${pdata.mcName} -> $name",
+                metadata = auditMeta("uuid" to uuid),
+            )
             val updated = pdata.copy(mcName = name)
             CacheStore.upsert(uuid, updated)
             scheduleSave()
@@ -222,10 +227,14 @@ object ArgusCore {
             }
             if (liveStatus == RoleStatus.NotInGuild) {
                 AuditLogger.log(
-                    "${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(
-                        pdata.discordName ?: "unknown",
-                        pdata.discordId,
-                    )} mc=${mcLabel(name, uuid)}",
+                    action = "Access revoked",
+                    subject = mcLabel(name, uuid),
+                    description = "${if (enforcement) "" else "[DRY-RUN] "}Left Discord guild",
+                    metadata =
+                        auditMeta(
+                            "discord" to discordLabel(pdata.discordName ?: "unknown", pdata.discordId),
+                            "uuid" to uuid,
+                        ),
                 )
             }
         }
@@ -254,7 +263,13 @@ object ArgusCore {
         val seen = CacheStore.eventsSnapshot().any { it.type == "first_allow" && it.targetUuid == uuid.toString() }
         if (!seen) {
             val discordLabel = discordLabel(pdata?.discordName ?: "unlinked", pdata?.discordId)
-            AuditLogger.log("First login seen (allow): mc=${mcLabel(name, uuid)} discord=$discordLabel")
+            AuditLogger.log(
+                action = "First login",
+                subject = mcLabel(name, uuid),
+                actor = discordLabel,
+                description = "Allow",
+                metadata = auditMeta("uuid" to uuid, "discordId" to pdata?.discordId),
+            )
             CacheStore.appendEvent(EventEntry(type = "first_allow", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId))
             scheduleSave()
         }
@@ -274,7 +289,12 @@ object ArgusCore {
                     "Access revoked: missing Discord whitelist role"
                 else -> withInviteSuffix(ArgusConfig.current().applicationMessage)
             }
-        AuditLogger.log("${if (!enforcement) "[DRY-RUN] " else ""}$message mc=${mcLabel(name, uuid)}")
+        AuditLogger.log(
+            action = if (!enforcement) "Access review (dry-run)" else "Access change",
+            subject = mcLabel(name, uuid),
+            description = message,
+            metadata = auditMeta("uuid" to uuid, "discordId" to pdata?.discordId),
+        )
     }
 
     private fun handleLegacyKick(
@@ -286,7 +306,12 @@ object ArgusCore {
         val token = LinkTokenService.issueToken(uuid, name)
         val seenLegacy = CacheStore.eventsSnapshot().any { it.type == "first_legacy_kick" && it.targetUuid == uuid.toString() }
         if (!seenLegacy) {
-            AuditLogger.log("Previously whitelisted but unlinked: mc=${mcLabel(name, uuid)} — kicked with link token")
+            AuditLogger.log(
+                action = "Legacy unlinked",
+                subject = mcLabel(name, uuid),
+                description = "Previously whitelisted but unlinked; issued link token",
+                metadata = auditMeta("uuid" to uuid, "discordId" to pdata?.discordId, "token" to token),
+            )
             CacheStore.appendEvent(
                 EventEntry(type = "first_legacy_kick", targetUuid = uuid.toString(), targetDiscordId = pdata?.discordId),
             )
@@ -294,7 +319,12 @@ object ArgusCore {
         }
         val msg = prefix(withInviteSuffix("Verification Required: /link $token in Discord"))
         if (!enforcement) {
-            AuditLogger.log("[DRY-RUN] Would deny legacy-unlinked: mc=${mcLabel(name, uuid)} reason=$msg")
+            AuditLogger.log(
+                action = "Legacy unlinked",
+                subject = mcLabel(name, uuid),
+                description = "[DRY-RUN] Would deny legacy-unlinked: $msg",
+                metadata = auditMeta("uuid" to uuid, "token" to token),
+            )
             return LoginResult.Allow
         }
         return LoginResult.Deny(msg, revokeWhitelist = true)
@@ -313,10 +343,14 @@ object ArgusCore {
         return when {
             liveStatus == RoleStatus.NotInGuild -> {
                 AuditLogger.log(
-                    "${if (enforcement) "" else "[DRY-RUN] "}Access revoked: left Discord guild discord=${discordLabel(
-                        pdata.discordName ?: "unknown",
-                        pdata.discordId,
-                    )} mc=${mcLabel(pdata.mcName, uuid)}",
+                    action = "Access revoked",
+                    subject = mcLabel(pdata.mcName, uuid),
+                    description = "${if (enforcement) "" else "[DRY-RUN] "}Left Discord guild",
+                    metadata =
+                        auditMeta(
+                            "discord" to discordLabel(pdata.discordName ?: "unknown", pdata.discordId),
+                            "uuid" to uuid,
+                        ),
                 )
                 if (enforcement) LoginResult.Deny(prefix(withInviteSuffix("Access revoked: left Discord guild"))) else null
             }
@@ -324,10 +358,14 @@ object ArgusCore {
             else -> {
                 if (!enforcement) {
                     AuditLogger.log(
-                        "[DRY-RUN] Would revoke: missing Discord whitelist role discord=${discordLabel(
-                            pdata.discordName ?: "unknown",
-                            pdata.discordId,
-                        )} mc=${mcLabel(pdata.mcName, uuid)}",
+                        action = "Access review (dry-run)",
+                        subject = mcLabel(pdata.mcName, uuid),
+                        description = "Would revoke: missing Discord whitelist role",
+                        metadata =
+                            auditMeta(
+                                "discord" to discordLabel(pdata.discordName ?: "unknown", pdata.discordId),
+                                "uuid" to uuid,
+                            ),
                     )
                     null
                 } else {
@@ -423,7 +461,13 @@ object ArgusCore {
         )
         val mcLabel = updated.mcName ?: tokenData.mcName ?: "minecraft user"
         val preferredDiscordName = discordNick?.takeIf { it.isNotBlank() } ?: discordName
-        AuditLogger.log("Linked minecraft user $mcLabel ($uuid) to discord user ${discordLabel(preferredDiscordName, discordId)}")
+        AuditLogger.log(
+            action = "Link complete",
+            subject = mcLabel(mcLabel, uuid),
+            actor = discordLabel(preferredDiscordName, discordId),
+            description = "Discord user linked via token",
+            metadata = auditMeta("uuid" to uuid, "discordId" to discordId),
+        )
         messenger?.invoke(uuid, prefix("Linked Discord user: $preferredDiscordName"))
         return Result.success("Linked successfully.")
     }
@@ -447,7 +491,12 @@ object ArgusCore {
                 ),
             )
             scheduleSave()
-            AuditLogger.log("Whitelist add: ${mcLabel(mcName ?: target.toString(), target)} by $actor")
+            AuditLogger.log(
+                action = "Whitelist add",
+                subject = mcLabel(mcName ?: target.toString(), target),
+                actor = actor,
+                metadata = auditMeta("uuid" to target, "discordId" to updated.discordId),
+            )
             "Whitelisted ${mcName ?: target}"
         }
 
@@ -468,7 +517,12 @@ object ArgusCore {
                 ),
             )
             scheduleSave()
-            AuditLogger.log("Whitelist remove: ${mcLabel(current.mcName ?: target.toString(), target)} by $actor")
+            AuditLogger.log(
+                action = "Whitelist remove",
+                subject = mcLabel(current.mcName ?: target.toString(), target),
+                actor = actor,
+                metadata = auditMeta("uuid" to target, "discordId" to updated.discordId),
+            )
             "Removed ${current.mcName ?: target} from whitelist"
         }
 
@@ -503,7 +557,12 @@ object ArgusCore {
             EventEntry(type = "apply_submit", targetUuid = uuid.toString(), targetDiscordId = discordId, message = "Applied as $canonical"),
         )
         scheduleSave()
-        AuditLogger.log("Application submitted: ${mcLabel(canonical, uuid)} by ${discordLabel(discordId)} id=$appId")
+        AuditLogger.log(
+            action = "Application submitted",
+            subject = mcLabel(canonical, uuid),
+            actor = discordLabel(discordId),
+            metadata = auditMeta("uuid" to uuid, "discordId" to discordId, "appId" to appId),
+        )
         return Result.success(appId)
     }
 
@@ -543,7 +602,13 @@ object ArgusCore {
             ),
         )
         scheduleSave()
-        AuditLogger.log("Application approved: ${mcLabel(app.mcName, uuid)} by ${discordLabel(actorDiscordId)}")
+        AuditLogger.log(
+            action = "Application approved",
+            subject = mcLabel(app.mcName, uuid),
+            actor = discordLabel(actorDiscordId),
+            description = reason ?: "Approved",
+            metadata = auditMeta("uuid" to uuid, "discordId" to app.discordId, "appId" to id),
+        )
         return Result.success("Approved $mcName")
     }
 
@@ -574,7 +639,13 @@ object ArgusCore {
         scheduleSave()
         val targetUuid = app.resolvedUuid?.let { UUID.fromString(it) }
         val label = targetUuid?.let { mcLabel(app.mcName, it) } ?: app.mcName
-        AuditLogger.log("Application denied: $label id=$id by ${discordLabel(actorDiscordId)} reason=${reason ?: ""}")
+        AuditLogger.log(
+            action = "Application denied",
+            subject = label,
+            actor = discordLabel(actorDiscordId),
+            description = reason ?: "No reason provided",
+            metadata = auditMeta("uuid" to targetUuid, "discordId" to app.discordId, "appId" to id),
+        )
         return Result.success("Denied application ${app.mcName}")
     }
 
@@ -597,7 +668,13 @@ object ArgusCore {
                 ),
             )
             scheduleSave()
-            AuditLogger.log("Warn: ${mcLabel(current.mcName ?: uuid.toString(), uuid)} by ${discordLabel(actor)} reason=$reason")
+            AuditLogger.log(
+                action = "Warn",
+                subject = mcLabel(current.mcName ?: uuid.toString(), uuid),
+                actor = discordLabel(actor),
+                description = reason,
+                metadata = auditMeta("uuid" to uuid, "discordId" to updated.discordId, "warnings" to updated.warnCount),
+            )
             "Warned ${current.mcName ?: uuid}"
         }
 
@@ -624,10 +701,16 @@ object ArgusCore {
             )
             scheduleSave()
             AuditLogger.log(
-                "Ban: ${mcLabel(
-                    current.mcName ?: uuid.toString(),
-                    uuid,
-                )} by ${discordLabel(actor)} reason=$reason until=${untilEpochMillis ?: "perm"}",
+                action = "Ban",
+                subject = mcLabel(current.mcName ?: uuid.toString(), uuid),
+                actor = discordLabel(actor),
+                description = reason,
+                metadata =
+                    auditMeta(
+                        "uuid" to uuid,
+                        "discordId" to updated.discordId,
+                        "until" to (untilEpochMillis ?: "perm"),
+                    ),
             )
             "Banned ${current.mcName ?: uuid}"
         }
@@ -652,7 +735,13 @@ object ArgusCore {
                 ),
             )
             scheduleSave()
-            AuditLogger.log("Unban: ${mcLabel(current.mcName ?: uuid.toString(), uuid)} by ${discordLabel(actor)} reason=${reason ?: ""}")
+            AuditLogger.log(
+                action = "Unban",
+                subject = mcLabel(current.mcName ?: uuid.toString(), uuid),
+                actor = discordLabel(actor),
+                description = reason ?: "",
+                metadata = auditMeta("uuid" to uuid, "discordId" to updated.discordId),
+            )
             "Unbanned ${current.mcName ?: uuid}"
         }
 
@@ -664,7 +753,13 @@ object ArgusCore {
         runCatching {
             CacheStore.appendEvent(EventEntry(type = "comment", targetUuid = uuid.toString(), actorDiscordId = actor, message = note))
             scheduleSave()
-            AuditLogger.log("Comment on ${mcLabel(uuid.toString(), uuid)} by ${discordLabel(actor)}: $note")
+            AuditLogger.log(
+                action = "Comment",
+                subject = mcLabel(uuid.toString(), uuid),
+                actor = discordLabel(actor),
+                description = note,
+                metadata = auditMeta("uuid" to uuid),
+            )
             "Comment recorded"
         }
 

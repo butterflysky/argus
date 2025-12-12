@@ -98,7 +98,7 @@ object DiscordBridge {
                         }
                     }
                 }
-            AuditLogger.configure { msg -> logToChannel(logChannel, msg) }
+            AuditLogger.configure { entry -> logToChannel(logChannel, entry) }
 
             registerRoleListeners(server)
             registerIdentityListeners(server)
@@ -604,9 +604,20 @@ object DiscordBridge {
 
     private fun logToChannel(
         channel: ServerTextChannel?,
-        message: String,
+        entry: AuditEntry,
     ) {
-        channel?.sendMessage(message)?.exceptionally {
+        val embed =
+            EmbedBuilder()
+                .setTitle(entry.action)
+                .setColor(Color(0x3498db))
+        entry.description?.let { embed.setDescription(it) }
+        entry.subject?.let { embed.addField("Subject", it, false) }
+        entry.actor?.let { embed.addField("Actor", it, false) }
+        if (entry.metadata.isNotEmpty()) {
+            embed.setFooter(entry.metadata.entries.joinToString(" · ") { "${it.key}: ${it.value}" })
+        }
+
+        channel?.sendMessage(embed)?.exceptionally {
             logger.warn("Failed to send audit log to Discord channel: ${it.message}")
             null
         }
@@ -683,24 +694,39 @@ object DiscordBridge {
                 )
             CacheStore.upsert(uuid, updated)
             if (nameChanged) {
-                AuditLogger.log("Discord name changed: ${pd.discordName} -> $newName ${discordLabel(newName, discordId)}")
+                AuditLogger.log(
+                    action = "Discord name changed",
+                    subject = discordLabel(newName ?: pd.discordName ?: "unknown", discordId),
+                    description = "${pd.discordName} -> $newName",
+                    metadata = auditMeta("uuid" to uuid, "discordId" to discordId),
+                )
             }
             if (nickChanged) {
                 AuditLogger.log(
-                    "Discord nick changed: ${pd.discordNick ?: "(none)"} -> ${newNick ?: "(none)"} ${discordLabel(
-                        newName ?: pd.discordName,
-                        discordId,
-                    )}",
+                    action = "Discord nick changed",
+                    subject = discordLabel(newName ?: pd.discordName ?: "unknown", discordId),
+                    description = "${pd.discordNick ?: "(none)"} -> ${newNick ?: "(none)"}",
+                    metadata = auditMeta("uuid" to uuid, "discordId" to discordId),
                 )
             }
             saveCache()
         } else {
             val lbl = discordLabel(newName ?: oldName ?: "unknown", discordId)
             if (oldName != null && newName != null && oldName != newName) {
-                AuditLogger.log("Discord name changed: $oldName -> $newName $lbl")
+                AuditLogger.log(
+                    action = "Discord name changed",
+                    subject = lbl,
+                    description = "$oldName -> $newName",
+                    metadata = auditMeta("discordId" to discordId),
+                )
             }
             if (oldNick != newNick) {
-                AuditLogger.log("Discord nick changed: ${oldNick ?: "(none)"} -> ${newNick ?: "(none)"} $lbl")
+                AuditLogger.log(
+                    action = "Discord nick changed",
+                    subject = lbl,
+                    description = "${oldNick ?: "(none)"} -> ${newNick ?: "(none)"}",
+                    metadata = auditMeta("discordId" to discordId),
+                )
             }
         }
     }
@@ -728,20 +754,30 @@ object DiscordBridge {
 
         val labelName = discordNick ?: discordName
         if (nameChanged) {
-            AuditLogger.log("Discord name changed: ${player.discordName} -> $discordName ${discordLabel(labelName, discordId)}")
+            AuditLogger.log(
+                action = "Discord name changed",
+                subject = discordLabel(labelName, discordId),
+                description = "${player.discordName} -> $discordName",
+                metadata = auditMeta("uuid" to uuid, "discordId" to discordId),
+            )
         }
         if (nickChanged) {
             AuditLogger.log(
-                "Discord nick changed: ${player.discordNick ?: "(none)"} -> ${discordNick ?: "(none)"} ${discordLabel(
-                    labelName,
-                    discordId,
-                )}",
+                action = "Discord nick changed",
+                subject = discordLabel(labelName, discordId),
+                description = "${player.discordNick ?: "(none)"} -> ${discordNick ?: "(none)"}",
+                metadata = auditMeta("uuid" to uuid, "discordId" to discordId),
             )
         }
         val whitelistedLabel = if (hasAccess) "whitelisted=true" else "whitelisted=false"
         val adminPart =
             if (isAdmin != (player.isAdmin == true)) " admin=$isAdmin" else ""
-        AuditLogger.log("Role update: ${discordLabel(labelName, discordId)} -> $whitelistedLabel$adminPart")
+        AuditLogger.log(
+            action = "Role update",
+            subject = discordLabel(labelName, discordId),
+            description = "$whitelistedLabel$adminPart",
+            metadata = auditMeta("uuid" to uuid, "discordId" to discordId),
+        )
         saveCache()
     }
 

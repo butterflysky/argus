@@ -18,7 +18,7 @@ class ArgusScenarioIntegrationTest {
         @TempDir tempDir: Path,
     ) {
         auditLogs.clear()
-        AuditLogger.configure { auditLogs += it }
+        AuditLogger.configure { auditLogs += it.toConsoleString() }
         ArgusCore.setDiscordStartedOverride(true)
         ArgusCore.setRoleCheckOverride(null)
 
@@ -101,7 +101,7 @@ class ArgusScenarioIntegrationTest {
         val result = ArgusCore.onPlayerLogin(uuid, "mc", isOp = false, isLegacyWhitelisted = false, whitelistEnabled = true)
 
         assertIs<LoginResult.Allow>(result)
-        assertTrue(auditLogs.any { it.contains("First login seen") })
+        assertTrue(auditLogs.any { it.contains("First login") })
     }
 
     @Test

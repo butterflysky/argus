@@ -1,0 +1,432 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "net.neoforged.gradle",
+    "module": "common",
+    "version": "7.1.6",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.plugin.api-version": "8.14",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains",
+          "module": "annotations",
+          "version": {
+            "requires": "23.0.0"
+          }
+        },
+        {
+          "group": "net.neoforged.gradle",
+          "module": "utils",
+          "version": {
+            "requires": "7.1.6"
+          }
+        },
+        {
+          "group": "net.neoforged.gradle",
+          "module": "dsl-common",
+          "version": {
+            "requires": "7.1.6"
+          }
+        },
+        {
+          "group": "commons-io",
+          "module": "commons-io",
+          "version": {
+            "requires": "2.11.0"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "31.1-jre"
+          }
+        },
+        {
+          "group": "de.siegmar",
+          "module": "fastcsv",
+          "version": {
+            "requires": "2.2.0"
+          }
+        },
+        {
+          "group": "net.minecraftforge",
+          "module": "unsafe",
+          "version": {
+            "requires": "0.2.0"
+          },
+          "excludes": [
+            {
+              "group": "*",
+              "module": "*"
+            }
+          ]
+        },
+        {
+          "group": "org.apache.maven",
+          "module": "maven-artifact",
+          "version": {
+            "requires": "3.8.5"
+          }
+        },
+        {
+          "group": "org.apache.ivy",
+          "module": "ivy",
+          "version": {
+            "requires": "2.5.1"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpclient",
+          "version": {
+            "requires": "4.5.13"
+          }
+        },
+        {
+          "group": "net.minecraftforge",
+          "module": "srgutils",
+          "version": {
+            "requires": "0.4.13"
+          }
+        },
+        {
+          "group": "io.codechicken",
+          "module": "DiffPatch",
+          "version": {
+            "requires": "2.0.0.35"
+          }
+        },
+        {
+          "group": "commons-codec",
+          "module": "commons-codec",
+          "version": {
+            "requires": "1.15"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "EclipseLaunchConfigs",
+          "version": {
+            "requires": "0.1.3"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "VscLaunchConfigs",
+          "version": {
+            "requires": "1.0.8"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "JarJarMetadata",
+          "version": {
+            "requires": "0.4.1"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "JarJarSelector",
+          "version": {
+            "requires": "0.4.1"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm",
+          "version": {
+            "requires": "9.9"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm-commons",
+          "version": {
+            "requires": "9.9"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm-tree",
+          "version": {
+            "requires": "9.9"
+          }
+        },
+        {
+          "group": "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext",
+          "module": "gradle-idea-ext",
+          "version": {
+            "requires": "1.2"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "groovydslimprover",
+          "version": {
+            "requires": "2.0.0"
+          },
+          "requestedCapabilities": [
+            {
+              "group": "net.neoforged",
+              "name": "groovydslimprover-base"
+            }
+          ]
+        }
+      ],
+      "files": [
+        {
+          "name": "common-7.1.6.jar",
+          "url": "common-7.1.6.jar",
+          "size": 521155,
+          "sha512": "cb90d1d00ddd8318e978f86ec8d9b399eb062af7f2797aba68dfcf41d17a75cad1221368b35f7afe4ebc8de4ff06eaf8a87c1b940cbf0a482124222f5f521150",
+          "sha256": "6417b86173e1d47e56137899c2d7019898b69272bf2fac12f66a9784d069cc59",
+          "sha1": "2aa4204f2356159dca900b6b45f97257a184b590",
+          "md5": "d3680e53721e69d14053fdb53c9b10b4"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.plugin.api-version": "8.14",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains",
+          "module": "annotations",
+          "version": {
+            "requires": "23.0.0"
+          }
+        },
+        {
+          "group": "net.neoforged.gradle",
+          "module": "utils",
+          "version": {
+            "requires": "7.1.6"
+          }
+        },
+        {
+          "group": "net.neoforged.gradle",
+          "module": "dsl-common",
+          "version": {
+            "requires": "7.1.6"
+          }
+        },
+        {
+          "group": "commons-io",
+          "module": "commons-io",
+          "version": {
+            "requires": "2.11.0"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "31.1-jre"
+          }
+        },
+        {
+          "group": "de.siegmar",
+          "module": "fastcsv",
+          "version": {
+            "requires": "2.2.0"
+          }
+        },
+        {
+          "group": "net.minecraftforge",
+          "module": "unsafe",
+          "version": {
+            "requires": "0.2.0"
+          },
+          "excludes": [
+            {
+              "group": "*",
+              "module": "*"
+            }
+          ]
+        },
+        {
+          "group": "org.apache.maven",
+          "module": "maven-artifact",
+          "version": {
+            "requires": "3.8.5"
+          }
+        },
+        {
+          "group": "org.apache.ivy",
+          "module": "ivy",
+          "version": {
+            "requires": "2.5.1"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpclient",
+          "version": {
+            "requires": "4.5.13"
+          }
+        },
+        {
+          "group": "net.minecraftforge",
+          "module": "srgutils",
+          "version": {
+            "requires": "0.4.13"
+          }
+        },
+        {
+          "group": "io.codechicken",
+          "module": "DiffPatch",
+          "version": {
+            "requires": "2.0.0.35"
+          }
+        },
+        {
+          "group": "commons-codec",
+          "module": "commons-codec",
+          "version": {
+            "requires": "1.15"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "EclipseLaunchConfigs",
+          "version": {
+            "requires": "0.1.3"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "VscLaunchConfigs",
+          "version": {
+            "requires": "1.0.8"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "JarJarMetadata",
+          "version": {
+            "requires": "0.4.1"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "JarJarSelector",
+          "version": {
+            "requires": "0.4.1"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm",
+          "version": {
+            "requires": "9.9"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm-commons",
+          "version": {
+            "requires": "9.9"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm-tree",
+          "version": {
+            "requires": "9.9"
+          }
+        },
+        {
+          "group": "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext",
+          "module": "gradle-idea-ext",
+          "version": {
+            "requires": "1.2"
+          }
+        },
+        {
+          "group": "net.neoforged",
+          "module": "groovydslimprover",
+          "version": {
+            "requires": "2.0.0"
+          },
+          "requestedCapabilities": [
+            {
+              "group": "net.neoforged",
+              "name": "groovydslimprover-base"
+            }
+          ]
+        }
+      ],
+      "files": [
+        {
+          "name": "common-7.1.6.jar",
+          "url": "common-7.1.6.jar",
+          "size": 521155,
+          "sha512": "cb90d1d00ddd8318e978f86ec8d9b399eb062af7f2797aba68dfcf41d17a75cad1221368b35f7afe4ebc8de4ff06eaf8a87c1b940cbf0a482124222f5f521150",
+          "sha256": "6417b86173e1d47e56137899c2d7019898b69272bf2fac12f66a9784d069cc59",
+          "sha1": "2aa4204f2356159dca900b6b45f97257a184b590",
+          "md5": "d3680e53721e69d14053fdb53c9b10b4"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "common-7.1.6-sources.jar",
+          "url": "common-7.1.6-sources.jar",
+          "size": 217259,
+          "sha512": "38b55fc98a4e30b92ee84d31ab75449cca3216ddff43d2eac292ad87d7b8104056177b8ee50308eb362db9df0db0f5e0136caf4c1f60a379fb61ea946ed45c17",
+          "sha256": "a6f53eccfa2c248aa97629360b2c203e9b04fa09c82cb8f974ca9e8acadba8a4",
+          "sha1": "08f4cd9120096b527b8025a739460927df0b119f",
+          "md5": "42ab657d1cb9a35264499cd06469fcc4"
+        }
+      ]
+    }
+  ]
+}

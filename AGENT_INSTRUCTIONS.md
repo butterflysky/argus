@@ -33,6 +33,7 @@ These instructions match the current Argus direction in `ARGUS_MASTER_SPEC.md`: 
   - Module builds: `./gradlew :common:build`, `./gradlew :fabric:build`, `./gradlew :neoforge:build`
   - Run dev server (Fabric): `./gradlew :fabric:runServer`
 - Run `./gradlew build` before committing code changes when code is modified.
+- When running Gradle, **do not override `GRADLE_USER_HOME`**; use the default so downloads work. Gradle needs network; run with escalated permissions so the user can authorize the command.
 
 ## File Organization and Conventions
 - Shared logic belongs in `:common`; platform specifics stay in their module.

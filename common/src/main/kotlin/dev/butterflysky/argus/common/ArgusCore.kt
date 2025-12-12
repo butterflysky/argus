@@ -31,6 +31,8 @@ object ArgusCore {
 
     @Volatile private var roleCheckOverride: ((Long) -> RoleStatus?)? = null
 
+    @Volatile private var profileLookupOverride: ((String) -> Pair<UUID, String>?)? = null
+
     @Volatile private var messenger: ((UUID, String) -> Unit)? = null
 
     @Volatile private var banMirror: ((UUID, String?, String, Long?) -> Unit)? = null
@@ -399,6 +401,8 @@ object ArgusCore {
         uuid: UUID,
     ): String = "${name ?: "minecraft user"} ($uuid)"
 
+    private fun mcLabelPretty(name: String?): String = name ?: "minecraft user"
+
     private fun discordLabel(discordId: Long?): String =
         discordId?.let { CacheStore.findByDiscordId(it)?.second?.discordName?.let { n -> "$n ($it)" } ?: "$it" } ?: "unknown"
 
@@ -406,6 +410,8 @@ object ArgusCore {
         name: String,
         id: Long?,
     ): String = if (id != null) "$name ($id)" else name
+
+    private fun discordLabelPretty(name: String?): String = name ?: "unknown"
 
     @JvmStatic
     fun onPlayerJoinJvm(
@@ -429,6 +435,10 @@ object ArgusCore {
     /** Testing hook to override whitelist role checks (for headless tests). */
     fun setRoleCheckOverride(checker: ((Long) -> RoleStatus?)?) {
         roleCheckOverride = checker
+    }
+
+    fun setProfileLookupOverride(resolver: ((String) -> Pair<UUID, String>?)?) {
+        profileLookupOverride = resolver
     }
 
     fun registerMessenger(handler: (UUID, String) -> Unit) {
@@ -550,10 +560,21 @@ object ArgusCore {
         val profile = lookupProfile(mcName)
         if (profile.isFailure) return profile.map { "" }
         val (uuid, canonical) = profile.getOrThrow()
+        val existing = CacheStore.get(uuid)
+        if (existing?.hasAccess == true) return Result.failure(IllegalStateException("Player is already whitelisted"))
+
+        val pending =
+            CacheStore.applicationsSnapshot().firstOrNull {
+                it.status == "pending" && (it.discordId == discordId || it.resolvedUuid == uuid.toString())
+            }
+        if (pending != null) return Result.failure(IllegalStateException("You already have a pending application"))
+
         val appId = UUID.randomUUID().toString()
+        val shortId = CacheStore.nextApplicationId()
         val app =
             WhitelistApplication(
                 id = appId,
+                shortId = shortId,
                 discordId = discordId,
                 mcName = canonical,
                 resolvedUuid = uuid.toString(),
@@ -566,11 +587,11 @@ object ArgusCore {
         scheduleSave()
         AuditLogger.log(
             action = "Application submitted",
-            subject = mcLabel(canonical, uuid),
-            actor = discordLabel(discordId),
-            metadata = auditMeta("uuid" to uuid, "discordId" to discordId, "appId" to appId),
+            subject = mcLabelPretty(canonical),
+            actor = discordLabelPretty(CacheStore.findByDiscordId(discordId)?.second?.discordName),
+            metadata = auditMeta("uuid" to uuid, "discordId" to discordId, "appId" to appId, "shortId" to shortId),
         )
-        return Result.success(appId)
+        return Result.success("Application received. An admin will review it shortly.")
     }
 
     fun listPendingApplications(): List<WhitelistApplication> =
@@ -611,12 +632,24 @@ object ArgusCore {
         scheduleSave()
         AuditLogger.log(
             action = "Application approved",
-            subject = mcLabel(app.mcName, uuid),
-            actor = discordLabel(actorDiscordId),
+            subject = mcLabelPretty(app.mcName),
+            actor = discordLabelPretty(CacheStore.findByDiscordId(actorDiscordId)?.second?.discordName),
             description = reason ?: "Approved",
             metadata = auditMeta("uuid" to uuid, "discordId" to app.discordId, "appId" to id),
         )
         return Result.success("Approved $mcName")
+    }
+
+    fun approveApplicationForDiscord(
+        applicantDiscordId: Long,
+        actorDiscordId: Long,
+        reason: String?,
+    ): Result<String> {
+        val pending =
+            CacheStore.applicationsSnapshot().firstOrNull {
+                it.status == "pending" && it.discordId == applicantDiscordId
+            } ?: return Result.failure(IllegalArgumentException("No pending application for that user"))
+        return approveApplication(pending.id, actorDiscordId, reason)
     }
 
     fun denyApplication(
@@ -645,15 +678,27 @@ object ArgusCore {
         )
         scheduleSave()
         val targetUuid = app.resolvedUuid?.let { UUID.fromString(it) }
-        val label = targetUuid?.let { mcLabel(app.mcName, it) } ?: app.mcName
+        val label = targetUuid?.let { mcLabelPretty(app.mcName) } ?: app.mcName
         AuditLogger.log(
             action = "Application denied",
             subject = label,
-            actor = discordLabel(actorDiscordId),
+            actor = discordLabelPretty(CacheStore.findByDiscordId(actorDiscordId)?.second?.discordName),
             description = reason ?: "No reason provided",
             metadata = auditMeta("uuid" to targetUuid, "discordId" to app.discordId, "appId" to id),
         )
         return Result.success("Denied application ${app.mcName}")
+    }
+
+    fun denyApplicationForDiscord(
+        applicantDiscordId: Long,
+        actorDiscordId: Long,
+        reason: String?,
+    ): Result<String> {
+        val pending =
+            CacheStore.applicationsSnapshot().firstOrNull {
+                it.status == "pending" && it.discordId == applicantDiscordId
+            } ?: return Result.failure(IllegalArgumentException("No pending application for that user"))
+        return denyApplication(pending.id, actorDiscordId, reason)
     }
 
     fun warnPlayer(
@@ -779,17 +824,18 @@ object ArgusCore {
     }
 
     private fun lookupProfile(name: String): Result<Pair<UUID, String>> =
-        runCatching {
-            val req =
-                HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.mojang.com/users/profiles/minecraft/$name"))
-                    .timeout(5.seconds.toJavaDuration())
-                    .GET()
-                    .build()
-            val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
-            if (resp.statusCode() != 200) error("Player not found")
-            parseMojangProfile(resp.body(), json)
-        }
+        profileLookupOverride?.invoke(name)?.let { Result.success(it) }
+            ?: runCatching {
+                val req =
+                    HttpRequest.newBuilder()
+                        .uri(URI.create("https://api.mojang.com/users/profiles/minecraft/$name"))
+                        .timeout(5.seconds.toJavaDuration())
+                        .GET()
+                        .build()
+                val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() != 200) error("Player not found")
+                parseMojangProfile(resp.body(), json)
+            }
 }
 
 @Serializable

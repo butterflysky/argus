@@ -26,6 +26,7 @@ abstract class ArgusTestBase {
         CacheStore.load(ArgusConfig.cachePath)
         ArgusCore.setDiscordStartedOverride(null)
         ArgusCore.setRoleCheckOverride(null)
+        ArgusCore.setProfileLookupOverride(null)
         AuditLogger.configure(null)
         ArgusCore.registerMessenger { _, _ -> }
         ArgusCore.registerBanSync(null, null)

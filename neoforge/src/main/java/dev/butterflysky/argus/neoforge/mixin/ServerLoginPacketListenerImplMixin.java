@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import dev.butterflysky.argus.common.ArgusCore;
 import dev.butterflysky.argus.common.LoginIntrospection;
 import dev.butterflysky.argus.common.LoginResult;
+import dev.butterflysky.argus.neoforge.LinkComponent;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.login.ServerboundHelloPacket;
@@ -45,7 +46,7 @@ public abstract class ServerLoginPacketListenerImplMixin {
             if (deny.getRevokeWhitelist()) {
                 LoginIntrospection.removeFromWhitelist(list, profile);
             }
-            connection.disconnect(Component.literal(deny.getMessage()));
+            connection.disconnect(LinkComponent.of(deny.getMessage()));
             ci.cancel();
         }
     }

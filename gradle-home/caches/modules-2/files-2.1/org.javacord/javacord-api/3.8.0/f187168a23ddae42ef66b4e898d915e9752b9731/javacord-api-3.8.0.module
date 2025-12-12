@@ -1,0 +1,100 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.javacord",
+    "module": "javacord-api",
+    "version": "3.8.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "7.5.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "javacord-api-3.8.0.jar",
+          "url": "javacord-api-3.8.0.jar",
+          "size": 599729,
+          "sha512": "dae69eecb2e0684bd5a1e7c3bf62775e312b0fe5e835bb67afd90c3f30961966cfabcd16a5cf1b62a5fe5c91fe21575a51570481a34ffb6057f35b27fc1fa7df",
+          "sha256": "4e0a24d45d7ab0920af69f4051bde9193add82b108eb82f4a6b07844f7bfb44a",
+          "sha1": "24b69483955233f1002d5346c9891f05822988ed",
+          "md5": "469a79f4696042637519e9c5a904c754"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "javacord-api-3.8.0.jar",
+          "url": "javacord-api-3.8.0.jar",
+          "size": 599729,
+          "sha512": "dae69eecb2e0684bd5a1e7c3bf62775e312b0fe5e835bb67afd90c3f30961966cfabcd16a5cf1b62a5fe5c91fe21575a51570481a34ffb6057f35b27fc1fa7df",
+          "sha256": "4e0a24d45d7ab0920af69f4051bde9193add82b108eb82f4a6b07844f7bfb44a",
+          "sha1": "24b69483955233f1002d5346c9891f05822988ed",
+          "md5": "469a79f4696042637519e9c5a904c754"
+        }
+      ]
+    },
+    {
+      "name": "javadocElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "javacord-api-3.8.0-javadoc.jar",
+          "url": "javacord-api-3.8.0-javadoc.jar",
+          "size": 4800587,
+          "sha512": "f7489576e9ec971472ac01c5341d15aa9c9e8d327c4489e2b58810851fade3e91bc807fb415643a2cc26d3bd8c81753b6c409fd0abfdc9ea3dd437f46fc1e1c8",
+          "sha256": "9ff70e224bb7ac2ebd7d7fb4ef654a72c921f35d77907b4ef2d80242d45129bd",
+          "sha1": "66ac3145fab7ee053397cefb90b9cd15bbecdfaa",
+          "md5": "ef00e673e3caea601db10d8b7e2eb18b"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "javacord-api-3.8.0-sources.jar",
+          "url": "javacord-api-3.8.0-sources.jar",
+          "size": 501827,
+          "sha512": "2344790a402ae4faa45bd024d145e0ea108d8b8546b2ff2b451135c3a1ee92c0ece46028da7d82c66070e98bedfed2f0005487f026f0d5af3f12341eeb052391",
+          "sha256": "13db574f84f260f82af0221cb65c857ce99d2f0583f2c374ae0cd961c13832ca",
+          "sha1": "38b9a75b0a087ec6c2f5b4b97b3b062a860747cd",
+          "md5": "30fab63696d958983da966d4a66e8f30"
+        }
+      ]
+    }
+  ]
+}

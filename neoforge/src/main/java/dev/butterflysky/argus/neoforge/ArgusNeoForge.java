@@ -72,9 +72,9 @@ public class ArgusNeoForge {
                         whitelistEnabled);
         if (message != null) {
             if (message.contains("Access revoked") || message.contains("Link required")) {
-                player.connection.disconnect(Component.literal(message));
+                player.connection.disconnect(LinkComponent.of(message));
             } else {
-                player.sendSystemMessage(Component.literal(message));
+                player.sendSystemMessage(LinkComponent.of(message));
             }
         }
     }

@@ -64,6 +64,15 @@ public class ArgusLoginGameTests {
                 if (capture.disconnectMessage == null || !capture.disconnectMessage.getString().contains("/link")) {
                     throw helper.createError("Expected mixin disconnect with link token");
                 }
+                var click = findClickEvent(capture.disconnectMessage);
+                if (click == null || click.getAction() != net.minecraft.text.ClickEvent.Action.COPY_TO_CLIPBOARD) {
+                    throw helper.createError("Expected copy_to_clipboard click event on link token");
+                }
+                if (click instanceof net.minecraft.text.ClickEvent.CopyToClipboard copy) {
+                    if (copy.value() == null || copy.value().isBlank()) {
+                        throw helper.createError("Click event missing token value");
+                    }
+                }
                 helper.complete();
             } catch (Exception e) {
                 throw helper.createError(e.getMessage());
@@ -160,6 +169,17 @@ public class ArgusLoginGameTests {
         var m = CacheStore.class.getDeclaredMethod("load-IoAF18A", Path.class);
         m.setAccessible(true);
         m.invoke(CacheStore.INSTANCE, path);
+    }
+
+    private net.minecraft.text.ClickEvent findClickEvent(Text text) {
+        if (text == null) return null;
+        var style = text.getStyle();
+        if (style != null && style.getClickEvent() != null) return style.getClickEvent();
+        for (Text sibling : text.getSiblings()) {
+            var found = findClickEvent(sibling);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private static class FakeConnection extends ClientConnection {

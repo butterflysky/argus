@@ -220,9 +220,9 @@ class ArgusFabric : ModInitializer {
             ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled, profile.name)?.let { message ->
                 // If message is a kick, disconnect; otherwise send chat message.
                 if (message.contains("Access revoked") || message.contains("Link required")) {
-                    player.networkHandler.disconnect(Text.literal(message))
+                    player.networkHandler.disconnect(LinkText.of(message))
                 } else {
-                    player.sendMessage(clickableIfLink(message), false)
+                    player.sendMessage(LinkText.of(message), false)
                 }
             }
         }
@@ -237,6 +237,4 @@ class ArgusFabric : ModInitializer {
         }
         ServerLifecycleEvents.SERVER_STOPPED.register { currentServer = null }
     }
-
-    private fun clickableIfLink(message: String): Text = Text.literal(message)
 }

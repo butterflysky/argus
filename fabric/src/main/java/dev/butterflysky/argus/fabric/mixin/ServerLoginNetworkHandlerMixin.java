@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import dev.butterflysky.argus.common.ArgusCore;
 import dev.butterflysky.argus.common.LoginIntrospection;
 import dev.butterflysky.argus.common.LoginResult;
+import dev.butterflysky.argus.fabric.LinkText;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginNetworkHandler;
@@ -38,7 +39,7 @@ public abstract class ServerLoginNetworkHandlerMixin {
             if (deny.getRevokeWhitelist()) {
                 LoginIntrospection.removeFromWhitelist(server.getPlayerManager(), gameProfile);
             }
-            connection.disconnect(Text.literal(deny.getMessage()));
+            connection.disconnect(LinkText.of(deny.getMessage()));
             ci.cancel();
         }
     }

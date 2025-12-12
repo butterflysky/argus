@@ -212,7 +212,7 @@ object DiscordBridge {
                         "approve",
                         "Approve an application (admin)",
                         listOf(
-                            SlashCommandOption.createStringOption("application", "Application ID", true, true),
+                            SlashCommandOption.createUserOption("applicant", "Discord applicant", true),
                             SlashCommandOption.createStringOption("reason", "Reason (optional)", false),
                         ),
                     ),
@@ -221,7 +221,7 @@ object DiscordBridge {
                         "deny",
                         "Deny an application (admin)",
                         listOf(
-                            SlashCommandOption.createStringOption("application", "Application ID", true, true),
+                            SlashCommandOption.createUserOption("applicant", "Discord applicant", true),
                             SlashCommandOption.createStringOption("reason", "Reason (optional)", false),
                         ),
                     ),
@@ -340,11 +340,6 @@ object DiscordBridge {
                                 SlashCommandOptionChoice.create(label, entry.key.toString())
                             }
                             .toList()
-                    interaction.respondWithChoices(choices)
-                }
-                "application" -> {
-                    val pending = ArgusCore.listPendingApplications().take(25)
-                    val choices = pending.map { SlashCommandOptionChoice.create("${it.mcName} (${it.id.take(8)})", it.id) }
                     interaction.respondWithChoices(choices)
                 }
                 else -> return@addAutocompleteCreateListener
@@ -487,7 +482,7 @@ object DiscordBridge {
                 .setDescription(
                     slice.joinToString("\n") {
                         val ageSeconds = (System.currentTimeMillis() - it.submittedAtEpochMillis) / 1000
-                        "- ${it.mcName} (id ${it.id.take(8)}), ${ageSeconds}s ago"
+                        "- ${it.mcName} (app #${it.shortId}) · <@${it.discordId}> · ${ageSeconds}s ago"
                     },
                 )
         val controls = mutableListOf<Button>()
@@ -503,16 +498,16 @@ object DiscordBridge {
     }
 
     private fun approveApplication(interaction: SlashCommandInteraction) {
-        val id = interaction.getArgumentStringValueByName("application").orElse(null) ?: return
+        val applicant = interaction.getArgumentUserValueByName("applicant").orElse(null) ?: return
         val reason = interaction.getArgumentStringValueByName("reason").orElse(null)
-        val result = ArgusCore.approveApplication(id, interaction.user.id, reason)
+        val result = ArgusCore.approveApplicationForDiscord(applicant.id, interaction.user.id, reason)
         interaction.replyText(result.getOrElse { "Approve failed: ${it.message}" })
     }
 
     private fun denyApplication(interaction: SlashCommandInteraction) {
-        val id = interaction.getArgumentStringValueByName("application").orElse(null) ?: return
+        val applicant = interaction.getArgumentUserValueByName("applicant").orElse(null) ?: return
         val reason = interaction.getArgumentStringValueByName("reason").orElse(null)
-        val result = ArgusCore.denyApplication(id, interaction.user.id, reason)
+        val result = ArgusCore.denyApplicationForDiscord(applicant.id, interaction.user.id, reason)
         interaction.replyText(result.getOrElse { "Deny failed: ${it.message}" })
     }
 
@@ -581,7 +576,7 @@ object DiscordBridge {
             /whitelist status player:<mc|uuid>
             /whitelist apply mcname:<name> — submit application
             /whitelist list-applications — list pending (admin)
-            /whitelist approve|deny application:<id> [reason]
+            /whitelist approve|deny applicant:<discord> [reason]
             /whitelist warn|ban|unban player:<mc|uuid> [reason] [duration_minutes]
             /whitelist comment|review player:<mc|uuid> [...]
             /whitelist my — see your warnings/bans

@@ -23,6 +23,7 @@ object CacheStore {
     private val data: MutableMap<UUID, PlayerData> = ConcurrentHashMap()
     private val events: MutableList<EventEntry> = mutableListOf()
     private val applications: MutableList<WhitelistApplication> = mutableListOf()
+    private var nextApplicationNumber: Int = 1
     private val saver = SaveScheduler()
 
     fun snapshot(): Map<UUID, PlayerData> = data.toMap()
@@ -52,8 +53,12 @@ object CacheStore {
     }
 
     fun addApplication(app: WhitelistApplication) {
-        applications += app
+        val ready = if (app.shortId > 0) app else app.copy(shortId = nextApplicationId())
+        applications += ready
     }
+
+    @Synchronized
+    fun nextApplicationId(): Int = nextApplicationNumber++
 
     fun updateApplication(
         id: String,
@@ -85,8 +90,19 @@ object CacheStore {
 
             data.putAll(loaded.players.mapKeys { UUID.fromString(it.key) })
             events.addAll(loaded.events)
-            applications.addAll(loaded.applications)
-            logger.info("Loaded argus cache with ${data.size} entries, ${events.size} events, ${applications.size} applications")
+
+            // Backfill short IDs for legacy applications and compute next counter.
+            var counter = loaded.nextApplicationNumber ?: 1
+            loaded.applications.forEach { app ->
+                val shortId = if (app.shortId > 0) app.shortId else counter++
+                applications.add(app.copy(shortId = shortId))
+            }
+            val maxShort = applications.maxOfOrNull { it.shortId } ?: 0
+            nextApplicationNumber = maxOf(counter, maxShort + 1)
+            val summary =
+                "Loaded argus cache with ${data.size} entries, ${events.size} events, " +
+                    "${applications.size} applications (nextAppId=$nextApplicationNumber)"
+            logger.info(summary)
         }
     }
 
@@ -105,6 +121,7 @@ object CacheStore {
                     players = data.mapKeys { it.key.toString() },
                     events = events,
                     applications = applications,
+                    nextApplicationNumber = nextApplicationNumber,
                 )
             Files.writeString(primary, json.encodeToString(serializable))
             logger.info("Saved argus cache (${data.size} entries) to ${primary.toAbsolutePath()}")
@@ -159,6 +176,7 @@ object CacheStore {
         val players: Map<String, PlayerData> = emptyMap(),
         val events: List<EventEntry> = emptyList(),
         val applications: List<WhitelistApplication> = emptyList(),
+        val nextApplicationNumber: Int? = null,
     )
 }
 
@@ -176,6 +194,7 @@ data class EventEntry(
 @Serializable
 data class WhitelistApplication(
     val id: String,
+    val shortId: Int = 0,
     val discordId: Long,
     val mcName: String,
     val resolvedUuid: String? = null,

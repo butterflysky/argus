@@ -16,7 +16,7 @@ import net.minecraft.network.chat.Component;
 import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
 
-/** Implements /argus reload and /argus config set for NeoForge. */
+/** Implements NeoForge /argus admin commands (reload/config/token/tokens/help). */
 public class CommandReload {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         final String prefix = "[argus] ";
@@ -99,12 +99,12 @@ public class CommandReload {
 
     private static String helpText() {
         return String.join("\n",
-            "[argus] /argus reload - reload config and restart Discord (if configured)",
-            "[argus] /argus config get <field> - show current value",
-            "[argus] /argus help - this help",
-            "[argus] /argus config set <field> <value> - update argus.json",
-            "[argus] /argus tokens - list active link tokens",
-            "[argus] Discord-side: /whitelist (add/remove/status/apply/list/approve/deny/warn/ban/unban/comment/review/my/help)"
+            "/argus reload - reload config and restart Discord (if configured)",
+            "/argus config get <field> - show current value",
+            "/argus config set <field> <value> - update argus.json (tab-complete fields)",
+            "/argus token <player> - issue a link token for that player",
+            "/argus tokens - list active link tokens",
+            "Discord-side: /whitelist (add/remove/status/apply/list/approve/deny/warn/ban/unban/comment/review/my/help)"
         );
     }
 

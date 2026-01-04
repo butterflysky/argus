@@ -9,6 +9,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.UUID
+import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
@@ -24,8 +25,16 @@ import kotlin.time.toJavaDuration
 object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")
     private val json = Json { ignoreUnknownKeys = true }
+    private val discordExecutor =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "argus-discord").apply { isDaemon = true }
+        }
 
     @Volatile private var discordStarted = false
+
+    @Volatile private var discordStarting = false
+
+    @Volatile private var discordStopping = false
 
     @Volatile private var discordStartedOverride: Boolean? = null
 
@@ -53,22 +62,30 @@ object ArgusCore {
     }
 
     fun startDiscord(): Result<Unit> {
-        if (discordStarted) return Result.success(Unit)
+        if (discordStarted || discordStarting) return Result.success(Unit)
         val settings = ArgusConfig.current()
         if (settings.botToken.isBlank() || settings.guildId == null) {
             logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
+            discordStarted = false
             return Result.success(Unit)
         }
-        return DiscordBridge.start(settings)
-            .onSuccess { discordStarted = true }
-            .onFailure { logger.warn("Discord startup skipped/failed: ${it.message}") }
+        discordStarting = true
+        discordExecutor.execute {
+            val result = DiscordBridge.start(settings)
+            if (result.isSuccess) {
+                discordStarted = true
+            } else {
+                discordStarted = false
+                logger.warn("Discord startup skipped/failed: ${result.exceptionOrNull()?.message}")
+            }
+            discordStarting = false
+        }
+        return Result.success(Unit)
     }
 
     fun reloadConfig(): Result<Unit> =
         initialize().onSuccess {
-            DiscordBridge.stop()
-            discordStarted = false
-            startDiscord()
+            scheduleDiscordReload()
         }
 
     @JvmStatic
@@ -82,8 +99,39 @@ object ArgusCore {
     }
 
     fun stopDiscord() {
-        DiscordBridge.stop()
+        if (discordStopping) return
+        discordStopping = true
         discordStarted = false
+        discordStarting = false
+        discordExecutor.execute {
+            DiscordBridge.stop()
+            discordStopping = false
+        }
+    }
+
+    private fun scheduleDiscordReload() {
+        discordExecutor.execute {
+            discordStopping = true
+            discordStarting = false
+            discordStarted = false
+            DiscordBridge.stop()
+            discordStopping = false
+
+            val settings = ArgusConfig.current()
+            if (settings.botToken.isBlank() || settings.guildId == null) {
+                logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
+                return@execute
+            }
+            discordStarting = true
+            val result = DiscordBridge.start(settings)
+            if (result.isSuccess) {
+                discordStarted = true
+            } else {
+                discordStarted = false
+                logger.warn("Discord startup skipped/failed: ${result.exceptionOrNull()?.message}")
+            }
+            discordStarting = false
+        }
     }
 
     fun onPlayerLogin(

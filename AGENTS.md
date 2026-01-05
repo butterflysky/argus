@@ -27,7 +27,9 @@ Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21
   - Claim/update: `bd update <id> --status in_progress --json`
   - Link discoveries: `--deps discovered-from:<parent-id>`
   - Close: `bd close <id> --reason "Completed" --json`
-- `.beads/issues.jsonl` must travel with code changes; `bd sync` flushes pending DB ↔ JSONL updates.
+- Before any `git fetch`/`git pull`, run `bd sync --flush-only` so local issue updates are written to JSONL.
+- After pulling, run `bd sync --import-only` (or `bd sync` when appropriate) so the local DB reflects repo JSONL.
+- `.beads/issues.jsonl` must travel with code changes; always commit any bd updates in the same commit as the related code/doc changes.
 
 ## Planning Docs
 - Store any AI-generated plans/designs in `history/`. Keep the repo root clean. Avoid markdown TODO lists.
@@ -35,6 +37,9 @@ Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21
 ## Build & Run
 - Multi-project now active: `./gradlew build`, `./gradlew :fabric:runServer`, `./gradlew :common:build`, `./gradlew :neoforge:build`.
 - Logs: `run/logs/latest.log`; crash reports: `run/crash-reports/`; JVM errors: `run/hs_err_pid*.log`.
+
+## Validation
+- Run all relevant local tests/verification after making changes and fix any failures before asking for next steps.
 
 ## Version Control
 - Use `git` (beads hooks expect git, not jj).

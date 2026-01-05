@@ -152,7 +152,10 @@ object ArgusCore {
         return future
     }
 
-    private fun performDiscordReload(settings: ArgusSettings, future: CompletableFuture<Result<Unit>>) {
+    private fun performDiscordReload(
+        settings: ArgusSettings,
+        future: CompletableFuture<Result<Unit>>,
+    ) {
         discordStopping = true
         discordStarting = false
         discordStarted = false

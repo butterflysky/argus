@@ -40,6 +40,11 @@ Argus is a Kotlin-based, multi-loader (Fabric + NeoForge) mod for Minecraft 1.21
 
 ## Validation
 - Run all relevant local tests/verification after making changes and fix any failures before asking for next steps.
+- Never push without running `./gradlew spotlessCheck` (or `./gradlew check`) and fixing any formatting failures.
+
+## Formatting
+- Pre-commit hook runs `./gradlew spotlessApply` and stages formatting changes; keep `core.hooksPath` set to `.githooks`.
+- Use `./gradlew spotlessApply` manually if formatting issues remain or the hook is bypassed.
 
 ## Version Control
 - Use `git` (beads hooks expect git, not jj).

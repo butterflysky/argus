@@ -122,12 +122,14 @@ class ArgusFabric : ModInitializer {
                     ArgusCore.reloadConfigAsync().whenComplete { reload, err ->
                         ctx.source.server.execute {
                             when {
-                                err != null -> ctx.source.sendError(
-                                    Text.literal("${prefix}Argus reload failed: ${err.message}"),
-                                )
-                                reload != null -> reload.onFailure {
-                                    ctx.source.sendError(Text.literal("${prefix}Argus reload failed: ${it.message}"))
-                                }
+                                err != null ->
+                                    ctx.source.sendError(
+                                        Text.literal("${prefix}Argus reload failed: ${err.message}"),
+                                    )
+                                reload != null ->
+                                    reload.onFailure {
+                                        ctx.source.sendError(Text.literal("${prefix}Argus reload failed: ${it.message}"))
+                                    }
                             }
                         }
                     }

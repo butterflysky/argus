@@ -164,7 +164,7 @@ object ArgusCore {
 
         if (settings.botToken.isBlank() || settings.guildId == null) {
             logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
-            finishDiscordStart(Result.success(Unit))
+            finishDiscordSkipped()
             future.complete(Result.success(Unit))
             return
         }
@@ -195,6 +195,12 @@ object ArgusCore {
             discordStarted = false
             logger.warn("Discord startup skipped/failed: ${result.exceptionOrNull()?.message}")
         }
+        discordStarting = false
+        discordStartFuture = null
+    }
+
+    private fun finishDiscordSkipped() {
+        discordStarted = false
         discordStarting = false
         discordStartFuture = null
     }

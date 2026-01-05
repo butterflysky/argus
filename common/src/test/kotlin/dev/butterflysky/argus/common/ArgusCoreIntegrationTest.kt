@@ -221,4 +221,24 @@ class ArgusCoreIntegrationTest {
         assertTrue(result.isFailure)
         assertEquals("nope", result.exceptionOrNull()?.message)
     }
+
+    @Test
+    fun `reload with discord disabled does not lock start`() {
+        ArgusCore.setDiscordStopOverride { }
+        ArgusConfig.update("botToken", "")
+        ArgusConfig.update("guildId", "")
+
+        val disabled = ArgusCore.reloadConfigAsync().get(5, TimeUnit.SECONDS)
+
+        assertTrue(disabled.isSuccess)
+
+        ArgusConfig.update("botToken", "token")
+        ArgusConfig.update("guildId", "123")
+        ArgusCore.setDiscordStartOverride { Result.failure(IllegalStateException("late")) }
+
+        val result = ArgusCore.startDiscord().get(5, TimeUnit.SECONDS)
+
+        assertTrue(result.isFailure)
+        assertEquals("late", result.exceptionOrNull()?.message)
+    }
 }

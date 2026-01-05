@@ -8,6 +8,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 abstract class ArgusTestBase {
+    private val json = Json { prettyPrint = true }
+
     @TempDir
     lateinit var tempDir: Path
 
@@ -20,7 +22,7 @@ abstract class ArgusTestBase {
         Files.deleteIfExists(configPath)
         Files.deleteIfExists(cachePath)
         Files.createDirectories(configPath.parent)
-        Files.writeString(configPath, Json { prettyPrint = true }.encodeToString(ArgusSettings()))
+        Files.writeString(configPath, json.encodeToString(ArgusSettings()))
         ArgusConfig.load(configPath)
         ArgusConfig.update("cacheFile", cachePath.toString())
         CacheStore.load(ArgusConfig.cachePath)

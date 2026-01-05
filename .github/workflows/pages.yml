@@ -44,9 +44,9 @@ jobs:
       - name: Generate coverage badge
         uses: cicirello/jacoco-badge-generator@v2.9.0
         with:
-          jacoco-report-path: common/build/reports/jacoco/test/jacocoTestReport.xml
-          coverage-badge-name: coverage.svg
+          jacoco-csv-file: common/build/reports/jacoco/test/jacocoTestReport.csv
           badges-directory: docs-book
+          coverage-badge-filename: coverage.svg
           generate-branches-badge: false
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

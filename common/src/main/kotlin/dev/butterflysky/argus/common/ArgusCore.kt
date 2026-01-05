@@ -9,6 +9,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
@@ -36,6 +37,8 @@ object ArgusCore {
 
     @Volatile private var discordStopping = false
 
+    @Volatile private var discordStartFuture: CompletableFuture<Result<Unit>>? = null
+
     @Volatile private var discordStartedOverride: Boolean? = null
 
     @Volatile private var roleCheckOverride: ((Long) -> RoleStatus?)? = null
@@ -61,26 +64,29 @@ object ArgusCore {
         initialize().onFailure { logger.error("Failed to initialize Argus core", it) }
     }
 
-    fun startDiscord(): Result<Unit> {
-        if (discordStarted || discordStarting) return Result.success(Unit)
+    fun startDiscord(): CompletableFuture<Result<Unit>> {
+        if (discordStarted) return CompletableFuture.completedFuture(Result.success(Unit))
+        discordStartFuture?.let { return it }
         val settings = ArgusConfig.current()
         if (settings.botToken.isBlank() || settings.guildId == null) {
             logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
             discordStarted = false
-            return Result.success(Unit)
+            return CompletableFuture.completedFuture(Result.success(Unit))
         }
+        val future = CompletableFuture<Result<Unit>>()
+        discordStartFuture = future
         discordStarting = true
         discordExecutor.execute {
-            val result = DiscordBridge.start(settings)
-            if (result.isSuccess) {
-                discordStarted = true
-            } else {
-                discordStarted = false
-                logger.warn("Discord startup skipped/failed: ${result.exceptionOrNull()?.message}")
-            }
-            discordStarting = false
+            val result =
+                try {
+                    DiscordBridge.start(settings)
+                } catch (t: Throwable) {
+                    Result.failure(t)
+                }
+            finishDiscordStart(result)
+            future.complete(result)
         }
-        return Result.success(Unit)
+        return future
     }
 
     fun reloadConfig(): Result<Unit> =
@@ -88,9 +94,29 @@ object ArgusCore {
             scheduleDiscordReload()
         }
 
+    fun reloadConfigAsync(): CompletableFuture<Result<Unit>> {
+        val init = initialize()
+        if (init.isFailure) {
+            return CompletableFuture.completedFuture(init)
+        }
+        return scheduleDiscordReload()
+    }
+
     @JvmStatic
     fun reloadConfigJvm() {
         reloadConfig().onFailure { logger.error("Failed to reload Argus config", it) }
+    }
+
+    @JvmStatic
+    fun reloadConfigAsyncJvm(): CompletableFuture<String?> {
+        return reloadConfigAsync().handle { result, err ->
+            when {
+                err != null -> err.message ?: "Unknown error"
+                result == null -> "Unknown error"
+                result.isFailure -> result.exceptionOrNull()?.message ?: "Unknown error"
+                else -> null
+            }
+        }
     }
 
     @JvmStatic
@@ -109,7 +135,9 @@ object ArgusCore {
         }
     }
 
-    private fun scheduleDiscordReload() {
+    private fun scheduleDiscordReload(): CompletableFuture<Result<Unit>> {
+        val future = CompletableFuture<Result<Unit>>()
+        discordStartFuture = future
         discordExecutor.execute {
             discordStopping = true
             discordStarting = false
@@ -120,18 +148,32 @@ object ArgusCore {
             val settings = ArgusConfig.current()
             if (settings.botToken.isBlank() || settings.guildId == null) {
                 logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
+                finishDiscordStart(Result.success(Unit))
+                future.complete(Result.success(Unit))
                 return@execute
             }
             discordStarting = true
-            val result = DiscordBridge.start(settings)
-            if (result.isSuccess) {
-                discordStarted = true
-            } else {
-                discordStarted = false
-                logger.warn("Discord startup skipped/failed: ${result.exceptionOrNull()?.message}")
-            }
-            discordStarting = false
+            val result =
+                try {
+                    DiscordBridge.start(settings)
+                } catch (t: Throwable) {
+                    Result.failure(t)
+                }
+            finishDiscordStart(result)
+            future.complete(result)
         }
+        return future
+    }
+
+    private fun finishDiscordStart(result: Result<Unit>) {
+        if (result.isSuccess) {
+            discordStarted = true
+        } else {
+            discordStarted = false
+            logger.warn("Discord startup skipped/failed: ${result.exceptionOrNull()?.message}")
+        }
+        discordStarting = false
+        discordStartFuture = null
     }
 
     fun onPlayerLogin(

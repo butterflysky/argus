@@ -25,8 +25,19 @@ public class CommandReload {
             .requires(stack -> stack.hasPermission(3))
             .then(Commands.literal("reload")
                 .executes(ctx -> {
-                    ArgusCore.reloadConfigJvm();
-                    ctx.getSource().sendSuccess(() -> Component.literal(prefix + "Argus config reloaded"), false);
+                    ArgusCore.reloadConfigAsyncJvm().whenComplete((error, err) -> {
+                        ctx.getSource().getServer().execute(() -> {
+                            if (err != null) {
+                                ctx.getSource().sendFailure(Component.literal(prefix + "Argus reload failed: " + err.getMessage()));
+                                return;
+                            }
+                            if (error == null) {
+                                ctx.getSource().sendSuccess(() -> Component.literal(prefix + "Argus config reloaded"), false);
+                            } else {
+                                ctx.getSource().sendFailure(Component.literal(prefix + "Argus reload failed: " + error));
+                            }
+                        });
+                    });
                     return 1;
                 })
             )
@@ -56,8 +67,15 @@ public class CommandReload {
                                 String value = StringArgumentType.getString(ctx, "value");
                                 boolean ok = ArgusConfig.updateFromJava(field, value);
                                 if (ok) {
-                                    ArgusCore.reloadConfigJvm();
                                     ctx.getSource().sendSuccess(() -> Component.literal(prefix + "Set " + field + " = " + value), false);
+                                    ArgusCore.reloadConfigAsyncJvm().whenComplete((error, err) -> {
+                                        if (err != null || error != null) {
+                                            ctx.getSource().getServer().execute(() -> {
+                                                String message = err != null ? err.getMessage() : error;
+                                                ctx.getSource().sendFailure(Component.literal(prefix + "Argus reload failed: " + message));
+                                            });
+                                        }
+                                    });
                                     return 1;
                                 } else {
                                     ctx.getSource().sendFailure(Component.literal(prefix + "Failed to update config field (see server log)"));

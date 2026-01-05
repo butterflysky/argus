@@ -118,7 +118,20 @@ class ArgusFabric : ModInitializer {
         val value = StringArgumentType.getString(ctx, "value")
         val result =
             ArgusConfig.update(field, value)
-                .onSuccess { ArgusCore.reloadConfig() }
+                .onSuccess {
+                    ArgusCore.reloadConfigAsync().whenComplete { reload, err ->
+                        ctx.source.server.execute {
+                            when {
+                                err != null -> ctx.source.sendError(
+                                    Text.literal("${prefix}Argus reload failed: ${err.message}"),
+                                )
+                                reload != null -> reload.onFailure {
+                                    ctx.source.sendError(Text.literal("${prefix}Argus reload failed: ${it.message}"))
+                                }
+                            }
+                        }
+                    }
+                }
         return result.fold(
             onSuccess = {
                 ctx.source.sendFeedback({ Text.literal("${prefix}Set $field = $value") }, false)

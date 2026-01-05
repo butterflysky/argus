@@ -39,6 +39,10 @@ object ArgusCore {
 
     @Volatile private var discordStartFuture: CompletableFuture<Result<Unit>>? = null
 
+    @Volatile private var discordStartOverride: ((ArgusSettings) -> Result<Unit>)? = null
+
+    @Volatile private var discordStopOverride: (() -> Unit)? = null
+
     @Volatile private var discordStartedOverride: Boolean? = null
 
     @Volatile private var roleCheckOverride: ((Long) -> RoleStatus?)? = null
@@ -77,12 +81,7 @@ object ArgusCore {
         discordStartFuture = future
         discordStarting = true
         discordExecutor.execute {
-            val result =
-                try {
-                    DiscordBridge.start(settings)
-                } catch (t: Throwable) {
-                    Result.failure(t)
-                }
+            val result = startDiscordImpl(settings)
             finishDiscordStart(result)
             future.complete(result)
         }
@@ -95,11 +94,19 @@ object ArgusCore {
         }
 
     fun reloadConfigAsync(): CompletableFuture<Result<Unit>> {
-        val init = initialize()
-        if (init.isFailure) {
-            return CompletableFuture.completedFuture(init)
+        val future = CompletableFuture<Result<Unit>>()
+        discordStartFuture = future
+        discordExecutor.execute {
+            val init = initialize()
+            if (init.isFailure) {
+                discordStartFuture = null
+                future.complete(init)
+                return@execute
+            }
+            val settings = ArgusConfig.current()
+            performDiscordReload(settings, future)
         }
-        return scheduleDiscordReload()
+        return future
     }
 
     @JvmStatic
@@ -130,7 +137,7 @@ object ArgusCore {
         discordStarted = false
         discordStarting = false
         discordExecutor.execute {
-            DiscordBridge.stop()
+            stopDiscordImpl()
             discordStopping = false
         }
     }
@@ -139,30 +146,43 @@ object ArgusCore {
         val future = CompletableFuture<Result<Unit>>()
         discordStartFuture = future
         discordExecutor.execute {
-            discordStopping = true
-            discordStarting = false
-            discordStarted = false
-            DiscordBridge.stop()
-            discordStopping = false
-
             val settings = ArgusConfig.current()
-            if (settings.botToken.isBlank() || settings.guildId == null) {
-                logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
-                finishDiscordStart(Result.success(Unit))
-                future.complete(Result.success(Unit))
-                return@execute
-            }
-            discordStarting = true
-            val result =
-                try {
-                    DiscordBridge.start(settings)
-                } catch (t: Throwable) {
-                    Result.failure(t)
-                }
-            finishDiscordStart(result)
-            future.complete(result)
+            performDiscordReload(settings, future)
         }
         return future
+    }
+
+    private fun performDiscordReload(settings: ArgusSettings, future: CompletableFuture<Result<Unit>>) {
+        discordStopping = true
+        discordStarting = false
+        discordStarted = false
+        stopDiscordImpl()
+        discordStopping = false
+
+        if (settings.botToken.isBlank() || settings.guildId == null) {
+            logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
+            finishDiscordStart(Result.success(Unit))
+            future.complete(Result.success(Unit))
+            return
+        }
+
+        discordStarting = true
+        val result = startDiscordImpl(settings)
+        finishDiscordStart(result)
+        future.complete(result)
+    }
+
+    private fun startDiscordImpl(settings: ArgusSettings): Result<Unit> =
+        runCatching {
+            discordStartOverride?.invoke(settings) ?: DiscordBridge.start(settings)
+        }.getOrElse { Result.failure(it) }
+
+    private fun stopDiscordImpl() {
+        try {
+            discordStopOverride?.invoke() ?: DiscordBridge.stop()
+        } catch (t: Throwable) {
+            logger.warn("Discord stop failed: ${t.message}")
+        }
     }
 
     private fun finishDiscordStart(result: Result<Unit>) {
@@ -174,6 +194,14 @@ object ArgusCore {
         }
         discordStarting = false
         discordStartFuture = null
+    }
+
+    fun setDiscordStartOverride(override: ((ArgusSettings) -> Result<Unit>)?) {
+        discordStartOverride = override
+    }
+
+    fun setDiscordStopOverride(override: (() -> Unit)?) {
+        discordStopOverride = override
     }
 
     fun onPlayerLogin(

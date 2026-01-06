@@ -366,8 +366,8 @@ if (modrinthToken && modrinthFabricId) {
     project(":fabric").modrinth {
         token = modrinthToken
         projectId = modrinthFabricId
-        versionNumber = "v${rootProject.version}-fabric"
-        versionName = "Argus ${rootProject.version} (Fabric)"
+        versionNumber = "v${rootProject.version}-${rootProject.ext.minecraft_version}-fabric"
+        versionName = "Argus ${rootProject.version} (Fabric ${rootProject.ext.minecraft_version})"
         loaders = ["fabric"]
         gameVersions = gameVersions
         uploadFile = project(":fabric").tasks.named("remapJar")
@@ -388,8 +388,8 @@ if (modrinthToken && modrinthNeoId) {
     project(":neoforge").modrinth {
         token = modrinthToken
         projectId = modrinthNeoId
-        versionNumber = "v${rootProject.version}-neoforge"
-        versionName = "Argus ${rootProject.version} (NeoForge)"
+        versionNumber = "v${rootProject.version}-${rootProject.ext.minecraft_version}-neoforge"
+        versionName = "Argus ${rootProject.version} (NeoForge ${rootProject.ext.minecraft_version})"
         loaders = ["neoforge"]
         gameVersions = gameVersions
         uploadFile = project(":neoforge").tasks.named("jar")

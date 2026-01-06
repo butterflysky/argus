@@ -51,7 +51,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to Modrinth (if configured)
         if: env.MODRINTH_TOKEN != '' && (env.MODRINTH_PROJECT_FABRIC != '' || env.MODRINTH_PROJECT_NEOFORGE != '')
-        run: ./gradlew publishModrinthFabric publishModrinthNeoforge
+        run: |
+          targets=$(grep '^mc_targets=' gradle.properties | cut -d= -f2 | tr -d ' ')
+          if [ -z "$targets" ]; then
+            echo "mc_targets not set; skipping Modrinth publish."
+            exit 0
+          fi
+          for target in ${targets//,/ }; do
+            echo "Publishing Modrinth for mc_target=${target}"
+            ./gradlew publishModrinthFabric publishModrinthNeoforge -Pmc_target=${target}
+          done
       - name: Publish to CurseForge (if configured)
         if: env.CURSEFORGE_TOKEN != '' && env.CURSEFORGE_PROJECT_ID != ''
-        run: ./gradlew publishCurseforge
+        run: |
+          targets=$(grep '^mc_targets=' gradle.properties | cut -d= -f2 | tr -d ' ')
+          if [ -z "$targets" ]; then
+            echo "mc_targets not set; skipping CurseForge publish."
+            exit 0
+          fi
+          for target in ${targets//,/ }; do
+            echo "Publishing CurseForge for mc_target=${target}"
+            ./gradlew publishCurseforge -Pmc_target=${target}
+          done

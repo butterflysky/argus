@@ -14,6 +14,7 @@ These instructions match the current Argus direction in `ARGUS_MASTER_SPEC.md`: 
 - **Planning docs:** if you need design/plan files, place them in `history/`.
 - **Small commits:** use `git status -sb` often and commit logically scoped changes with the agreed message format.
 - **Version control:** use git (not jj); beads hooks, auto-flush, and sync features rely on git commands running.
+- **PR hygiene:** when you change a PR, leave a brief comment summarizing the update. Prefer the GitHub MCP connector for PR comments; fall back to the `gh` CLI if needed.
 
 ## Coding Standards (spec-driven)
 - Language/targets: Java 21, Kotlin 2.1.x, package `dev.butterflysky.argus`.

@@ -43,20 +43,30 @@ jobs:
           else
             echo "release_version=" >> $GITHUB_OUTPUT
           fi
-      - name: Build (all targets + checks + smokes)
+      - name: Check (all targets + smokes)
+        run: |
+          if [ -n "${{ steps.release.outputs.release_version }}" ]; then
+            ./gradlew checkAllTargets -PreleaseVersion=${{ steps.release.outputs.release_version }}
+          else
+            ./gradlew checkAllTargets
+          fi
+      - name: Build (all targets)
         run: |
           if [ -n "${{ steps.release.outputs.release_version }}" ]; then
             ./gradlew buildAllTargets -PreleaseVersion=${{ steps.release.outputs.release_version }}
           else
             ./gradlew buildAllTargets
           fi
-      - name: Run Fabric GameTests (latest target)
+      - name: Run Fabric GameTests (all targets)
         run: |
-          if [ -n "${{ steps.release.outputs.release_version }}" ]; then
-            ./gradlew :fabric:runGameTest -PargusRunGameTests -PreleaseVersion=${{ steps.release.outputs.release_version }}
-          else
-            ./gradlew :fabric:runGameTest -PargusRunGameTests
-          fi
+          for target in ${{ steps.targets.outputs.targets }}; do
+            echo "Running Fabric GameTests for mc_target=${target}"
+            if [ -n "${{ steps.release.outputs.release_version }}" ]; then
+              ./gradlew :fabric:runGameTest -PargusRunGameTests -Pmc_target=${target} -PreleaseVersion=${{ steps.release.outputs.release_version }}
+            else
+              ./gradlew :fabric:runGameTest -PargusRunGameTests -Pmc_target=${target}
+            fi
+          done
       - name: Resolve mc_targets
         id: targets
         run: |

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -21,7 +23,10 @@ class ArgusCoreIntegrationTest {
     ) {
         auditLogs.clear()
         AuditLogger.configure { auditLogs += it.toConsoleString() }
+        ArgusCore.resetDiscordStateForTests()
         ArgusCore.setDiscordStartedOverride(true)
+        ArgusCore.setDiscordStartOverride(null)
+        ArgusCore.setDiscordStopOverride(null)
         ArgusCore.setRoleCheckOverride(null)
 
         val cachePath = tempDir.resolve("argus_db.json")
@@ -45,6 +50,9 @@ class ArgusCoreIntegrationTest {
         AuditLogger.configure(null)
         ArgusCore.setRoleCheckOverride(null)
         ArgusCore.setDiscordStartedOverride(null)
+        ArgusCore.setDiscordStartOverride(null)
+        ArgusCore.setDiscordStopOverride(null)
+        ArgusCore.resetDiscordStateForTests()
     }
 
     @Test
@@ -194,5 +202,75 @@ class ArgusCoreIntegrationTest {
                     (it.contains("ServerNick") || it.contains("TestDiscordUser"))
             },
         )
+    }
+
+    @Test
+    fun `reload config async surfaces discord start failure`() {
+        ArgusCore.setDiscordStopOverride { }
+        ArgusCore.setDiscordStartOverride { Result.failure(IllegalStateException("boom")) }
+        ArgusCore.setDiscordStartedOverride(null)
+
+        val result = ArgusCore.reloadConfigAsync().get(5, TimeUnit.SECONDS)
+
+        assertTrue(result.isFailure)
+        assertEquals("boom", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `start discord returns failure when bridge fails`() {
+        ArgusCore.setDiscordStartOverride { Result.failure(IllegalStateException("nope")) }
+        ArgusCore.setDiscordStartedOverride(null)
+
+        val result = ArgusCore.startDiscord().get(5, TimeUnit.SECONDS)
+
+        assertTrue(result.isFailure)
+        assertEquals("nope", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `reload with discord disabled does not lock start`() {
+        ArgusCore.setDiscordStopOverride { }
+        ArgusConfig.update("botToken", "")
+        ArgusConfig.update("guildId", "")
+        ArgusCore.setDiscordStartedOverride(null)
+
+        val disabled = ArgusCore.reloadConfigAsync().get(5, TimeUnit.SECONDS)
+
+        assertTrue(disabled.isSuccess)
+
+        ArgusConfig.update("botToken", "token")
+        ArgusConfig.update("guildId", "123")
+        ArgusCore.setDiscordStartOverride { Result.failure(IllegalStateException("late")) }
+
+        val result = ArgusCore.startDiscord().get(5, TimeUnit.SECONDS)
+
+        assertTrue(result.isFailure)
+        assertEquals("late", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `stop during start keeps discord stopped`() {
+        ArgusCore.setDiscordStartedOverride(null)
+        ArgusCore.setDiscordStopOverride { }
+
+        val started = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        ArgusCore.setDiscordStartOverride {
+            started.countDown()
+            proceed.await(5, TimeUnit.SECONDS)
+            Result.success(Unit)
+        }
+
+        val future = ArgusCore.startDiscord()
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        ArgusCore.stopDiscord()
+        proceed.countDown()
+
+        future.get(5, TimeUnit.SECONDS)
+
+        ArgusCore.setDiscordStartOverride { Result.failure(IllegalStateException("later")) }
+        val restart = ArgusCore.startDiscord().get(5, TimeUnit.SECONDS)
+        assertTrue(restart.isFailure)
+        assertEquals("later", restart.exceptionOrNull()?.message)
     }
 }

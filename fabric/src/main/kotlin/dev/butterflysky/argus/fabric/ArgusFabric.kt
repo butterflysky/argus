@@ -118,7 +118,22 @@ class ArgusFabric : ModInitializer {
         val value = StringArgumentType.getString(ctx, "value")
         val result =
             ArgusConfig.update(field, value)
-                .onSuccess { ArgusCore.reloadConfig() }
+                .onSuccess {
+                    ArgusCore.reloadConfigAsync().whenComplete { reload, err ->
+                        ctx.source.server.execute {
+                            when {
+                                err != null ->
+                                    ctx.source.sendError(
+                                        Text.literal("${prefix}Argus reload failed: ${err.message}"),
+                                    )
+                                reload != null ->
+                                    reload.onFailure {
+                                        ctx.source.sendError(Text.literal("${prefix}Argus reload failed: ${it.message}"))
+                                    }
+                            }
+                        }
+                    }
+                }
         return result.fold(
             onSuccess = {
                 ctx.source.sendFeedback({ Text.literal("${prefix}Set $field = $value") }, false)
@@ -147,17 +162,19 @@ class ArgusFabric : ModInitializer {
     }
 
     private fun reloadConfig(ctx: CommandContext<ServerCommandSource>): Int {
-        val result = ArgusCore.reloadConfig()
-        return result.fold(
-            onSuccess = {
-                ctx.source.sendFeedback({ Text.literal("${prefix}Argus config reloaded") }, false)
-                1
-            },
-            onFailure = {
-                ctx.source.sendError(Text.literal("${prefix}Argus reload failed: ${it.message}"))
-                0
-            },
-        )
+        ArgusCore.reloadConfigAsync().whenComplete { result, _ ->
+            ctx.source.server.execute {
+                result.fold(
+                    onSuccess = {
+                        ctx.source.sendFeedback({ Text.literal("${prefix}Argus config reloaded") }, false)
+                    },
+                    onFailure = {
+                        ctx.source.sendError(Text.literal("${prefix}Argus reload failed: ${it.message}"))
+                    },
+                )
+            }
+        }
+        return 1
     }
 
     private fun issueToken(ctx: CommandContext<ServerCommandSource>): Int {

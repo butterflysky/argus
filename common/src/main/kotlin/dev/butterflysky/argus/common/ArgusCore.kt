@@ -9,6 +9,8 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
@@ -24,8 +26,28 @@ import kotlin.time.toJavaDuration
 object ArgusCore {
     private val logger = LoggerFactory.getLogger("argus-core")
     private val json = Json { ignoreUnknownKeys = true }
+    private val discordExecutor =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "argus-discord").apply { isDaemon = true }
+        }
 
-    @Volatile private var discordStarted = false
+    private enum class DiscordPhase {
+        STOPPED,
+        STARTING,
+        STARTED,
+        STOPPING,
+        DISABLED,
+    }
+
+    @Volatile private var discordPhase = DiscordPhase.STOPPED
+
+    @Volatile private var discordGeneration = 0L
+
+    @Volatile private var discordStartFuture: CompletableFuture<Result<Unit>>? = null
+
+    @Volatile private var discordStartOverride: ((ArgusSettings) -> Result<Unit>)? = null
+
+    @Volatile private var discordStopOverride: (() -> Unit)? = null
 
     @Volatile private var discordStartedOverride: Boolean? = null
 
@@ -52,28 +74,62 @@ object ArgusCore {
         initialize().onFailure { logger.error("Failed to initialize Argus core", it) }
     }
 
-    fun startDiscord(): Result<Unit> {
-        if (discordStarted) return Result.success(Unit)
+    fun startDiscord(): CompletableFuture<Result<Unit>> {
+        if (discordPhase == DiscordPhase.STARTED) {
+            return CompletableFuture.completedFuture(Result.success(Unit))
+        }
+        discordStartFuture?.let { return it }
         val settings = ArgusConfig.current()
         if (settings.botToken.isBlank() || settings.guildId == null) {
             logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
-            return Result.success(Unit)
+            discordPhase = DiscordPhase.DISABLED
+            return CompletableFuture.completedFuture(Result.success(Unit))
         }
-        return DiscordBridge.start(settings)
-            .onSuccess { discordStarted = true }
-            .onFailure { logger.warn("Discord startup skipped/failed: ${it.message}") }
+        val future = prepareStartFuture("Superseded by a new Discord start")
+        val generation = nextDiscordGeneration()
+        discordPhase = DiscordPhase.STARTING
+        discordExecutor.execute {
+            val result = startDiscordImpl(settings)
+            finishDiscordStart(generation, result, future)
+        }
+        return future
     }
 
     fun reloadConfig(): Result<Unit> =
         initialize().onSuccess {
-            DiscordBridge.stop()
-            discordStarted = false
-            startDiscord()
+            scheduleDiscordReload()
         }
+
+    fun reloadConfigAsync(): CompletableFuture<Result<Unit>> {
+        val future = prepareStartFuture("Superseded by reload")
+        discordExecutor.execute {
+            val init = initialize()
+            if (init.isFailure) {
+                discordStartFuture = null
+                future.complete(init)
+                return@execute
+            }
+            val settings = ArgusConfig.current()
+            performDiscordReload(settings, future)
+        }
+        return future
+    }
 
     @JvmStatic
     fun reloadConfigJvm() {
         reloadConfig().onFailure { logger.error("Failed to reload Argus config", it) }
+    }
+
+    @JvmStatic
+    fun reloadConfigAsyncJvm(): CompletableFuture<String?> {
+        return reloadConfigAsync().handle { result, err ->
+            when {
+                err != null -> err.message ?: "Unknown error"
+                result == null -> "Unknown error"
+                result.isFailure -> result.exceptionOrNull()?.message ?: "Unknown error"
+                else -> null
+            }
+        }
     }
 
     @JvmStatic
@@ -82,8 +138,108 @@ object ArgusCore {
     }
 
     fun stopDiscord() {
-        DiscordBridge.stop()
-        discordStarted = false
+        if (discordPhase == DiscordPhase.STOPPING || discordPhase == DiscordPhase.STOPPED) return
+        val inflight = discordStartFuture
+        discordStartFuture = null
+        nextDiscordGeneration()
+        discordPhase = DiscordPhase.STOPPING
+        inflight?.complete(Result.failure(IllegalStateException("Discord stop requested")))
+        discordExecutor.execute {
+            stopDiscordImpl()
+            discordPhase = DiscordPhase.STOPPED
+        }
+    }
+
+    private fun scheduleDiscordReload(): CompletableFuture<Result<Unit>> {
+        val future = prepareStartFuture("Superseded by reload")
+        discordExecutor.execute {
+            val settings = ArgusConfig.current()
+            performDiscordReload(settings, future)
+        }
+        return future
+    }
+
+    private fun performDiscordReload(
+        settings: ArgusSettings,
+        future: CompletableFuture<Result<Unit>>,
+    ) {
+        val generation = nextDiscordGeneration()
+        discordPhase = DiscordPhase.STOPPING
+        stopDiscordImpl()
+
+        if (settings.botToken.isBlank() || settings.guildId == null) {
+            logger.info("Discord disabled: bot token or guildId not configured; continuing without Discord")
+            discordPhase = DiscordPhase.DISABLED
+            discordStartFuture = null
+            future.complete(Result.success(Unit))
+            return
+        }
+
+        discordPhase = DiscordPhase.STARTING
+        val result = startDiscordImpl(settings)
+        finishDiscordStart(generation, result, future)
+    }
+
+    private fun startDiscordImpl(settings: ArgusSettings): Result<Unit> =
+        runCatching {
+            discordStartOverride?.invoke(settings) ?: DiscordBridge.start(settings)
+        }.getOrElse { Result.failure(it) }
+
+    private fun stopDiscordImpl() {
+        try {
+            discordStopOverride?.invoke() ?: DiscordBridge.stop()
+        } catch (t: Throwable) {
+            logger.warn("Discord stop failed: ${t.message}")
+        }
+    }
+
+    private fun finishDiscordStart(
+        generation: Long,
+        result: Result<Unit>,
+        future: CompletableFuture<Result<Unit>>,
+    ) {
+        if (generation != discordGeneration || discordPhase != DiscordPhase.STARTING) {
+            future.complete(result)
+            return
+        }
+        if (result.isSuccess) {
+            discordPhase = DiscordPhase.STARTED
+        } else {
+            discordPhase = DiscordPhase.STOPPED
+            logger.warn("Discord startup skipped/failed: ${result.exceptionOrNull()?.message}")
+        }
+        discordStartFuture = null
+        future.complete(result)
+    }
+
+    private fun prepareStartFuture(reason: String): CompletableFuture<Result<Unit>> {
+        val previous = discordStartFuture
+        val future = CompletableFuture<Result<Unit>>()
+        if (previous != null && !previous.isDone) {
+            previous.complete(Result.failure(IllegalStateException(reason)))
+        }
+        discordStartFuture = future
+        return future
+    }
+
+    private fun nextDiscordGeneration(): Long {
+        val next = discordGeneration + 1
+        discordGeneration = next
+        return next
+    }
+
+    fun setDiscordStartOverride(override: ((ArgusSettings) -> Result<Unit>)?) {
+        discordStartOverride = override
+    }
+
+    fun setDiscordStopOverride(override: (() -> Unit)?) {
+        discordStopOverride = override
+    }
+
+    internal fun resetDiscordStateForTests() {
+        discordPhase = DiscordPhase.STOPPED
+        discordGeneration = 0L
+        discordStartFuture = null
     }
 
     fun onPlayerLogin(
@@ -95,7 +251,7 @@ object ArgusCore {
     ): LoginResult {
         if (isOp || !whitelistEnabled) return LoginResult.Allow
 
-        val discordUp = discordStartedOverride ?: discordStarted
+        val discordUp = discordStartedOverride ?: (discordPhase == DiscordPhase.STARTED)
         val configured = ArgusConfig.isConfigured()
         val pdata = if (configured) CacheStore.get(uuid) else null
 

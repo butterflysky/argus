@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# No enforced checks at this time; hook kept for future use.
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+if [[ ! -x ./gradlew ]]; then
+  echo "gradlew not executable; run chmod +x ./gradlew" >&2
+  exit 1
+fi
+
+./gradlew -q spotlessApply
+git add -A

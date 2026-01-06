@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.6] - 2026-01-04
+- Fix: Discord reconnect/reload now runs off-thread to avoid watchdog stalls on `/argus reload`.
+
+## [1.1.5] - 2025-12-12
+- Improved link token UX (click-to-copy prompts) and streamlined link prompt helper.
+- CI: publish JaCoCo XML for coverage badge generation.
+
 ## [1.1.4] - 2025-12-11
 - Finished the Minecraft-name propagation for join flow: all loaders/tests now pass the player's name into `onPlayerJoin`, so link prompts and audit log entries show the correct username.
 
@@ -77,7 +84,7 @@ All notable changes to this project will be documented in this file.
 ## 0.2.3 - 2025-12-07
 - Fixed NeoForge mods.toml expansion and command registration bus.
 
-[Unreleased]: https://github.com/butterflysky/argus/compare/v1.0.13...HEAD
+[Unreleased]: https://github.com/butterflysky/argus/compare/v1.1.6...HEAD
 
 ## [1.0.13] - 2025-12-08
 - Prefix everywhere: All Argus messages in Minecraft now start with “[argus]”.
@@ -96,3 +103,5 @@ All notable changes to this project will be documented in this file.
 [1.0.2]: https://github.com/butterflysky/argus/releases/tag/v1.0.2
 [1.0.1]: https://github.com/butterflysky/argus/releases/tag/v1.0.1
 [1.0.0]: https://github.com/butterflysky/argus/releases/tag/v1.0.0
+[1.1.6]: https://github.com/butterflysky/argus/compare/v1.1.5...v1.1.6
+[1.1.5]: https://github.com/butterflysky/argus/compare/v1.1.4...v1.1.5

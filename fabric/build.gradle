@@ -40,11 +40,11 @@ configurations.named("gametestCompileClasspath") {
 }
 
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
+    minecraft "com.mojang:minecraft:${rootProject.ext.minecraft_version}"
+    mappings "net.fabricmc:yarn:${rootProject.ext.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${rootProject.ext.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.ext.fabric_version}"
+    modImplementation "net.fabricmc:fabric-language-kotlin:${rootProject.ext.fabric_kotlin_version}"
     modImplementation("org.javacord:javacord:${rootProject.ext.javacordVersion}") {
         exclude group: "org.jetbrains.kotlin"
         exclude group: "org.jetbrains.kotlinx"
@@ -127,10 +127,10 @@ tasks.withType(net.fabricmc.loom.task.AbstractRunTask).configureEach {
 
 def modProps = [
         version: project.version,
-        minecraft_version: project.minecraft_version,
-        loader_version: project.loader_version,
-        fabric_version: project.fabric_version,
-        fabric_kotlin_version: project.fabric_kotlin_version
+        minecraft_version: rootProject.ext.minecraft_version,
+        loader_version: rootProject.ext.loader_version,
+        fabric_version: rootProject.ext.fabric_version,
+        fabric_kotlin_version: rootProject.ext.fabric_kotlin_version
 ]
 
 tasks.withType(ProcessResources).configureEach {
@@ -196,7 +196,7 @@ tasks.register("fabricJarSmoke", JavaExec) {
     description = "Verify remapped production jar can load ArgusCore without dev classpath"
     dependsOn(tasks.named("remapJar"))
     def langKotlinCfg = configurations.detachedConfiguration(
-            dependencies.create("net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}")
+            dependencies.create("net.fabricmc:fabric-language-kotlin:${rootProject.ext.fabric_kotlin_version}")
     )
     def slf4jCfg = configurations.detachedConfiguration(
             dependencies.create("org.slf4j:slf4j-simple:${rootProject.ext.slf4jVersion}")

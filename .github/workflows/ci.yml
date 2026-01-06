@@ -26,7 +26,7 @@ jobs:
         run: ./gradlew spotlessCheck
       - name: Install mdBook
         run: |
-          curl -sL https://github.com/rust-lang/mdBook/releases/download/v0.4.40/mdbook-v0.4.40-x86_64-unknown-linux-gnu.tar.gz \
+          curl -sL https://github.com/rust-lang/mdBook/releases/download/v0.4.52/mdbook-v0.4.52-x86_64-unknown-linux-gnu.tar.gz \
             | tar -xz -C /tmp
           mkdir -p $HOME/.local/bin
           mv /tmp/mdbook $HOME/.local/bin/mdbook

@@ -23,7 +23,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Spotless check
-        run: ./gradlew spotlessCheck
+        run: ./gradlew -q printVersion spotlessCheck
       - name: Install mdBook
         run: |
           curl -sL https://github.com/rust-lang/mdBook/releases/download/v0.4.52/mdbook-v0.4.52-x86_64-unknown-linux-gnu.tar.gz \

@@ -219,6 +219,16 @@ def registerMultiTarget = { baseName, gradleTasks, groupName ->
 registerMultiTarget("build", ["build"], "build")
 registerMultiTarget("check", ["check"], "verification")
 
+tasks.register("printVersion") {
+    group = "help"
+    description = "Print the resolved Argus version and active Minecraft target."
+    doLast {
+        println("Argus version: ${rootProject.ext.modVersionResolved}")
+        println("Minecraft target: ${rootProject.ext.minecraft_version}")
+        println("mc_target: ${rootProject.ext.activeMcTarget}")
+    }
+}
+
 configure(subprojects.findAll { it.name == "fabric" }) {
     apply plugin: 'fabric-loom'
 

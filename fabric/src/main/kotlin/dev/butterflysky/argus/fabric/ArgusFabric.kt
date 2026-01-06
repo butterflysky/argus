@@ -47,7 +47,7 @@ class ArgusFabric : ModInitializer {
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
             dispatcher.register(
                 literal("argus")
-                    .requires { it.hasPermissionLevel(3) }
+                    .requires { PermissionBridge.hasPermissionLevel(it, 3) }
                     .then(
                         literal("reload")
                             .executes { ctx -> reloadConfig(ctx) },
@@ -87,7 +87,7 @@ class ArgusFabric : ModInitializer {
                     )
                     .then(
                         literal("token")
-                            .requires { it.hasPermissionLevel(3) }
+                            .requires { PermissionBridge.hasPermissionLevel(it, 3) }
                             .then(
                                 net.minecraft.server.command.CommandManager.argument(
                                     "player",
@@ -98,7 +98,7 @@ class ArgusFabric : ModInitializer {
                     )
                     .then(
                         literal("tokens")
-                            .requires { it.hasPermissionLevel(3) }
+                            .requires { PermissionBridge.hasPermissionLevel(it, 3) }
                             .executes { ctx -> listTokens(ctx) },
                     ),
             )
@@ -231,7 +231,7 @@ class ArgusFabric : ModInitializer {
         ServerPlayConnectionEvents.JOIN.register { handler, _, server ->
             val player = handler.player
             val profile = player.gameProfile
-            val isOp = player.hasPermissionLevel(4)
+            val isOp = PermissionBridge.hasPermissionLevel(player, 4)
             val whitelistEnabled = server.isEnforceWhitelist
 
             ArgusCore.onPlayerJoin(profile.id, isOp, whitelistEnabled, profile.name)?.let { message ->
@@ -256,4 +256,36 @@ class ArgusFabric : ModInitializer {
     }
 
     private fun clickableIfLink(message: String): Text = Text.literal(message)
+}
+
+private object PermissionBridge {
+    private val legacyMethodCache =
+        java.util.concurrent.ConcurrentHashMap<Class<*>, java.lang.reflect.Method?>()
+
+    fun hasPermissionLevel(
+        source: Any,
+        level: Int,
+    ): Boolean {
+        val legacy =
+            legacyMethodCache.computeIfAbsent(source.javaClass) { clazz ->
+                runCatching { clazz.getMethod("hasPermissionLevel", Int::class.javaPrimitiveType) }.getOrNull()
+            }
+        if (legacy != null) {
+            return runCatching { legacy.invoke(source, level) as Boolean }.getOrDefault(false)
+        }
+
+        return runCatching {
+            val getPermissions = source.javaClass.getMethod("getPermissions")
+            val permissions = getPermissions.invoke(source)
+            val permissionInterface = Class.forName("net.minecraft.command.permission.Permission")
+            val permissionLevelClass = Class.forName("net.minecraft.command.permission.PermissionLevel")
+            val fromLevel = permissionLevelClass.getMethod("fromLevel", Int::class.javaPrimitiveType)
+            val levelEnum = fromLevel.invoke(null, level)
+            val permissionLevelRecord = Class.forName("net.minecraft.command.permission.Permission\$Level")
+            val ctor = permissionLevelRecord.getConstructor(permissionLevelClass)
+            val permission = ctor.newInstance(levelEnum)
+            val hasPermission = permissions.javaClass.getMethod("hasPermission", permissionInterface)
+            hasPermission.invoke(permissions, permission) as Boolean
+        }.getOrDefault(false)
+    }
 }

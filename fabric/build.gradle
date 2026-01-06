@@ -122,11 +122,18 @@ tasks.withType(net.fabricmc.loom.task.AbstractRunTask).configureEach {
     }
 }
 
-// Fill in version placeholder in fabric.mod.json
-tasks.named("processResources") {
-    inputs.property("version", project.version)
+def modProps = [
+        version: project.version,
+        minecraft_version: project.minecraft_version,
+        loader_version: project.loader_version,
+        fabric_version: project.fabric_version,
+        fabric_kotlin_version: project.fabric_kotlin_version
+]
+
+tasks.withType(ProcessResources).configureEach {
+    inputs.properties(modProps)
     filesMatching("fabric.mod.json") {
-        expand(version: project.version)
+        expand(modProps)
     }
 }
 

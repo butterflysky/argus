@@ -22,7 +22,7 @@ public class CommandReload {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         final String prefix = "[argus] ";
         dispatcher.register(Commands.literal("argus")
-            .requires(stack -> stack.hasPermission(3))
+            .requires(stack -> PermissionBridge.hasPermissionLevel(stack, 3))
             .then(Commands.literal("reload")
                 .executes(ctx -> {
                     ArgusCore.reloadConfigAsyncJvm().whenComplete((error, err) -> {
@@ -87,11 +87,11 @@ public class CommandReload {
                 )
             )
             .then(Commands.literal("tokens")
-                .requires(stack -> stack.hasPermission(3))
+                .requires(stack -> PermissionBridge.hasPermissionLevel(stack, 3))
                 .executes(ctx -> listTokens(ctx, prefix))
             )
             .then(Commands.literal("token")
-                .requires(stack -> stack.hasPermission(3))
+                .requires(stack -> PermissionBridge.hasPermissionLevel(stack, 3))
                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
                     .executes(ctx -> issueToken(ctx, prefix))
                 )

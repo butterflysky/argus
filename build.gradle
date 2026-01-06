@@ -1,6 +1,6 @@
 plugins {
     id 'base'
-    id 'fabric-loom' version '1.11-SNAPSHOT' apply false
+    id 'fabric-loom' version '1.13.3' apply false
     id 'org.jetbrains.kotlin.jvm' version '2.1.20' apply false
     id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.20' apply false
     id 'com.diffplug.spotless' version '6.25.0' apply false
@@ -20,20 +20,51 @@ ext {
 
     modVersionResolved = (project.findProperty("releaseVersion") ?: project.findProperty("mod_version") ?: "0.0.1").toString()
 
-    mcTargets = [
-            "1.21.10": [
-                    minecraft_version       : "1.21.10",
-                    yarn_mappings           : "1.21.10+build.2",
-                    loader_version          : "0.17.3",
-                    fabric_kotlin_version   : "1.13.7+kotlin.2.2.21",
-                    fabric_version          : "0.138.3+1.21.10",
-                    neo_version             : "21.10.64",
-                    parchment_minecraft     : "1.21.10",
-                    parchment_mappings      : "2025.10.12"
-            ]
+    def targetList = (project.findProperty("mc_targets") ?: "1.21.10")
+            .split(",")
+            .collect { it.trim() }
+            .findAll { it }
+    if (targetList.isEmpty()) {
+        throw new GradleException("mc_targets is empty; set it in gradle.properties")
+    }
+
+    def requiredKeys = [
+            'minecraft_version',
+            'yarn_mappings',
+            'loader_version',
+            'fabric_kotlin_version',
+            'fabric_version',
+            'neo_version'
     ]
 
-    activeMcTarget = project.findProperty("mc_target") ?: "1.21.10"
+    mcTargets = [:]
+    targetList.each { target ->
+        def prefix = "mc_${target.replace('.', '_')}_"
+        def readProp = { key ->
+            def value = project.findProperty("${prefix}${key}")
+            return value != null ? value.toString() : null
+        }
+
+        def entry = [:]
+        requiredKeys.each { key ->
+            def value = readProp(key)
+            if (!value) {
+                throw new GradleException("Missing ${prefix}${key} in gradle.properties")
+            }
+            entry[key] = value
+        }
+
+        def parchmentMinecraft = readProp("parchment_minecraft")
+        def parchmentMappings = readProp("parchment_mappings")
+        if (parchmentMinecraft && parchmentMappings) {
+            entry.parchment_minecraft = parchmentMinecraft
+            entry.parchment_mappings = parchmentMappings
+        }
+
+        mcTargets[target] = entry
+    }
+
+    activeMcTarget = project.findProperty("mc_target") ?: targetList.last()
     activeVersions = mcTargets[activeMcTarget] ?: mcTargets.values().first()
 
     // Expose selected versions as project/ext props for downstream build scripts.
@@ -51,6 +82,11 @@ ext {
             'parchment_minecraft',
             'parchment_mappings'
     ].each { assignVersion(it) }
+
+    if (activeVersions.containsKey('parchment_minecraft') && activeVersions.containsKey('parchment_mappings')) {
+        ext["neogradle.subsystems.parchment.minecraftVersion"] = ext.parchment_minecraft
+        ext["neogradle.subsystems.parchment.mappingsVersion"] = ext.parchment_mappings
+    }
 }
 
 subprojects {
@@ -140,6 +176,30 @@ subprojects {
     }
 }
 
+def sanitizeTarget = { target ->
+    target.replaceAll(/[^0-9A-Za-z]+/, "_")
+}
+
+def registerMultiTarget = { baseName, gradleTasks, groupName ->
+    def gradleWrapper = System.getProperty("os.name").toLowerCase().contains("windows") ? "gradlew.bat" : "./gradlew"
+    def perTargetTasks = mcTargets.keySet().collect { target ->
+        tasks.register("${baseName}Mc_${sanitizeTarget(target)}", Exec) {
+            group = groupName
+            description = "${baseName} for Minecraft ${target}"
+            workingDir = rootDir
+            commandLine([gradleWrapper] + gradleTasks + ["-Pmc_target=${target}"])
+        }
+    }
+    tasks.register("${baseName}AllTargets") {
+        group = groupName
+        description = "${baseName} for all configured Minecraft targets"
+        dependsOn(perTargetTasks)
+    }
+}
+
+registerMultiTarget("build", ["build"], "build")
+registerMultiTarget("check", ["check"], "verification")
+
 configure(subprojects.findAll { it.name == "fabric" }) {
     apply plugin: 'fabric-loom'
 
@@ -218,7 +278,7 @@ tasks.register("release") {
             throw new GradleException("Dirty worktree; please commit or stash before release.")
         }
     }
-    dependsOn("check", "build")
+    dependsOn("buildAllTargets")
     doLast {
         def newVer = project.property("releaseVersion").toString()
         updateModVersion(newVer)

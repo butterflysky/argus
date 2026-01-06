@@ -39,10 +39,8 @@ jobs:
         run: |
           targets=$(grep '^mc_targets=' gradle.properties | cut -d= -f2 | tr -d ' ')
           if [ -z "$targets" ]; then
-            echo "targets=" >> $GITHUB_OUTPUT
-            echo "targets_csv=" >> $GITHUB_OUTPUT
-            echo "mc_targets not set; publishing steps will be skipped."
-            exit 0
+            echo "mc_targets not set; release publishing cannot continue."
+            exit 1
           fi
           echo "targets=${targets//,/ }" >> $GITHUB_OUTPUT
           echo "targets_csv=${targets}" >> $GITHUB_OUTPUT

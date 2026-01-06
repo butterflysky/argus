@@ -45,7 +45,10 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
-    modImplementation "org.javacord:javacord:${rootProject.ext.javacordVersion}"
+    modImplementation("org.javacord:javacord:${rootProject.ext.javacordVersion}") {
+        exclude group: "org.jetbrains.kotlin"
+        exclude group: "org.jetbrains.kotlinx"
+    }
     javacordBundle("org.javacord:javacord:${rootProject.ext.javacordVersion}") {
         exclude group: "org.jetbrains.kotlin"
         exclude group: "org.jetbrains.kotlinx"

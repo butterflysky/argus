@@ -16,9 +16,28 @@ ext {
     slf4jVersion = "2.0.13"
     junitVersion = project.findProperty("junit_version") ?: "5.11.0"
 
-    modVersionResolved = (project.findProperty("releaseVersion") ?: project.findProperty("mod_version") ?: "0.0.1").toString()
-
-    modVersionResolved = (project.findProperty("releaseVersion") ?: project.findProperty("mod_version") ?: "0.0.1").toString()
+    def baseVersion = (project.findProperty("releaseVersion") ?: project.findProperty("mod_version") ?: "0.0.1").toString()
+    def isReleaseBuild = project.hasProperty("releaseVersion")
+    def resolveGitSha = {
+        def envSha = System.getenv("GITHUB_SHA")
+        if (envSha != null && !envSha.isBlank()) {
+            return envSha.take(8)
+        }
+        try {
+            def out = new ByteArrayOutputStream()
+            project.exec {
+                commandLine "git", "rev-parse", "--short=8", "HEAD"
+                standardOutput = out
+                errorOutput = new ByteArrayOutputStream()
+                ignoreExitValue = true
+            }
+            def sha = out.toString().trim()
+            return sha ? sha : "local"
+        } catch (Exception ignored) {
+            return "local"
+        }
+    }
+    modVersionResolved = isReleaseBuild ? baseVersion : "${baseVersion}+git.${resolveGitSha()}"
 
     def targetList = (project.findProperty("mc_targets") ?: "1.21.10")
             .split(",")

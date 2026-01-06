@@ -201,12 +201,17 @@ def sanitizeTarget = { target ->
 
 def registerMultiTarget = { baseName, gradleTasks, groupName ->
     def gradleWrapper = System.getProperty("os.name").toLowerCase().contains("windows") ? "gradlew.bat" : "./gradlew"
+    def releaseVersionProp = project.hasProperty("releaseVersion") ? project.property("releaseVersion").toString() : null
     def perTargetTasks = mcTargets.keySet().collect { target ->
         tasks.register("${baseName}Mc_${sanitizeTarget(target)}", Exec) {
             group = groupName
             description = "${baseName} for Minecraft ${target}"
             workingDir = rootDir
-            commandLine([gradleWrapper] + gradleTasks + ["-Pmc_target=${target}"])
+            def args = [gradleWrapper] + gradleTasks + ["-Pmc_target=${target}"]
+            if (releaseVersionProp) {
+                args += "-PreleaseVersion=${releaseVersionProp}"
+            }
+            commandLine(args)
         }
     }
     tasks.register("${baseName}AllTargets") {

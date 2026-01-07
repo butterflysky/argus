@@ -92,6 +92,10 @@ tasks.named("remapJar") {
     archiveClassifier.set("")
 }
 
+tasks.named("assemble") {
+    dependsOn(tasks.named("remapJar"))
+}
+
 // Disable sources jar in release outputs
 tasks.matching { it.name in ["sourcesJar", "remapSourcesJar"] }.configureEach { enabled = false }
 

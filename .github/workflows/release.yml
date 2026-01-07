@@ -50,12 +50,12 @@ jobs:
           else
             ./gradlew checkAllTargets
           fi
-      - name: Build (all targets)
+      - name: Assemble (all targets)
         run: |
           if [ -n "${{ steps.release.outputs.release_version }}" ]; then
-            ./gradlew buildAllTargets -PreleaseVersion=${{ steps.release.outputs.release_version }}
+            ./gradlew assembleAllTargets -PreleaseVersion=${{ steps.release.outputs.release_version }}
           else
-            ./gradlew buildAllTargets
+            ./gradlew assembleAllTargets
           fi
       - name: Resolve mc_targets
         id: targets

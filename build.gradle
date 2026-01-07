@@ -225,6 +225,7 @@ def registerMultiTarget = { baseName, gradleTasks, groupName ->
 }
 
 registerMultiTarget("build", ["build"], "build")
+registerMultiTarget("assemble", ["assemble"], "build")
 registerMultiTarget("check", ["check"], "verification")
 
 tasks.register("printVersion") {
@@ -315,7 +316,7 @@ tasks.register("release") {
             throw new GradleException("Dirty worktree; please commit or stash before release.")
         }
     }
-    dependsOn("checkAllTargets", "buildAllTargets")
+    dependsOn("checkAllTargets", "assembleAllTargets")
     doLast {
         def newVer = project.property("releaseVersion").toString()
         updateModVersion(newVer)

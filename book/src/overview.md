@@ -12,6 +12,6 @@ Core abilities
 - **Safety**: if Discord/config is unavailable, Argus stays cache-only and never blocks startup; cache writes keep a `.bak`.
 
 Platform
-- Minecraft 1.21.10
+- Minecraft 1.21.10–1.21.11
 - Fabric and NeoForge loaders
 - Discord via Javacord slash commands

@@ -30,26 +30,87 @@ jobs:
           cache: gradle
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Build (checks + jars + smokes + gametests)
-        run: ./gradlew build fabricSmoke neoforgeJarSmoke :neoforge:neoforgeRunSmoke :fabric:runGameTest -PargusRunGameTests
+      - name: Resolve release version
+        id: release
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            if [ -z "$version" ]; then
+              echo "Tag ref did not include a version."
+              exit 1
+            fi
+            echo "release_version=$version" >> $GITHUB_OUTPUT
+          else
+            echo "release_version=" >> $GITHUB_OUTPUT
+          fi
+      - name: Check (all targets + smokes)
+        run: |
+          if [ -n "${{ steps.release.outputs.release_version }}" ]; then
+            ./gradlew checkAllTargets -PreleaseVersion=${{ steps.release.outputs.release_version }}
+          else
+            ./gradlew checkAllTargets
+          fi
+      - name: Assemble (all targets)
+        run: |
+          if [ -n "${{ steps.release.outputs.release_version }}" ]; then
+            ./gradlew assembleAllTargets -PreleaseVersion=${{ steps.release.outputs.release_version }}
+          else
+            ./gradlew assembleAllTargets
+          fi
+      - name: Resolve mc_targets
+        id: targets
+        run: |
+          targets=$(grep '^mc_targets=' gradle.properties | cut -d= -f2 | tr -d ' ')
+          if [ -z "$targets" ]; then
+            echo "mc_targets not set; release publishing cannot continue."
+            exit 1
+          fi
+          echo "targets=${targets//,/ }" >> $GITHUB_OUTPUT
+          echo "targets_csv=${targets}" >> $GITHUB_OUTPUT
+      - name: Run Fabric GameTests (all targets)
+        run: |
+          for target in ${{ steps.targets.outputs.targets }}; do
+            echo "Running Fabric GameTests for mc_target=${target}"
+            if [ -n "${{ steps.release.outputs.release_version }}" ]; then
+              ./gradlew :fabric:runGameTest -PargusRunGameTests -Pmc_target=${target} -PreleaseVersion=${{ steps.release.outputs.release_version }}
+            else
+              ./gradlew :fabric:runGameTest -PargusRunGameTests -Pmc_target=${target}
+            fi
+          done
       - name: Collect artifacts
         id: artifacts
         run: |
-          echo "fabric_jars=$(ls fabric/build/libs/*fabric*.jar | tr '\n' ' ')" >> $GITHUB_OUTPUT
-          echo "neoforge_jars=$(ls neoforge/build/neoforge/**/*.jar | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          echo "fabric_jars=$(find fabric/build/fabric -type f -name '*fabric.jar' -print0 | xargs -0 echo)" >> $GITHUB_OUTPUT
+          echo "neoforge_jars=$(find neoforge/build/neoforge -type f -name '*neoforge.jar' -print0 | xargs -0 echo)" >> $GITHUB_OUTPUT
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            fabric/build/libs/*fabric*.jar
-            neoforge/build/neoforge/**/*.jar
+            fabric/build/fabric/**/*fabric.jar
+            neoforge/build/neoforge/**/*neoforge.jar
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to Modrinth (if configured)
-        if: env.MODRINTH_TOKEN != '' && (env.MODRINTH_PROJECT_FABRIC != '' || env.MODRINTH_PROJECT_NEOFORGE != '')
-        run: ./gradlew publishModrinthFabric publishModrinthNeoforge
+        if: env.MODRINTH_TOKEN != '' && (env.MODRINTH_PROJECT_FABRIC != '' || env.MODRINTH_PROJECT_NEOFORGE != '') && steps.targets.outputs.targets != ''
+        run: |
+          for target in ${{ steps.targets.outputs.targets }}; do
+            echo "Publishing Modrinth for mc_target=${target}"
+            if [ -n "${{ steps.release.outputs.release_version }}" ]; then
+              ./gradlew publishModrinthFabric publishModrinthNeoforge -Pmc_target=${target} -PreleaseVersion=${{ steps.release.outputs.release_version }}
+            else
+              ./gradlew publishModrinthFabric publishModrinthNeoforge -Pmc_target=${target}
+            fi
+          done
       - name: Publish to CurseForge (if configured)
-        if: env.CURSEFORGE_TOKEN != '' && env.CURSEFORGE_PROJECT_ID != ''
-        run: ./gradlew publishCurseforge
+        if: env.CURSEFORGE_TOKEN != '' && env.CURSEFORGE_PROJECT_ID != '' && steps.targets.outputs.targets != ''
+        run: |
+          for target in ${{ steps.targets.outputs.targets }}; do
+            echo "Publishing CurseForge for mc_target=${target}"
+            if [ -n "${{ steps.release.outputs.release_version }}" ]; then
+              ./gradlew publishCurseforge -Pmc_target=${target} -PreleaseVersion=${{ steps.release.outputs.release_version }}
+            else
+              ./gradlew publishCurseforge -Pmc_target=${target}
+            fi
+          done

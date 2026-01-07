@@ -68,7 +68,7 @@ public class ArgusNeoForge {
                 ArgusCore.INSTANCE.onPlayerJoinJvm(
                         player.getUUID(),
                         player.getGameProfile().name(),
-                        player.hasPermissions(4),
+                        PermissionBridge.hasPermissionLevel(player, 4),
                         whitelistEnabled);
         if (message != null) {
             if (message.contains("Access revoked") || message.contains("Link required")) {

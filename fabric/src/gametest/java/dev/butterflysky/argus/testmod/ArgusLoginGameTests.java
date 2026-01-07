@@ -15,7 +15,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginNetworkHandler;
 import net.minecraft.server.WhitelistEntry;
 import net.minecraft.text.Text;
-import net.minecraft.world.GameRules;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -51,7 +50,6 @@ public class ArgusLoginGameTests {
         invokeCacheLoad(cache);
         ArgusCore.INSTANCE.setDiscordStartedOverride(true);
         ArgusCore.INSTANCE.setRoleCheckOverride(null);
-        helper.getWorld().getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE).set(false, helper.getWorld().getServer());
     }
 
     @GameTest(structure = EMPTY_STRUCTURE)

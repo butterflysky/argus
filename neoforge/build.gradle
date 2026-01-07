@@ -1,7 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.gradle.userdev' version '7.1.6'
+    id 'net.neoforged.gradle.userdev' version '7.1.18'
     id 'java'
 }
 
@@ -35,14 +35,14 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 // Expand mod metadata placeholders
 tasks.named("processResources") {
     inputs.properties(
-            "mod_version": rootProject.mod_version,
+            "mod_version": rootProject.ext.modVersionResolved,
             "minecraft_version": rootProject.ext.minecraft_version,
             "neo_version": rootProject.ext.neo_version
     )
     from(project(":common").sourceSets.main.resources)
     filesMatching("META-INF/neoforge.mods.toml") {
         expand(
-                mod_version: rootProject.mod_version,
+                mod_version: rootProject.ext.modVersionResolved,
                 minecraft_version: rootProject.ext.minecraft_version,
                 neo_version: rootProject.ext.neo_version
         )

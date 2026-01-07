@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/butterflysky/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/ci.yml) [![Docs](https://github.com/butterflysky/argus/actions/workflows/pages.yml/badge.svg)](https://github.com/butterflysky/argus/actions/workflows/pages.yml) [![Release](https://img.shields.io/github/v/release/butterflysky/argus?logo=github&label=release)](https://github.com/butterflysky/argus/releases) [![Coverage](https://butterflysky.github.io/argus/coverage.svg)](https://butterflysky.github.io/argus/coverage.svg)
 
-Cache-first Discord-linked whitelist for Minecraft 1.21.10 (Fabric & NeoForge). Argus ties each Minecraft player to a Discord user with a whitelist role, handles applications, and logs every decision.
+Cache-first Discord-linked whitelist for Minecraft 1.21.10–1.21.11 (Fabric & NeoForge). Argus ties each Minecraft player to a Discord user with a whitelist role, handles applications, and logs every decision.
 
 Changelog: see [CHANGELOG.md](CHANGELOG.md).
 
@@ -16,9 +16,9 @@ Changelog: see [CHANGELOG.md](CHANGELOG.md).
 - Multi-loader: Fabric and NeoForge builds from one codebase.
 
 **Compatibility & downloads**
-- Minecraft: 1.21.10
+- Minecraft: 1.21.10, 1.21.11
 - Loaders: Fabric, NeoForge
-- Releases: `argus-1.21.10-<version>-fabric.jar` and `argus-1.21.10-<version>-neoforge.jar` on the [Releases](https://github.com/butterflysky/argus/releases) page.
+- Releases: `argus-<mc>-<version>-fabric.jar` and `argus-<mc>-<version>-neoforge.jar` on the [Releases](https://github.com/butterflysky/argus/releases) page.
 
 **Setup (quick)**
 - Drop the jar for your loader into `mods/`.
@@ -33,6 +33,8 @@ Changelog: see [CHANGELOG.md](CHANGELOG.md).
 **Build & test (dev)**
 ```bash
 ./gradlew check                # spotlessCheck + unit tests + Fabric/NeoForge smoke
+./gradlew checkAllTargets      # run checks for all configured MC targets
+./gradlew buildAllTargets      # build all configured MC targets
 ./gradlew :fabric:runServer    # dev server (Fabric)
 ./gradlew :neoforge:runServer  # dev server (NeoForge)
 ```

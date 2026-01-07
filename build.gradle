@@ -315,7 +315,7 @@ tasks.register("release") {
             throw new GradleException("Dirty worktree; please commit or stash before release.")
         }
     }
-    dependsOn("buildAllTargets")
+    dependsOn("checkAllTargets", "buildAllTargets")
     doLast {
         def newVer = project.property("releaseVersion").toString()
         updateModVersion(newVer)

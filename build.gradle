@@ -84,7 +84,10 @@ ext {
     }
 
     activeMcTarget = project.findProperty("mc_target") ?: targetList.last()
-    activeVersions = mcTargets[activeMcTarget] ?: mcTargets.values().first()
+    if (!mcTargets.containsKey(activeMcTarget)) {
+        throw new GradleException("Unknown mc_target=${activeMcTarget}. Supported targets: ${mcTargets.keySet().join(', ')}")
+    }
+    activeVersions = mcTargets[activeMcTarget]
 
     // Expose selected versions as project/ext props for downstream build scripts.
     def assignVersion = { key ->
